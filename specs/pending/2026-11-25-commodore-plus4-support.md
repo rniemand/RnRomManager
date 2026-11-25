@@ -112,9 +112,9 @@ Adds the `plus4` system (Commodore Plus/4) to `RnRomManager.Systems.Commodore`. 
 | Api | `src/RnRomManager.Api/Endpoints/PlayDisc.cs` | B12. The `HandleSetAsync`, `FloppySetAsync` and `FirmwareNames` summaries say "Amiga and Plus/4 floppies". |
 | Api | `src/RnRomManager.Api/Endpoints/LibraryEndpoints.cs` | B11: comment only. The `DiscSets.Find` comment in `DetailAsync` (~line 541) reads `// Multi-disc M3 (Saturn/Sega CD S2, Amiga F3, Plus/4 B11): PlayStation, Saturn, Sega CD, Amiga and Plus/4; other systems have none. Keyed by each set's Disc 1.` |
 | Web | `static/emulator/params.js` | `'vice_xplus4'` after `'vice_x128'` in the `cores` allowlist, in `operatorCores` (B9, entry after `vice_x128`) and in `hidesCoreChooser`. The `operatorCores` JSDoc list adds ", Plus/4 VICE xplus4" after "C128 VICE x128". Also B13 (`diskSetCores`, `parsePlayParams`, `discError`; the set comment reads "Amiga F6, Plus/4 B13: a disk-set core too, with `disc=1`"). |
-| Web | `static/emulator/play.js` | B13 status. The pinned-cores comment (~line 757) reads "VICE x64sc, xpet, xvic, x128 and xplus4". |
+| Web | `static/emulator/play.js` | B13 status: `diskSetCores` joins the `import { … } from './params.js'` list and the line reads `show(diskSetCores.includes(params.core) ? 'Downloading disks…' : 'Downloading disc…');`. The pinned-cores comment (~line 757) reads "VICE x64sc, xpet, xvic, x128 and xplus4". |
 | Web | `scripts/vendor-emulatorjs.mjs` | `"vice_xplus4"` after `"vice_x128"` in the explicit-core patch, the non-threaded guard and the no-CDN guard (~lines 89, 100, 110). Comments: on line 53, "vice_xvic of the vic20 group and vice_x128 of the c128 group." becomes "vice_xvic of the vic20 group, vice_x128 of the c128 group and vice_xplus4 of the plus4 group."; line 62 adds "Plus/4" after "C128"; line 63 reads "VICE (x64sc, xpet, xvic, x128 and xplus4)". |
-| Web | `src/lib/emulator.ts` | B14 `setMedia`; its comment adds "Plus/4 B14". |
+| Web | `src/lib/emulator.ts` | B14 `setMedia` (`core === 'puae' \|\| core === 'vice_xplus4'`; the SPA can't import `params.js`); its comment reads `/** Amiga F8, Plus/4 B14: what a set's All button plays: floppy disks for PUAE and VICE (xplus4), discs for every other core. */`. |
 | Web | `src/lib/systemColours.ts`, `src/app.css` | B15. |
 | Web | `src/lib/systemEmulators.json` | B17. |
 | Tests | `tests/RnRomManager.TestData/IngestSeeder.cs` | `public const string Plus4Dat = "Commodore - Plus-4";` after `Vic20Dat`; `Directory.CreateDirectory(Path.Combine(ingest, "plus4"));` after the `c128` line; `[Plus4Dat] = []` after `[Vic20Dat] = …` in the `FixtureDatWriter.Write` dictionary (line ~437). |
@@ -189,8 +189,8 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
     - `C64_DiskTokens_AreNoSet` (new): `Find("c64", …)` on two tokened `.d64`s is empty;
     - every existing Amiga and disc case passes unchanged.
   - `tests/RnRomManager.Api.Tests/Integration/LibraryEndpointsTests.PlayDiscSet.cs`:
-    - `AmigaGame` is generalised to a private `FloppyGame(string system, string title, int seed, Func<…>? shape, params string[] fileNames)`. The two `AmigaGame` overloads stay as one-line wrappers, so the Amiga tests are untouched.
-    - `Detail_DiscSet_IsOnPlus4DiskOne_WithTheNameAndOrderedIds_AndNullElsewhere` (new).
+    - `AmigaGame` is generalised to a private `FloppyGame(string system, string title, int seed, Func<…>? shape, params string[] fileNames)`, which sets `System = system` and writes the ZIP under `$"{system}/{title[..1]}/{title}.zip"`. The two `AmigaGame` overloads stay as one-line wrappers, so the Amiga tests are untouched. The Plus/4 tests use seeds 9301, 9311 and 9321.
+    - `Detail_DiscSet_IsOnPlus4DiskOne_WithTheNameAndOrderedIds_AndNullElsewhere` (new): a `plus4` game with `Pixel Quest (Disk 1 of 2).d64` and `Pixel Quest (1986)(Synth)(Disk 2 of 2) (Unverified).d64` has `discSet` `{ name: "Pixel Quest.m3u", romIds: [disk 1, disk 2] }` on Disk 1 and null on Disk 2.
     - `PlayDiscSet_APlus4Set_IsThePlaylist_ThenEachDiskAliased` (new, after the Amiga one): entries `["Pixel Quest (1986)(Synth).m3u", "Disk 1.d64", "Disk 2.d64"]`, playlist bytes `"Disk 1.d64\nDisk 2.d64\n"`, disks byte-exact, `X-Content-Bytes`.
     - `PlayDiscSet_APlus4SetWithAnExternalDisk_Is404` (new, modelled on `PlayDiscSet_AmigaDiskTwo_AnAmbiguousGame_OrAnExternalDisk_Is404`): Disk 2's mirrored row shaped with an `ExternalFileName` gives 404 (the B12 guard).
     - The existing Amiga and PlayStation/Saturn/Sega CD set tests pass unchanged.
@@ -205,13 +205,13 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
     - the `accepts the %s core` list (~line 168) gains `'vice_xplus4'` after `'vice_x128'`;
     - `describe('Commodore Plus/4')` (new) right after `describe('Commodore 128')`, mirroring it with the B8 files and B9 texts;
     - next to the PUAE `set` cases (~line 134), `parsePlayParams` accepts `core: 'vice_xplus4', disc: '1', set: '1'` and refuses it without `disc`;
-    - `discError(409, 'InvalidPlayDisc', 'vice_xplus4', true)` and `discError(500, null, 'vice_xplus4', true)` give the B13 texts.
+    - after the PUAE `discError` cases (~line 362), `discError(409, 'InvalidPlayDisc', 'vice_xplus4', true)`, `discError(null, null, 'vice_xplus4', true)` and `discError(500, null, 'vice_xplus4', true)` give the three B13 texts.
   - `src/lib/vendorEmulatorjs.test.ts`:
     - the three guarded-edit strings (~lines 131, 140, 147) and the two `includes(this.getCore())` expectations (~705, 709) gain `"vice_xplus4"` after `"vice_x128"`;
     - two new `it.each(['src/emulator.js', 'emulator.min.js'])` cases right after the two `vice_x128` ones (~858–882), mirroring them: `%s pins an explicit vice_xplus4, in the plus4 group` and `%s never picks a threaded VICE (Plus/4) payload, and shows a local error for a failed one`.
-  - `src/lib/emulatorPlay.test.ts`, in `describe('play page Amiga disk sets (Amiga F7)')`: a new `it('loads a Plus/4 set from play-disc-set, saying it downloads disks (Plus/4 B13)')`, with the same query shape using `core: 'vice_xplus4'` and the operator-core files served.
-  - `src/lib/emulator.test.ts`: `setMedia('vice_xplus4')` is `'disks'`.
-  - `src/routes/games/game-page.test.ts`: a Plus/4 Disk 1 with `discSet` and `browserCore` `vice_xplus4` shows `All disks` (after the Amiga case, ~line 389).
+  - `src/lib/emulatorPlay.test.ts`, in `describe('play page Amiga disk sets (Amiga F7)')`: its `playDisks(name)` helper gains a second parameter `core = 'puae'` (Amiga calls unchanged), and a new `it('loads a Plus/4 set from play-disc-set, saying it downloads disks (Plus/4 B13)')` serves `/api/emulator/cores/vice_xplus4` (204) and the set URL, calls `playDisks('Pixel Quest.m3u', 'vice_xplus4')`, and expects `urls()` `['/api/emulator/cores/vice_xplus4', setUrl]`, the status `Downloading disks…` while the set loads, `EJS_core` `vice_xplus4`, `EJS_gameName` and the `File` name `Pixel Quest.m3u`, and `EJS_paths` the three `/api/emulator/cores/vice_xplus4/<file>` URLs.
+  - `src/lib/emulator.test.ts`, in `describe('setMedia (Amiga F8)')`: `expect(setMedia('vice_xplus4')).toBe('disks');` after the `puae` line.
+  - `src/routes/games/game-page.test.ts`: `it('Disk 1 of a Plus/4 disk set has All disks, which plays the set (Plus/4 B14)')`, right after the Amiga case (~line 389), mirroring it with `system` `plus4`, `browserCore` `vice_xplus4` and `discSet` `{ name: 'Pixel Quest.m3u', romIds: [1, 2] }`: button `Play all disks of Pixel Quest.m3u`, text `All disks`, and iframe `src` `/emulator/play.html?game=<id>&rom=1&core=vice_xplus4&name=Pixel%20Quest.m3u&disc=1&set=1`.
   - `src/lib/systemColours.test.ts`: in the Commodore case, `expect(systemColour('plus4')).toEqual({ name: 'plus4', foreground: '#fff' });` after the `c128` line.
 
   Done when: those files, `npm run lint` and `npm run check` pass, and `npm run predev` vendors without error.
@@ -259,6 +259,7 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
 - 2026-11-25 Reviewer round 2: Manual joins the game owning the base title (or creates it; `AmbiguousGroup` if several), so Manual works for every disk; `keyByName` derived from the system id (reviewer)
 - 2026-11-25 Reviewer round 3: the features.md Review-path sentence pinned; review stopped after 3 rounds with nothing open (reviewer)
 - 2026-11-25 Deep review: zip-format's `system` list and features' intro, Play and families lists have no PET, so Plus/4 goes after Commodore 64 there; `.g64` dropped from the Plus/4 header text (not a Plus/4 type); the deployment upgrade note mirrors VIC-20's and follows PC-FX's; Dat/Hack/Translated Review naming for disks stated; every step-5 doc edit, the `LibraryEndpoints` and vendor-script comments and the Review tests' bytes, drop path and Manual body pinned (reviewer)
+- 2026-11-25 Deep review pass 2: pinned the Plus/4 detail test's names, `FloppyGame`'s ZIP path and seeds, the `playDisks` core parameter and expected requests, the game-page case's URL, the `setMedia`/`discError` test lines, and `play.js`'s `diskSetCores` import (reviewer)
 - 2026-11-25 e2e? → none: the e2e stack has no VICE core to play with, the DAT/Review flows are covered by existing e2e, and sets by the Amiga API and vitest cases this spec mirrors (code)
 
 ## Kickoff prompt
