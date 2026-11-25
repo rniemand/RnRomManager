@@ -287,6 +287,9 @@ test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
   await expect(page.getByRole("table")).toContainText("Placeholder art");
   await expectAccessible(page, "missing images report");
   await page.getByRole("link", { name: "Duplicates", exact: true }).click();
+  // Duplicates D4: IGDB ID is the default match; no game is linked yet.
+  await expect(page.getByText("No games share an IGDB ID.")).toBeVisible();
+  await page.getByLabel("Match by").selectOption("title");
   await expect(page.getByText("No duplicate games found.")).toBeVisible();
   await expectAccessible(page, "duplicates report");
   // Multiple Releases: Orbit Blocks has three releases; the Switch game's base + DLC is one release (DLC B14).
@@ -2076,6 +2079,41 @@ test("collections systems: browse a system's games and its emulator links", { ta
   await expect(emulators).toBeFocused();
 });
 
+test("timeline: an IGDB-linked game by year, and the Developers tab", { tag: "@shard-b" }, async () => {
+  // Timeline T2: only games linked to IGDB are on it, so link Orbit Kart 64 (seeded with 1998) first.
+  await openGame("Orbit Kart 64");
+  const id = new URL(page.url()).pathname.split("/").at(-1)!;
+  const xsrf =
+    (await context.cookies()).find((c) => c.name === "XSRF-TOKEN")?.value ?? "";
+  const linked = await page.request.patch(`/api/games/${id}`, {
+    data: { igdbId: 1 },
+    headers: { "X-XSRF-TOKEN": decodeURIComponent(xsrf) },
+  });
+  expect(linked.status()).toBe(200);
+  await page.reload();
+
+  // P2: the Year cell links to its Timeline year.
+  const year = page.getByRole("link", { name: "1998", exact: true });
+  await expect(year).toHaveAttribute("href", "/timeline?from=1998&to=1998");
+  await year.click();
+  await expect(page).toHaveURL(/\/timeline\?from=1998&to=1998$/);
+  await expect(page.getByRole("button", { name: "1998: 1 game" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(
+    page.getByRole("table").getByRole("link", { name: "Orbit Kart 64", exact: true }),
+  ).toBeVisible();
+  await expectAccessible(page, "timeline");
+
+  // C1: the Developers tab groups the seeded developer.
+  await page.goto("/collections?tab=developers");
+  await expect(
+    page.getByRole("list", { name: "Developers" }).getByRole("link", { name: /Seed Studio/ }),
+  ).toBeVisible();
+  await expectAccessible(page, "developers tab");
+});
+
 test("collections discovery: an Admin replaces and removes a publisher logo a Site user only sees", { tag: "@shard-b" }, async () => {
   // A Site user next to the admin, in a browser of their own.
   const curatorPassword = `${newPassword}-curator`;
@@ -3293,7 +3331,7 @@ test("Missing Metadata report, and the phone navbar closes after a link", async 
 });
 
 test("Missing IGDB IDs report", async () => {
-  // IGDB lookup R2, R3: no game is linked in e2e, so the seeded ones are listed.
+  // IGDB lookup R2, R3: Red Horizon isn't linked, so it's listed.
   await page.goto("/reports/missing-igdb-ids");
   await expect(page.getByRole("link", { name: "Missing IGDB IDs" })).toHaveAttribute(
     "aria-current",
