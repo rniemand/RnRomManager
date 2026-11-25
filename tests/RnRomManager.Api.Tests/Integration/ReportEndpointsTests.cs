@@ -525,6 +525,53 @@ public class ReportEndpointsTests
         Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty(field, out _), Is.True);
     }
 
+    [Test]
+    public async Task Duplicates_ByIgdb_GroupSharedIds_AndDismissWithIgdbId()
+    {
+        using var editor = await Editor();
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        await Sql("UPDATE games SET igdb_id = 42 WHERE id IN @ids", new { ids = new[] { alpha, bravo } });
+
+        Assert.That(await Groups(), Is.Empty, "title is the default match");
+        Assert.That(await Groups("?match=TITLE"), Is.Empty);
+        var group = (await Groups("?match=igdb")).Single();
+        Assert.That((group.GetProperty("baseTitle").GetString(), group.GetProperty("igdbId").GetInt32()), Is.EqualTo(("Alpha", 42)));
+        Assert.That(group.GetProperty("gamesKey").GetString(), Is.EqualTo(RnRomManager.Core.Reports.DuplicateGroups.GamesKey([alpha, bravo])));
+        Assert.That(GameIds(group), Is.EquivalentTo(new[] { alpha, bravo }));
+
+        using var dismissed = await editor.PostAsync("/api/reports/duplicates/dismiss",
+            new { system = "gb", gamesKey = group.GetProperty("gamesKey").GetString(), igdbId = 42 });
+        Assert.That(dismissed.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await Groups("?match=igdb"), Is.Empty);
+    }
+
+    [Test]
+    public async Task Duplicates_TitleGroups_HaveNullIgdbId()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        await SetBaseTitle("Shared", alpha, bravo);
+
+        Assert.That((await Groups("?match=title")).Single().GetProperty("igdbId").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [TestCase("{\"system\":\"gb\",\"gamesKey\":\"" + Key + "\"}", "Give baseTitle or igdbId, not both.")]
+    [TestCase("{\"system\":\"gb\",\"baseTitle\":null,\"igdbId\":null,\"gamesKey\":\"" + Key + "\"}", "Give baseTitle or igdbId, not both.")]
+    [TestCase("{\"system\":\"gb\",\"baseTitle\":\"Quest\",\"igdbId\":42,\"gamesKey\":\"" + Key + "\"}", "Give baseTitle or igdbId, not both.")]
+    [TestCase("{\"system\":\"gb\",\"igdbId\":0,\"gamesKey\":\"" + Key + "\"}", "Must be a positive whole number.")]
+    [TestCase("{\"system\":\"gb\",\"igdbId\":1.5,\"gamesKey\":\"" + Key + "\"}", "Must be a positive whole number.")]
+    [TestCase("{\"system\":\"gb\",\"igdbId\":\"42\",\"gamesKey\":\"" + Key + "\"}", "Must be a positive whole number.")]
+    public async Task Dismiss_BaseTitleOrIgdbId_Errors(string json, string message)
+    {
+        using var editor = await Editor();
+
+        using var response = await editor.PostAsync("/api/reports/duplicates/dismiss", JsonDocument.Parse(json).RootElement);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("igdbId")[0].GetString(), Is.EqualTo(message));
+    }
+
     private const string Key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string UpperKey = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
 
@@ -606,6 +653,7 @@ public class ReportEndpointsTests
 
     [TestCase("system=sg1000", "system")]
     [TestCase("pageSize=201", "pageSize")]
+    [TestCase("match=name", "match")]
     public async Task Duplicates_InvalidQuery_Is400(string query, string field)
     {
         using var response = await _user.GetAsync("/api/reports/duplicates?" + query);

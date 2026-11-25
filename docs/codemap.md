@@ -292,7 +292,7 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 
 ## Migrations (src/RnRomManager.Data/Migrations)
 
-0001_users, 0002_games, 0003_roms, 0004_images, 0005_jobs, 0006_job_items, 0007_ingest_review_items, 0008_integrity_issues, 0009_data_protection_keys, 0010_game_rating, 0011_user_roles, 0012_image_cover, 0013_duplicate_dismissals, 0014_audit_events, 0015_app_settings, 0016_user_hotkeys, 0017_collections, 0018_external_roms, 0019_release_versions, 0020_rom_files, 0021_publisher_logos, 0022_bundle_queues, 0023_game_save_count, 0024_fold_rom_manager, 0025_game_user_save_counts, 0026_discovery_logos, 0027_game_igdb_id
+0001_users, 0002_games, 0003_roms, 0004_images, 0005_jobs, 0006_job_items, 0007_ingest_review_items, 0008_integrity_issues, 0009_data_protection_keys, 0010_game_rating, 0011_user_roles, 0012_image_cover, 0013_duplicate_dismissals, 0014_audit_events, 0015_app_settings, 0016_user_hotkeys, 0017_collections, 0018_external_roms, 0019_release_versions, 0020_rom_files, 0021_publisher_logos, 0022_bundle_queues, 0023_game_save_count, 0024_fold_rom_manager, 0025_game_user_save_counts, 0026_discovery_logos, 0027_game_igdb_id, 0028_duplicate_dismissal_match
 
 ## Source files by folder
 

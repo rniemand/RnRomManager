@@ -43,7 +43,7 @@ public class SchemaMigrationTests
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
             "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
             "0019_release_versions", "0020_rom_files", "0021_publisher_logos", "0022_bundle_queues", "0023_game_save_count",
-            "0024_fold_rom_manager", "0025_game_user_save_counts", "0026_discovery_logos", "0027_game_igdb_id",
+            "0024_fold_rom_manager", "0025_game_user_save_counts", "0026_discovery_logos", "0027_game_igdb_id", "0028_duplicate_dismissal_match",
         }));
     }
 
@@ -52,7 +52,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 27L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 28L }));
     }
 
     [Test]
@@ -81,7 +81,7 @@ public class SchemaMigrationTests
     [TestCase("audit_events", "id bigint(20), occurred_at datetime(6), action varchar(32), system_id varchar(16) NULL, game_id char(36) NULL, user_id int(11) NULL, username varchar(64) NULL, job_id char(36) NULL, path varchar(1024) NULL, target_path varchar(1024) NULL, details varchar(1024) NULL")]
     [TestCase("data_protection_keys", "id int(11), friendly_name varchar(255), xml text, created_at datetime(6)")]
     [TestCase("app_settings", "name varchar(64), value varchar(255)")]
-    [TestCase("duplicate_dismissals", "system_id varchar(16), base_title varchar(255), games_key char(64), dismissed_by int(11) NULL, dismissed_at datetime(6)")]
+    [TestCase("duplicate_dismissals", "match_kind varchar(8) ='title', system_id varchar(16), base_title varchar(255), games_key char(64), dismissed_by int(11) NULL, dismissed_at datetime(6)")]
     [TestCase("collections", "id char(36), user_id int(11), name varchar(100), notes text NULL, cover_format varchar(8) NULL, cover_updated_at datetime(6) NULL, created_at datetime(6), updated_at datetime(6)")]
     [TestCase("collection_games", "collection_id char(36), game_id char(36), added_at datetime(6)")]
     [TestCase("game_user_save_counts", "game_id char(36), username varchar(64), save_count int(11)")]
@@ -115,7 +115,7 @@ public class SchemaMigrationTests
             "collections PRIMARY U id",
             "collections ux_collections_user_name U user_id,name",
             "data_protection_keys PRIMARY U id",
-            "duplicate_dismissals PRIMARY U system_id,base_title,games_key",
+            "duplicate_dismissals PRIMARY U match_kind,system_id,base_title,games_key",
             "game_user_save_counts PRIMARY U game_id,username",
             "games ix_games_created_at - created_at",
             "games ix_games_system_bucket_title - system_id,bucket,title",
