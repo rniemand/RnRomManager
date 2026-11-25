@@ -13,7 +13,13 @@ vi.mock('$app/state', () => ({
 		}
 	}
 }));
+// Bootstrap's Modal (GameResults' play dialog) needs layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
+	Modal: class {
+		show() {}
+		hide() {}
+		dispose() {}
+	},
 	Dropdown: { getOrCreateInstance: () => ({ hide() {} }) }
 }));
 vi.mock('$app/paths', () => ({
