@@ -41,6 +41,10 @@ describe('systemColour', () => {
 		expect(systemColour('tgcd')).toEqual({ name: 'tgcd', foreground: '#fff' });
 	});
 
+	it('gives PC-FX plum with white text (PC-FX X3)', () => {
+		expect(systemColour('pcfx')).toEqual({ name: 'pcfx', foreground: '#fff' });
+	});
+
 	it('gives MS-DOS its own slate with white text (MS-DOS S4)', () => {
 		expect(systemColour('dos')).toEqual({ name: 'dos', foreground: '#fff' });
 		expect(systemColour('mame2003')).toEqual({ name: 'mame2003', foreground: '#fff' });

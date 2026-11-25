@@ -295,6 +295,7 @@ public static class AppHost
         services.AddSystemHandler<NeoGeoPocketColorHandler>();
         services.AddSystemHandler<Mame2003Handler>();
         services.AddSystemHandler<FbneoHandler>();
+        services.AddSystemHandler<PcfxHandler>();
     }
 
     // spec §11: hashed SvelteKit assets are immutable; everything else (index.html, theme.js) must revalidate.

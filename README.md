@@ -59,6 +59,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds`, `.ids` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz`, `.hdf` | titledb | — |
+| PC-FX | `pcfx` | Next to ZIP | `.bin`, `.cue`, `.chd`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | — |
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd`, `.img`, `.pbp`, `.ccd`, `.sub`, `.mds`, `.mdf`, `.toc`, `.cbn` | Redump | `pcsx_rearmed` |
 | PlayStation Portable | `psp` | Next to ZIP | `.iso`, `.cso`, `.pbp`, `.chd` | Redump | `ppsspp` |
 | Satellaview | `satellaview` | In ZIP | `.bs` | No-Intro | `snes9x` |
