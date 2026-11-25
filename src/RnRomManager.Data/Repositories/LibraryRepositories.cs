@@ -173,7 +173,7 @@ public sealed class GameRepository : IGameRepository
         var dir = query.Descending ? "DESC" : "ASC";
         var order = query.Sort switch
         {
-            GameSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.id",
+            GameSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.title, g.id",
             GameSort.Added when query.CollectionId is not null => $"cg.added_at {dir}, g.id",
             GameSort.Added => $"g.created_at {dir}, g.id",
             GameSort.Rating => $"g.rating IS NULL, g.rating {dir}, g.title, g.id",
@@ -208,7 +208,7 @@ public sealed class GameRepository : IGameRepository
                    (SELECT r.external_file_name IS NOT NULL FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryIsExternal,
                    (SELECT EXISTS(SELECT 1 FROM rom_files f WHERE f.rom_id = r.id) FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryHasFiles,
                    (SELECT JSON_EXTRACT(r.header, '$.encrypted') = 'true' FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryEncrypted,
-                   g.rating AS Rating, g.favourite AS Favourite, g.save_count AS SaveCount, g.title AS Title,
+                   g.rating AS Rating, g.favourite AS Favourite, g.save_count AS SaveCount, g.title AS Title, g.igdb_id AS IgdbId,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres,
                    {(words.Count == 0 ? "NULL" : AddOnNamesJson)} AS AddOns
             FROM {from} {filter}
@@ -219,7 +219,7 @@ public sealed class GameRepository : IGameRepository
         var items = rows.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
             r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns)),
-            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true)).ToList();
+            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true, r.IgdbId)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
     }
 
@@ -272,6 +272,12 @@ public sealed class GameRepository : IGameRepository
             where.Add("NOT EXISTS (SELECT 1 FROM collection_games x WHERE x.game_id = g.id AND x.collection_id = @notInCollection)");
         if (query.GameIds is not null)
             where.Add(query.GameIds.Count == 0 ? "FALSE" : "g.id IN @gameIds");
+        if (query.YearFrom is not null)
+            where.Add("g.release_year >= @yearFrom");
+        if (query.YearTo is not null)
+            where.Add("g.release_year <= @yearTo");
+        if (query.IgdbLinked)
+            where.Add("g.igdb_id > 0");
         var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
         var args = new DynamicParameters(new
         {
@@ -281,6 +287,8 @@ public sealed class GameRepository : IGameRepository
             region = query.Region is null ? null : SqlLike.Contains("|" + query.Region + "|"),
             favourite = query.Favourite,
             gameIds = query.GameIds is { Count: > 0 } ids ? ids : null,
+            yearFrom = query.YearFrom,
+            yearTo = query.YearTo,
         });
         for (var i = 0; i < words.Count; i++)
             args.Add($"w{i}", SqlLike.Contains(words[i]));
@@ -336,6 +344,16 @@ public sealed class GameRepository : IGameRepository
             parts.Add($"(CASE WHEN {JsonLike("genres", i)} THEN 10 ELSE 0 END)");
         }
         return "(" + string.Join(" + ", parts) + ")";
+    }
+
+    public async Task<IReadOnlyList<(int Year, int Count)>> ListReleaseYearCountsAsync(string? systemId, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<(int Year, long Count)>(new CommandDefinition("""
+            SELECT release_year, COUNT(*) FROM games
+            WHERE igdb_id > 0 AND release_year IS NOT NULL AND (@systemId IS NULL OR system_id = @systemId)
+            GROUP BY release_year ORDER BY release_year
+            """, new { systemId }, cancellationToken: cancellationToken))).Select(r => (r.Year, (int)r.Count)).ToList();
     }
 
     public async Task<IReadOnlyList<SystemStats>> ListSystemStatsAsync(CancellationToken cancellationToken)
@@ -406,6 +424,7 @@ public sealed class GameRepository : IGameRepository
         public bool? PrimaryIsExternal { get; init; }
         public bool? PrimaryHasFiles { get; init; }
         public bool? PrimaryEncrypted { get; init; }
+        public int? IgdbId { get; init; }
         public int? Rating { get; init; }
         public bool Favourite { get; init; }
         public string Title { get; init; } = "";

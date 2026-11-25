@@ -11,8 +11,9 @@ namespace RnRomManager.Core.Library;
 /// <param name="PrimaryRomId">The primary release (lowest id if several), null when none; with its file name and external flag for quick play (C2).</param>
 /// <param name="PrimaryHasFiles">TurboGrafx-CD B5: the primary release has set files (<c>rom_files</c> rows).</param>
 /// <param name="PrimaryEncrypted">3DS P4: the primary release's header has <c>encrypted: true</c>.</param>
+/// <param name="IgdbId">The game's IGDB id, null or 0 when not linked (Timeline).</param>
 public sealed record GameListItem(
     Guid Id, string SystemId, string DisplayTitle, int? ReleaseYear, IReadOnlyList<string> Regions, int RomCount, long? BoxArtImageId,
     int? Rating, bool Favourite, long? PrimarySizeBytes, SearchMatch? MatchedOn = null,
     int UpdateCount = 0, long? PrimaryRomId = null, string? PrimaryRomFileName = null, bool PrimaryIsExternal = false,
-    int SaveCount = 0, int DlcCount = 0, bool PrimaryHasFiles = false, bool PrimaryEncrypted = false);
+    int SaveCount = 0, int DlcCount = 0, bool PrimaryHasFiles = false, bool PrimaryEncrypted = false, int? IgdbId = null);
