@@ -98,6 +98,27 @@
 	});
 
 	const id = $derived(page.params.id ?? '');
+
+	/** P5: the description is clamped to two lines; the toggle shows only when the text is taller than that. */
+	let descriptionEl = $state<HTMLParagraphElement>();
+	let descriptionExpanded = $state(false);
+	let descriptionOverflows = $state(false);
+	function measureDescription(): void {
+		if (descriptionEl && !descriptionExpanded)
+			descriptionOverflows = descriptionEl.scrollHeight > descriptionEl.clientHeight;
+	}
+	// Another game collapses it again.
+	$effect(() => {
+		void id;
+		untrack(() => {
+			descriptionExpanded = false;
+			descriptionOverflows = false;
+		});
+	});
+	$effect(() => {
+		void game?.description;
+		if (descriptionEl && !descriptionExpanded) untrack(measureDescription);
+	});
 	// P3: the cover (any type); screenshots are in the Images gallery.
 	const cover = $derived(game?.images.find((i) => i.isCover));
 	// P1: primary first, then the Releases order.
@@ -463,6 +484,8 @@
 
 <svelte:head><title>{game?.displayTitle ?? 'Game'} · RnRomManager</title></svelte:head>
 
+<svelte:window onresize={measureDescription} />
+
 <!-- P2: each value links to its Collections group (resolved by name there); none is a plain dash. -->
 {#snippet metadataLinks(tab: 'developers' | 'publishers' | 'genres', names: string[])}
 	{#each names as name, i (i)}{i > 0 ? ', ' : ''}<a
@@ -621,7 +644,25 @@
 				</div>
 			{/if}
 			{#if game.description}
-				<p style="white-space: pre-line">{game.description}</p>
+				<p
+					id="game-description"
+					class="game-description"
+					class:clamped={!descriptionExpanded}
+					class:mb-1={descriptionOverflows}
+					bind:this={descriptionEl}
+				>
+					{game.description}
+				</p>
+				{#if descriptionOverflows}
+					<button
+						type="button"
+						class="btn btn-link btn-sm p-0 mb-3"
+						aria-expanded={descriptionExpanded}
+						aria-controls="game-description"
+						onclick={() => (descriptionExpanded = !descriptionExpanded)}
+						>{descriptionExpanded ? 'Show less' : 'Show more'}</button
+					>
+				{/if}
 			{/if}
 			<div class="d-flex flex-wrap gap-2">
 				{#if external}
@@ -1230,3 +1271,17 @@
 		<Icon name={inCart ? 'cart-check' : 'cart-add'} />
 	</button>
 {/snippet}
+
+<style>
+	.game-description {
+		white-space: pre-line;
+	}
+	/* P5: two lines until Show more. */
+	.game-description.clamped {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
+	}
+</style>

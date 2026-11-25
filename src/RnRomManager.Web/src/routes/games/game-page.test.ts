@@ -1701,6 +1701,68 @@ describe('game detail page', () => {
 		expect(cell('Genres').querySelector('a')).toBeNull();
 	});
 
+	describe('description clamp (P5)', () => {
+		const text = 'Line one.\nLine two.\nLine three.';
+		/** jsdom has no layout: stub the clamped paragraph's heights. */
+		const heights = (scroll: number, client: number) => {
+			vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(scroll);
+			vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(client);
+		};
+		afterEach(() => vi.restoreAllMocks());
+		const toggle = (name: string) => screen.queryByRole('button', { name });
+
+		it('clamps to two lines and offers Show more when the text overflows', async () => {
+			heights(72, 48);
+			answers.push({ status: 200, body: { ...game([1]), description: text } });
+			render(GamePage);
+
+			const more = await screen.findByRole('button', { name: 'Show more' });
+			const p = document.getElementById('game-description')!;
+			expect(p.tagName).toBe('P');
+			expect(p.textContent).toBe(text);
+			expect(p.classList).toContain('clamped');
+			expect(more.className).toBe('btn btn-link btn-sm p-0 mb-3');
+			expect(more.getAttribute('type')).toBe('button');
+			expect(more.getAttribute('aria-controls')).toBe('game-description');
+			expect(more.getAttribute('aria-expanded')).toBe('false');
+
+			await fireEvent.click(more);
+			expect(p.classList).not.toContain('clamped');
+			const less = toggle('Show less')!;
+			expect(less.getAttribute('aria-expanded')).toBe('true');
+
+			await fireEvent.click(less);
+			expect(p.classList).toContain('clamped');
+			expect(toggle('Show more')).toBeTruthy();
+		});
+
+		it('no toggle when the text fits', async () => {
+			heights(48, 48);
+			answers.push({ status: 200, body: { ...game([1]), description: text } });
+			render(GamePage);
+
+			await screen.findByText(/Line one/);
+			expect(toggle('Show more')).toBeNull();
+			expect(toggle('Show less')).toBeNull();
+		});
+
+		it('collapses again on another game', async () => {
+			heights(72, 48);
+			answers.push(
+				{ status: 200, body: { ...game([1]), description: text } },
+				{ status: 200, body: { ...game([1]), id: 'g2', description: text } }
+			);
+			render(GamePage);
+			await fireEvent.click(await screen.findByRole('button', { name: 'Show more' }));
+			expect(toggle('Show less')).toBeTruthy();
+
+			navigateTo('/games/g2');
+
+			expect(await screen.findByRole('button', { name: 'Show more' })).toBeTruthy();
+			expect(document.getElementById('game-description')!.classList).toContain('clamped');
+		});
+	});
+
 	it('Back to Library is a small outline button to / (B5)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
