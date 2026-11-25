@@ -7,7 +7,7 @@ namespace RnRomManager.Api.Endpoints;
 
 /// <summary>
 /// <c>/api/timeline*</c> (Timeline T8, T9): any signed-in user browses the games linked to IGDB that have a release year,
-/// counted per year and listed by year range.
+/// counted per year and listed by year range; and <c>/api/igdb/games/{igdbId}/page</c> (T7), a redirect to a game's IGDB page.
 /// </summary>
 public static class TimelineEndpoints
 {
@@ -59,6 +59,24 @@ public static class TimelineEndpoints
             };
             var result = await LibraryEndpoints.ForViewerAsync(await games.ListAsync(query, ctx.RequestAborted), ctx, games);
             return Results.Ok(Paging.ToDto(result, game => LibraryEndpoints.ToListItemDto(game, systems)));
+        });
+
+        // T7: any signed-in user; found pages and not-found results are cached here, failures aren't.
+        api.MapGet("/igdb/games/{igdbId:int}/page", async (int igdbId, HttpContext ctx, IGameInfoLookup lookup, IgdbPageUrlCache cache) =>
+        {
+            if (igdbId < 1)
+                return Problems.NotFound(ctx);
+            if (!lookup.Configured)
+                return Problems.Create(ctx, StatusCodes.Status409Conflict, LibraryEndpoints.IgdbNotConfigured,
+                    "Metadata lookup needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
+            if (!cache.TryGet(igdbId, out var url))
+            {
+                var result = await lookup.GamePageUrlAsync(igdbId, ctx.RequestAborted);
+                if (result.FailedTitle is not null)
+                    return Problems.Create(ctx, StatusCodes.Status502BadGateway, LibraryEndpoints.IgdbFailed, result.FailedTitle);
+                cache.Set(igdbId, url = result.Url);
+            }
+            return url is null ? Problems.NotFound(ctx) : Results.Redirect(url);
         });
 
         return api;

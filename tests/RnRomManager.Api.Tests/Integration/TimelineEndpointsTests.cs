@@ -35,7 +35,7 @@ public class TimelineEndpointsTests
         await _factory.ResetAsync();
         _lookup.ClearSubstitute();
         _lookup.Configured.Returns(true);
-        _user = await AuthClient.CreateAsync(_factory);
+        _user = await AuthClient.CreateAsync(_factory, followRedirects: false);
         await TestUsers.CreateAsync(_factory, "alice");
         (await _user.LoginAsync("alice", TestUsers.Password)).Dispose();
     }
@@ -144,5 +144,74 @@ public class TimelineEndpointsTests
         Assert.That(errors.TryGetProperty(field, out var error), Is.True, body.ToString());
         if (message is not null)
             Assert.That(error[0].GetString(), Is.EqualTo(message));
+    }
+
+    private async Task<HttpResponseMessage> PageAsync(int igdbId) => await _user.GetAsync($"/api/igdb/games/{igdbId}/page");
+
+    private static async Task<JsonElement> ProblemAsync(HttpResponseMessage response) =>
+        JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
+
+    [Test]
+    public async Task IgdbPage_Found_RedirectsAndIsCached()
+    {
+        _lookup.GamePageUrlAsync(9101, Arg.Any<CancellationToken>()).Returns(new GamePageResult("https://www.igdb.com/games/orbit", null));
+
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            using var response = await PageAsync(9101);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
+            Assert.That(response.Headers.Location, Is.EqualTo(new Uri("https://www.igdb.com/games/orbit")));
+        }
+        await _lookup.Received(1).GamePageUrlAsync(9101, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task IgdbPage_NotFound_Is404AndIsCached()
+    {
+        _lookup.GamePageUrlAsync(9102, Arg.Any<CancellationToken>()).Returns(new GamePageResult(null, null));
+
+        using (var first = await PageAsync(9102))
+            Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        using (var second = await PageAsync(9102))
+            Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        await _lookup.Received(1).GamePageUrlAsync(9102, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task IgdbPage_Failure_Is502AndIsNotCached()
+    {
+        _lookup.GamePageUrlAsync(9103, Arg.Any<CancellationToken>()).Returns(new GamePageResult(null, "IGDB is busy; try again in a moment."));
+
+        using (var response = await PageAsync(9103))
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadGateway));
+            var problem = await ProblemAsync(response);
+            Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("IgdbFailed"));
+            Assert.That(problem.GetProperty("title").GetString(), Is.EqualTo("IGDB is busy; try again in a moment."));
+        }
+        using (await PageAsync(9103)) { }
+        await _lookup.Received(2).GamePageUrlAsync(9103, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task IgdbPage_NotConfigured_Is409()
+    {
+        _lookup.Configured.Returns(false);
+
+        using var response = await PageAsync(9104);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        var problem = await ProblemAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("IgdbNotConfigured"));
+        Assert.That(problem.GetProperty("title").GetString(), Is.EqualTo("Metadata lookup needs Sources:IgdbClientId and Sources:IgdbClientSecret."));
+        await _lookup.DidNotReceiveWithAnyArgs().GamePageUrlAsync(default, default);
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public async Task IgdbPage_IdBelowOne_Is404(int igdbId)
+    {
+        using var response = await PageAsync(igdbId);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        await _lookup.DidNotReceiveWithAnyArgs().GamePageUrlAsync(default, default);
     }
 }

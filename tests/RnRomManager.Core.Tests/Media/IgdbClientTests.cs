@@ -526,4 +526,35 @@ public class IgdbClientTests
         _igdb.Games = (_, _) => throw new HttpRequestException("down");
         Assert.That((await Client().LookupAsync("Orbit", "snes", CancellationToken.None)).FailedTitle, Is.EqualTo("IGDB couldn't be reached."));
     }
+
+    [Test]
+    public async Task GamePage_AsksForTheUrlById_AndReturnsAnIgdbUrl()
+    {
+        _igdb.Games = (_, _) => Task.FromResult(Json("""[{"id":42,"url":"https://www.igdb.com/games/orbit"}]"""));
+
+        var result = await Client().GamePageUrlAsync(42, CancellationToken.None);
+
+        Assert.That(result, Is.EqualTo(new GamePageResult("https://www.igdb.com/games/orbit", null)));
+        Assert.That(_igdb.GameRequests.Single().Body, Is.EqualTo("fields url; where id = 42; limit 1;"));
+    }
+
+    [TestCase("[]")]
+    [TestCase("""[{"id":42}]""")]
+    [TestCase("""[{"id":42,"url":"https://evil.example/games/orbit"}]""")]
+    [TestCase("""[{"id":42,"url":"http://www.igdb.com/games/orbit"}]""")]
+    public async Task GamePage_NoGameMissingOrForeignUrl_IsBothNull(string json)
+    {
+        _igdb.Games = (_, _) => Task.FromResult(Json(json));
+        Assert.That(await Client().GamePageUrlAsync(42, CancellationToken.None), Is.EqualTo(new GamePageResult(null, null)));
+    }
+
+    [Test]
+    public async Task GamePage_Failure_ReturnsItsTitle()
+    {
+        _igdb.Games = (_, _) => Task.FromResult(Status(HttpStatusCode.TooManyRequests));
+        Assert.That(await Client().GamePageUrlAsync(42, CancellationToken.None), Is.EqualTo(new GamePageResult(null, "IGDB is busy; try again in a moment.")));
+
+        _igdb.Games = (_, _) => throw new HttpRequestException("down");
+        Assert.That((await Client().GamePageUrlAsync(42, CancellationToken.None)).FailedTitle, Is.EqualTo("IGDB couldn't be reached."));
+    }
 }

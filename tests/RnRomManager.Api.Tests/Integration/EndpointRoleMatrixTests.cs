@@ -115,6 +115,7 @@ public partial class EndpointRoleMatrixTests
         ["DELETE /api/discovery/{kind}/logo"] = Role.Admin,
         ["GET /api/timeline"] = Role.User,
         ["GET /api/timeline/games"] = Role.User,
+        ["GET /api/igdb/games/{igdbId:int}/page"] = Role.User,
 
         ["GET /api/ingest/pending"] = Role.Admin,
         ["GET /api/ingest/failed"] = Role.Admin,

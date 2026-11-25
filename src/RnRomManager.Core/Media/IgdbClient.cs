@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -42,6 +43,12 @@ public sealed record GameInfoMatch(int IgdbId, string Name, int? ReleaseYear, IR
 /// <summary>The matches, or the failure title (the image suggestions' titles) when IGDB couldn't be used.</summary>
 public sealed record GameInfoLookupResult(IReadOnlyList<GameInfoMatch>? Matches, string? FailedTitle);
 
+/// <summary>
+/// Timeline T7: the game's IGDB page (<c>https://www.igdb.com/…</c>); both null when IGDB has no such game or page, or
+/// <see cref="FailedTitle"/> when IGDB couldn't be used.
+/// </summary>
+public sealed record GamePageResult(string? Url, string? FailedTitle);
+
 /// <summary>IGDB metadata lookup (L3): up to five games matching a title, for the Edit Metadata modal.</summary>
 public interface IGameInfoLookup
 {
@@ -50,6 +57,29 @@ public interface IGameInfoLookup
 
     /// <summary><paramref name="title"/> goes through <see cref="IgdbClient.SearchTitle"/>. Cancellation propagates.</summary>
     Task<GameInfoLookupResult> LookupAsync(string title, string systemId, CancellationToken cancellationToken);
+
+    /// <summary>T7: the IGDB page of game <paramref name="igdbId"/>. Cancellation propagates.</summary>
+    Task<GamePageResult> GamePageUrlAsync(int igdbId, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// T7: IGDB page URLs by game id, per process; found pages and not-found (null) results only, never failures. Cleared
+/// whole when it holds <see cref="MaxEntries"/>.
+/// </summary>
+public sealed class IgdbPageUrlCache
+{
+    public const int MaxEntries = 10_000;
+
+    private readonly ConcurrentDictionary<int, string?> _urls = new();
+
+    public bool TryGet(int igdbId, out string? url) => _urls.TryGetValue(igdbId, out url);
+
+    public void Set(int igdbId, string? url)
+    {
+        if (_urls.Count >= MaxEntries)
+            _urls.Clear();
+        _urls[igdbId] = url;
+    }
 }
 
 /// <summary>
@@ -149,6 +179,31 @@ public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, I
             .ConfigureAwait(false);
         return new GameInfoLookupResult(matches, failed);
     }
+
+    public async Task<GamePageResult> GamePageUrlAsync(int igdbId, CancellationToken cancellationToken)
+    {
+        if (!Configured)
+            throw new InvalidOperationException("IGDB isn't configured.");
+        try
+        {
+            var root = await SearchAsync(PageBody(igdbId), cancellationToken).ConfigureAwait(false);
+            var url = root.EnumerateArray().Where(g => g.ValueKind == JsonValueKind.Object).Select(g => Text(g, "url")).FirstOrDefault();
+            return new GamePageResult(url is not null && url.StartsWith("https://www.igdb.com/", StringComparison.Ordinal) ? url : null, null);
+        }
+        catch (IgdbFailure failure)
+        {
+            logger.LogWarning("IGDB page of {IgdbId} failed: {Reason}", igdbId, failure.Message);
+            return new GamePageResult(null, failure.Message);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning("IGDB page of {IgdbId} failed: {Type}: {Message}", igdbId, ex.GetType().Name, ex.Message);
+            return new GamePageResult(null, Unreachable);
+        }
+    }
+
+    /// <summary>T7: the Apicalypse body for one game's page URL.</summary>
+    public static string PageBody(int igdbId) => $"fields url; where id = {igdbId.ToString(CultureInfo.InvariantCulture)}; limit 1;";
 
     /// <summary>
     /// S4/L3: searches the system's IGDB platform, then once more on every platform when that finds nothing; failures become

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace RnRomManager.Api.Tests.Integration;
 
@@ -15,9 +16,10 @@ public sealed class AuthClient(HttpClient http) : IDisposable
 
     private static int _lastClientId;
 
-    public static async Task<AuthClient> CreateAsync(ApiFactory factory)
+    /// <param name="followRedirects">false to see a redirect's own status and <c>Location</c>.</param>
+    public static async Task<AuthClient> CreateAsync(ApiFactory factory, bool followRedirects = true)
     {
-        var http = factory.CreateClient();
+        var http = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = followRedirects });
         // Its own client IP (ApiFactory), like a separate browser: per-client limits don't carry over between tests.
         http.DefaultRequestHeaders.Add(ApiFactory.ClientHeader, Interlocked.Increment(ref _lastClientId).ToString(CultureInfo.InvariantCulture));
         var client = new AuthClient(http);

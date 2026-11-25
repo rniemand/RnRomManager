@@ -183,6 +183,7 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 `src/RnRomManager.Api/Endpoints/TimelineEndpoints.cs`:
 - `GET /api/timeline`
 - `GET /api/timeline/games`
+- `GET /api/igdb/games/{igdbId:int}/page`
 
 `src/RnRomManager.Api/Endpoints/UserEndpoints.cs`:
 - `GET /api/users` Admin
