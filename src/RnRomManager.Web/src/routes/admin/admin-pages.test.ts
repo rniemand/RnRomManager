@@ -320,6 +320,7 @@ describe('admin pages', () => {
 			['DATs', 'bi bi-database'],
 			['Settings', 'bi bi-gear'],
 			['ROM Zip Config', 'bi bi-file-zip'],
+			['BIOS info', 'bi bi-cpu'],
 			['Backups', 'bi bi-archive'],
 			['Logs', 'bi bi-journal-text'],
 			['Auditing', 'bi bi-clock-history']

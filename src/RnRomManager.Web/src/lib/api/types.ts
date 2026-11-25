@@ -364,6 +364,38 @@ export interface DatVersion {
 	downloadedAt: string;
 }
 
+/** One file of `GET /api/admin/bios`. */
+export interface BiosFileStatus {
+	name: string;
+	minBytes: number;
+	maxBytes: number;
+	status: 'Valid' | 'Missing' | 'WrongSize' | 'Unsafe' | 'Unreadable';
+	size: number | null;
+	md5: string | null;
+}
+
+/** One system's BIOS needs in `GET /api/admin/bios`. */
+export interface BiosGroup {
+	system: string;
+	need: 'All' | 'OneOf' | 'Optional';
+	ok: boolean;
+	note: string;
+	files: BiosFileStatus[];
+	coreSetting: string | null;
+	coreEnv: string | null;
+	coreConfigured: boolean | null;
+}
+
+/** `GET /api/admin/bios`: the BIOS info tab. */
+export interface BiosInfo {
+	folder: string;
+	setting: string;
+	env: string;
+	folderExists: boolean;
+	groups: BiosGroup[];
+	otherFiles: { name: string; size: number }[];
+}
+
 export type ReviewReason = 'NoDatMatch' | 'AmbiguousGroup' | 'AmbiguousSet';
 
 /** One item of `GET /api/review` (spec §23). */
