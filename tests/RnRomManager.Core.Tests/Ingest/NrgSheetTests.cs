@@ -70,7 +70,11 @@ public class NrgSheetTests
 
     private static IEnumerable<TestCaseData> ParseErrors()
     {
-        TestCaseData Case(string name, byte[] region, string error, bool v2 = true) =>
+        TestCaseData Case(
+            string name,
+            byte[] region,
+            string error,
+            bool v2 = true) =>
             new TestCaseData(region, v2, error).SetName($"Parse_{name}_Fails");
 
         var one = new NrgBlock(0, 0, 10 * S);

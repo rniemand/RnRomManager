@@ -8,7 +8,6 @@ using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
-using RnRomManager.Core.Users;
 using RnRomManager.Data.Repositories;
 using RnRomManager.TestData;
 
@@ -25,18 +24,9 @@ public class AuditLibraryEditTests
 
     private ApiFactory _factory = null!;
     private AuthClient _admin = null!;
-    private FailingMirror _mirror = null!;
+    private AuditLibraryEditFailingMirror _mirror = null!;
     private int _bossId;
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
-
-    /// <summary>The real mirror, made to fail on demand (a DB update that fails after the ZIP was written).</summary>
-    private sealed class FailingMirror(ILibraryMirror inner) : ILibraryMirror
-    {
-        public bool Fail { get; set; }
-
-        public Task ApplyAsync(IReadOnlyList<MirrorEntry> replace, IReadOnlyCollection<Guid> delete, CancellationToken cancellationToken) =>
-            Fail ? throw new TimeoutException("DB down") : inner.ApplyAsync(replace, delete, cancellationToken);
-    }
 
     [OneTimeSetUp]
     public async Task StartHost()
@@ -44,7 +34,7 @@ public class AuditLibraryEditTests
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
             TestServices = services => services.AddSingleton<ILibraryMirror>(sp =>
-                _mirror = new FailingMirror(ActivatorUtilities.CreateInstance<LibraryMirror>(sp))),
+                _mirror = new AuditLibraryEditFailingMirror(ActivatorUtilities.CreateInstance<LibraryMirror>(sp))),
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         await _factory.StartSharedAsync();
@@ -122,15 +112,12 @@ public class AuditLibraryEditTests
     private async Task<long> RomId(Guid gameId, string fileName) =>
         (await Service<IRomRepository>().ListByGameAsync(gameId, default)).Single(r => r.FileName == fileName).Id;
 
-    private sealed record Row(string Action, int? UserId, string? Username, Guid? JobId, Guid? GameId, string? Path, string? TargetPath,
-        string? Details);
-
     /// <summary>The edit rows (the ingest rows from seeding are left out).</summary>
-    private async Task<List<Row>> EditRows()
+    private async Task<List<AuditLibraryEditRow>> EditRows()
     {
         await Service<AuditWriter>().FlushAsync();
         await using var db = Service<IDbConnectionFactory>().Create();
-        return (await db.QueryAsync<Row>("""
+        return (await db.QueryAsync<AuditLibraryEditRow>("""
             SELECT action AS Action, user_id AS UserId, username AS Username, job_id AS JobId, game_id AS GameId, path AS Path,
                    target_path AS TargetPath, details AS Details
             FROM audit_events WHERE action <> 'Ingested' AND action NOT IN ('SignedIn', 'SignInFailed', 'LockedOut', 'PasswordChanged') ORDER BY id

@@ -93,7 +93,11 @@ public class DatStoreTests
         Assert.That(store.MetadataFor("46df91ad"), Is.SameAs(DatMetadata.Empty));
     }
 
-    private static DatRom Wii(string game, string serial, char sha1, string ext = ".iso") =>
+    private static DatRom Wii(
+        string game,
+        string serial,
+        char sha1,
+        string ext = ".iso") =>
         new(game, game + ext, 1, "0000000" + sha1, new string(sha1, 32), new string(sha1, 40), serial);
 
     [Test]

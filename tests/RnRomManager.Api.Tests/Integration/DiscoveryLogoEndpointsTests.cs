@@ -15,8 +15,8 @@ using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
-using RnRomManager.Data.Repositories;
 using RnRomManager.Core.Users;
+using RnRomManager.Data.Repositories;
 using RnRomManager.TestData;
 using static RnRomManager.TestData.TestLibrary;
 
@@ -89,7 +89,11 @@ public class DiscoveryLogoEndpointsTests
         return client;
     }
 
-    private async Task<Guid> AddGameAsync(string title, string[] publishers, string[]? genres = null, string[]? developers = null)
+    private async Task<Guid> AddGameAsync(
+        string title,
+        string[] publishers,
+        string[]? genres = null,
+        string[]? developers = null)
     {
         var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with { Publishers = publishers, Genres = genres ?? [], Developers = developers ?? [] };
         await _factory.Services.GetRequiredService<ILibraryMirror>()
@@ -144,13 +148,11 @@ public class DiscoveryLogoEndpointsTests
         return (await AuthClient.JsonAsync(response)).GetProperty("items").EnumerateArray().Single(i => i.GetProperty("key").GetString() == key);
     }
 
-    private sealed record AuditRow(string Action, string? Username, string? Details);
-
-    private async Task<List<AuditRow>> AuditRowsAsync()
+    private async Task<List<DiscoveryLogoEndpointsAuditRow>> AuditRowsAsync()
     {
         await _factory.Services.GetRequiredService<AuditWriter>().FlushAsync();
         await using var db = _factory.Services.GetRequiredService<IDbConnectionFactory>().Create();
-        return (await db.QueryAsync<AuditRow>("""
+        return (await db.QueryAsync<DiscoveryLogoEndpointsAuditRow>("""
             SELECT action AS Action, username AS Username, details AS Details FROM audit_events
             WHERE action LIKE '%Logo%' ORDER BY id
             """)).AsList();
@@ -223,9 +225,9 @@ public class DiscoveryLogoEndpointsTests
         var details = $"Nintendo (key {Nintendo})";
         Assert.That(await AuditRowsAsync(), Is.EqualTo(new[]
         {
-            new AuditRow(AuditActions.PublisherLogoReplaced, "alice", details),
-            new AuditRow(AuditActions.PublisherLogoReplaced, "bob", details),
-            new AuditRow(AuditActions.PublisherLogoRemoved, "alice", details),
+            new DiscoveryLogoEndpointsAuditRow(AuditActions.PublisherLogoReplaced, "alice", details),
+            new DiscoveryLogoEndpointsAuditRow(AuditActions.PublisherLogoReplaced, "bob", details),
+            new DiscoveryLogoEndpointsAuditRow(AuditActions.PublisherLogoRemoved, "alice", details),
         }), "failed writes aren't audited");
     }
 
@@ -286,8 +288,8 @@ public class DiscoveryLogoEndpointsTests
         };
         Assert.That(await AuditRowsAsync(), Is.EqualTo(new[]
         {
-            new AuditRow(replaced, "alice", details),
-            new AuditRow(removed, "alice", details),
+            new DiscoveryLogoEndpointsAuditRow(replaced, "alice", details),
+            new DiscoveryLogoEndpointsAuditRow(removed, "alice", details),
         }));
         Assert.That(await AuditSystemIdsAsync(), Is.EqualTo(new[] { systemId, systemId }));
     }
@@ -305,7 +307,7 @@ public class DiscoveryLogoEndpointsTests
         Assert.That(await StatusAsync(_alice.GetAsync(url)), Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await StatusAsync(_alice.SendContentAsync(HttpMethod.Put, url, Form(("file", Png(5, 5))))), Is.EqualTo(HttpStatusCode.NotFound));
         Assert.That(await StatusAsync(_alice.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true)), Is.EqualTo(HttpStatusCode.NoContent));
-        Assert.That((await AuditRowsAsync()).Last(), Is.EqualTo(new AuditRow(AuditActions.GenreLogoRemoved, "alice", $"key {Key("puzzle")}")));
+        Assert.That((await AuditRowsAsync()).Last(), Is.EqualTo(new DiscoveryLogoEndpointsAuditRow(AuditActions.GenreLogoRemoved, "alice", $"key {Key("puzzle")}")));
     }
 
     [Test]
@@ -319,7 +321,7 @@ public class DiscoveryLogoEndpointsTests
             new DiscoveryLogo(LogoKind.Systems, DiscoveryKey.ForSystem("zx81"), "image/png", Png(5, 5), null, When.UtcDateTime), default);
         Assert.That(await StatusAsync(_alice.GetAsync(url)), Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await StatusAsync(_alice.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true)), Is.EqualTo(HttpStatusCode.NoContent));
-        Assert.That(await AuditRowsAsync(), Is.EqualTo(new[] { new AuditRow(AuditActions.SystemLogoRemoved, "alice", "system zx81") }));
+        Assert.That(await AuditRowsAsync(), Is.EqualTo(new[] { new DiscoveryLogoEndpointsAuditRow(AuditActions.SystemLogoRemoved, "alice", "system zx81") }));
     }
 
     [TestCase("studios")]
@@ -364,7 +366,11 @@ public class DiscoveryLogoEndpointsTests
 
     private static string FromUrl(string kind, string key) => $"/api/discovery/{kind}/logo/from-url?key={key}";
 
-    private static Task<HttpResponseMessage> PutUrlAsync(AuthClient client, string kind, string key, string url) =>
+    private static Task<HttpResponseMessage> PutUrlAsync(
+        AuthClient client,
+        string kind,
+        string key,
+        string url) =>
         client.SendAsync(HttpMethod.Put, FromUrl(kind, key), new { url }, sendXsrf: true);
 
     [TestCase("publishers")]
@@ -397,7 +403,7 @@ public class DiscoveryLogoEndpointsTests
             "genres" => AuditActions.GenreLogoReplaced,
             _ => AuditActions.SystemLogoReplaced,
         };
-        Assert.That(await AuditRowsAsync(), Is.EqualTo(new[] { new AuditRow(replaced, "alice", $"{details} from {url}") }));
+        Assert.That(await AuditRowsAsync(), Is.EqualTo(new[] { new DiscoveryLogoEndpointsAuditRow(replaced, "alice", $"{details} from {url}") }));
     }
 
     private static IEnumerable<TestCaseData> BadUrls()
@@ -561,7 +567,7 @@ public class DiscoveryLogoEndpointsTests
     {
         HttpContent form = Form(("file", Png(10, 10, DiscoveryLogoEndpoints.RequestLimit + 1)));
         if (chunked)
-            form = new UnknownLengthContent(form);
+            form = new DiscoveryLogoEndpointsUnknownLengthContent(form);
 
         using var response = await _alice.SendContentAsync(HttpMethod.Put, Url(Nintendo), form);
 
@@ -601,32 +607,5 @@ public class DiscoveryLogoEndpointsTests
             Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("AntiforgeryInvalid"));
         }
         Assert.That(await StatusAsync(_alice.GetAsync(Url(Nintendo))), Is.EqualTo(HttpStatusCode.NotFound));
-    }
-
-    /// <summary>The inner content without a length, so it's sent chunked.</summary>
-    private sealed class UnknownLengthContent : HttpContent
-    {
-        private readonly HttpContent _inner;
-
-        public UnknownLengthContent(HttpContent inner)
-        {
-            _inner = inner;
-            foreach (var header in inner.Headers.Where(h => h.Key != "Content-Length"))
-                Headers.TryAddWithoutValidation(header.Key, header.Value);
-        }
-
-        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) => _inner.CopyToAsync(stream);
-
-        protected override bool TryComputeLength(out long length)
-        {
-            length = 0;
-            return false;
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing) _inner.Dispose();
-            base.Dispose(disposing);
-        }
     }
 }

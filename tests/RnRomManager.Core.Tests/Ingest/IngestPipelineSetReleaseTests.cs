@@ -88,7 +88,10 @@ public class IngestPipelineSetReleaseTests
 
     private string GameFolder => Path.Combine(_paths.Roms, ExternalSetTestHandler.SystemId, Bucket.For("Mystery.zip"));
 
-    private Task<IngestItemResult> StoreAsync(IngestPipeline pipeline, IReadOnlyList<(IngestFile, string)> members, List<Guid>? mirrored = null,
+    private Task<IngestItemResult> StoreAsync(
+        IngestPipeline pipeline,
+        IReadOnlyList<(IngestFile, string)> members,
+        List<Guid>? mirrored = null,
         JobProgress? progress = null) =>
         pipeline.StoreSetReleaseAsync(members, _system, Rom(), DatMetadata.Empty, null,
             id => { mirrored?.Add(id); return Task.CompletedTask; }, Actor, "Manual", progress ?? new JobProgress());

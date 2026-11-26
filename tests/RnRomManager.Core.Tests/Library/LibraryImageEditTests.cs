@@ -6,7 +6,6 @@ using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
-using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 using static RnRomManager.TestData.TestLibrary;
@@ -72,7 +71,12 @@ public class LibraryImageEditTests
 
     private string Abs => _dir.Combine("gb", "T", "Tetris.zip");
 
-    private InfoJsonImage Image(string name, ImageType type, byte[] bytes, bool cover = false, bool isDefault = false) => new()
+    private InfoJsonImage Image(
+        string name,
+        ImageType type,
+        byte[] bytes,
+        bool cover = false,
+        bool isDefault = false) => new()
     {
         FileName = name, Type = type, Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceUpload, IsDefault = isDefault,
         IsCover = cover, SizeBytes = bytes.Length, Sha1 = Convert.ToHexStringLower(SHA1.HashData(bytes)), Width = 1, Height = 1, DateAdded = When,

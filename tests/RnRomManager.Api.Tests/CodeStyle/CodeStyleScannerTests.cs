@@ -90,6 +90,10 @@ public class CodeStyleScannerTests
     public void Cs2_TrailingCommentCommas_AreNotCounted() =>
         Assert.That(Rules(Cs, Lines("public class A", "{", "    void M(int a, int b) // c, d, e", "    { }", "}")), Is.Empty);
 
+    [Test]
+    public void RawStringContent_IsNotScanned() =>
+        Assert.That(Rules(Cs, Lines("public class A", "{", "    private const string Sql = \"\"\"", "        SELECT a, b, CONCAT('x', @n, ' ', c), d", "        public class B { }", "        \"\"\";", "}")), Is.Empty);
+
     // ---- SV1 ----
 
     [Test]

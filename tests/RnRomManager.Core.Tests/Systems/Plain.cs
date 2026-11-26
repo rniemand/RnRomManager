@@ -1,0 +1,17 @@
+using RnRomManager.Core.Systems;
+
+namespace RnRomManager.Core.Tests.Systems;
+
+internal sealed class Plain : ISystemHandler
+{
+    public string Id => "plain";
+    public string DisplayName => "Plain System";
+    public string Family => "plain";
+    public IReadOnlyList<string> RomExtensions => [".bin"];
+    public long MinRomSizeBytes => 1;
+    public long MaxRomSizeBytes => 1024;
+    public string DatName => "Plain";
+    public bool EmbedRomsInZip => true;
+    public ReadOnlyMemory<byte> DefaultBoxArtPng => ReadOnlyMemory<byte>.Empty;
+    public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
+}

@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using Dapper;
-using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using RnRomManager.Core.Database;
@@ -35,7 +34,12 @@ public partial class ExternalLibraryTests
         return await db.QuerySingleAsync<long>("SELECT id FROM roms WHERE sha1 = @sha", new { sha = Sha(bytes) });
     }
 
-    private async Task<LibraryEditResult> MoveAsync(Guid from, byte[] release, Guid? to, string? newTitle = null, LibraryEditor? editor = null) =>
+    private async Task<LibraryEditResult> MoveAsync(
+        Guid from,
+        byte[] release,
+        Guid? to,
+        string? newTitle = null,
+        LibraryEditor? editor = null) =>
         await (editor ?? EditorWith()).MoveReleaseAsync(from, await RomIdAsync(release), to, newTitle, Editor, default);
 
     private static string[] Listed(string zip)
@@ -305,7 +309,12 @@ public partial class ExternalLibraryTests
     }
 
     /// <summary>An external game written straight to disk and mirrored, for names ingest wouldn't produce.</summary>
-    private async Task<Guid> CraftedGameAsync(string title, string fileName, string pointer, byte[] bytes, string? note = null)
+    private async Task<Guid> CraftedGameAsync(
+        string title,
+        string fileName,
+        string pointer,
+        byte[] bytes,
+        string? note = null)
     {
         var game = TestLibrary.Game(title, TestLibrary.Rom(fileName, bytes) with { ExternalFileName = pointer }) with { System = ExternalTestHandler.SystemId };
         var folder = Path.Combine(_factory.Root, "roms", "ext", Core.Naming.Bucket.For(title + ".zip"));

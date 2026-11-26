@@ -9,7 +9,6 @@ using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
-using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -344,7 +343,13 @@ public class LibraryMoveMergeTests
     [TestCase(null, false, 3, true, 3, true, TestName = "Merge rating: unrated target takes the source's; favourite OR")]
     [TestCase(5, false, 3, false, 5, false, TestName = "Merge rating: target keeps its own")]
     [TestCase(2, true, null, false, 2, true, TestName = "Merge rating: target favourite kept when source isn't")]
-    public async Task Merge_RatingAndFavourite(int? targetRating, bool targetFav, int? sourceRating, bool sourceFav, int? rating, bool favourite)
+    public async Task Merge_RatingAndFavourite(
+        int? targetRating,
+        bool targetFav,
+        int? sourceRating,
+        bool sourceFav,
+        int? rating,
+        bool favourite)
     {
         var tetris = await Game(("t1.gb", TetrisWorld));
         var zelda = await Game(("z.gb", Zelda));

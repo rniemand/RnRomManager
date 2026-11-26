@@ -12,7 +12,6 @@ using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
-using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -565,7 +564,11 @@ public partial class LibraryEndpointsTests
     [TestCase("n64", false, true, "mupen64plus_next")]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
-    public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
+    public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(
+        string system,
+        bool external,
+        bool playable,
+        string? core) =>
         AssertQuickPlayAsync(system, external, playable, core);
 
     // Browser play format gaps N5: an .nrg primary (read from roms.file_name, any case) plays; play-disc sends a generated cue.
@@ -574,7 +577,11 @@ public partial class LibraryEndpointsTests
     [TestCase("psx", "x.bin", "x.nrg", true)]
     [TestCase("saturn", "x.NRG", "x.bin", true)]
     [TestCase("saturn", "x.bin", "x.nrg", true)]
-    public Task Games_QuickPlay_AnNrgPrimary_IsPlayable(string system, string fileName, string externalName, bool playable) =>
+    public Task Games_QuickPlay_AnNrgPrimary_IsPlayable(
+        string system,
+        string fileName,
+        string externalName,
+        bool playable) =>
         AssertQuickPlayAsync(system, true, playable, system == "saturn" ? "yabause" : "pcsx_rearmed", fileName, externalName);
 
     // CHD B5: a .chd primary plays on all three disc cores, with playDisc true.
@@ -593,7 +600,12 @@ public partial class LibraryEndpointsTests
     [TestCase("pcfx", "mednafen_pcfx", "x.bin", null, false)]
     [TestCase("pcfx", "mednafen_pcfx", "x.BIN", null, false)]
     [TestCase("pcfx", "mednafen_pcfx", "x.chd", null, true)]
-    public Task Games_QuickPlay_DiscOnlyCores_ALoneBinIsNotPlayable(string system, string core, string fileName, string? setFile, bool playable) =>
+    public Task Games_QuickPlay_DiscOnlyCores_ALoneBinIsNotPlayable(
+        string system,
+        string core,
+        string fileName,
+        string? setFile,
+        bool playable) =>
         AssertQuickPlayAsync(system, true, playable, core, fileName, fileName, setFile);
 
     // Amiga: PUAE's WebAssembly build has no capsimg, so an .ipf primary never plays.
@@ -614,8 +626,16 @@ public partial class LibraryEndpointsTests
         await AssertQuickPlayAsync("3ds", true, playable, "azahar", fileName, fileName, header: header, playDisc: false);
     }
 
-    private async Task AssertQuickPlayAsync(string system, bool external, bool playable, string? core,
-        string? fileName = null, string externalName = "x.gb", string? setFile = null, string? header = null, bool? playDisc = null)
+    private async Task AssertQuickPlayAsync(
+        string system,
+        bool external,
+        bool playable,
+        string? core,
+        string? fileName = null,
+        string externalName = "x.gb",
+        string? setFile = null,
+        string? header = null,
+        bool? playDisc = null)
     {
         var id = await Tetris();
         long primaryId;

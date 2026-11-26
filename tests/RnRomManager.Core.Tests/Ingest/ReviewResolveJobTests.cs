@@ -168,8 +168,8 @@ public class ReviewResolveJobTests
         void Observe() => phases.Add(progress?.StepAt(DateTime.UtcNow)?.Phase);
         var (runner, job) = Build(new ExternalIngestHooks
         {
-            WrapHashStream = stream => new ObservedStream(stream, Observe),
-            Move = new ExternalMoveHooks { Rename = (from, to) => NoReplaceRename.FromErrno(95, from, to), WrapSource = stream => new ObservedStream(stream, Observe) },
+            WrapHashStream = stream => new ReviewResolveJobObservedStream(stream, Observe),
+            Move = new ExternalMoveHooks { Rename = (from, to) => NoReplaceRename.FromErrno(95, from, to), WrapSource = stream => new ReviewResolveJobObservedStream(stream, Observe) },
         });
         var started = await runner.StartAsync(new Capture(job, p => progress = p), JobTrigger.Manual, 42, CancellationToken.None);
         await started!.Completion.WaitAsync(Timeout);
@@ -196,46 +196,5 @@ public class ReviewResolveJobTests
         var (_, job) = Build();
         Assert.That(((IJob)job).Cancellable, Is.False);
         Assert.That((job.Type, job.Mode), Is.EqualTo((JobType.ReviewResolve, (JobMode?)null)));
-    }
-
-    /// <summary>Hands the test the job's progress, then runs the job.</summary>
-    private sealed class Capture(IJob inner, Action<JobProgress> seen) : IJob
-    {
-        public JobType Type => inner.Type;
-        public JobMode? Mode => inner.Mode;
-
-        public Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
-        {
-            seen(context.Progress);
-            return inner.RunAsync(context, cancellationToken);
-        }
-    }
-
-    private sealed class ObservedStream(Stream inner, Action observe) : Stream
-    {
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            observe();
-            return inner.Read(buffer, offset, count);
-        }
-
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
-            Task.FromResult(Read(buffer, offset, count));
-
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            observe();
-            return inner.ReadAsync(buffer, cancellationToken);
-        }
-
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => inner.Length;
-        public override long Position { get => inner.Position; set => throw new NotSupportedException(); }
-        public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

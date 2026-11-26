@@ -1,5 +1,4 @@
 using System.Net;
-using System.Reflection;
 using System.Security.Cryptography;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,32 +15,6 @@ namespace RnRomManager.Api.Tests.Integration;
 /// <summary>Spec T9: a retry of an archived Review item whose release is already in the library.</summary>
 public partial class ExternalLibraryTests
 {
-    /// <summary>A review repository whose first call of one method fails, as a DB outage at that moment would.</summary>
-    public class FailFirstResolution : DispatchProxy
-    {
-        public IIngestReviewRepository Inner { get; set; } = null!;
-        public string Method { get; set; } = nameof(IIngestReviewRepository.SetResolutionAsync);
-        private bool _failed;
-
-        public static IIngestReviewRepository Wrap(IIngestReviewRepository inner, string method = nameof(IIngestReviewRepository.SetResolutionAsync))
-        {
-            var proxy = Create<IIngestReviewRepository, FailFirstResolution>();
-            ((FailFirstResolution)(object)proxy).Inner = inner;
-            ((FailFirstResolution)(object)proxy).Method = method;
-            return proxy;
-        }
-
-        protected override object? Invoke(MethodInfo? method, object?[]? args)
-        {
-            if (method!.Name == Method && !_failed)
-            {
-                _failed = true;
-                return Task.FromException(new InvalidOperationException("db down"));
-            }
-            return method.Invoke(Inner, args);
-        }
-    }
-
     private ReviewResolver ResolverWith(IngestPipeline pipeline, IIngestReviewRepository? reviews = null) => reviews is null
         ? ActivatorUtilities.CreateInstance<ReviewResolver>(_factory.Services, pipeline)
         : ActivatorUtilities.CreateInstance<ReviewResolver>(_factory.Services, pipeline, reviews);

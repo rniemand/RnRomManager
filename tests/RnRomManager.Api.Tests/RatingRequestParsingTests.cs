@@ -15,7 +15,11 @@ public class RatingRequestParsingTests
     [TestCase("""{"favourite":true}""", false, null, true)]
     [TestCase("""{"rating":1,"favourite":false}""", true, 1, false)]
     [TestCase("""{"rating":5,"title":"ignored"}""", true, 5, null)]
-    public void ValidBodies(string json, bool setRating, int? rating, bool? favourite)
+    public void ValidBodies(
+        string json,
+        bool setRating,
+        int? rating,
+        bool? favourite)
     {
         var (patch, errors) = Parse(json);
 

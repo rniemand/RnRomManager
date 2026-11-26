@@ -130,7 +130,7 @@ Phase 1: C# structure (C1, C2) — each step splits types, wraps declarations an
 - [x] **6. Core Integrity/Jobs/Library**: `Core/{Integrity,Jobs,Library}`. Tests: those namespaces + `CodeStyleTests`. Done when: as above.
 - [x] **7. Core rest**: every remaining `Core` folder (`Media`, `Naming`, `Reports`, `Storage`, `Users`, …). Tests: those namespaces + `CodeStyleTests`. Done when: no baseline line under `src/RnRomManager.Core/`.
 - [x] **8. Data + Systems**: `src/RnRomManager.Data/**` (`LibraryRepositories.cs` → one file per repository plus `JsonStringListHandler.cs`), all `src/RnRomManager.Systems.*`. Tests: Data.Tests (`&Category!=Integration` if Docker is down, then rerun in Finish), the Systems test projects + `CodeStyleTests`. Done when: no `CS1`/`CS2` baseline line under `src/`.
-- [ ] **9. Tests A**: `tests/RnRomManager.Api.Tests`, `tests/RnRomManager.Core.Tests`. Tests: both projects (build + the moved fixtures' classes) + `CodeStyleTests`. Done when: no baseline line for those projects.
+- [x] **9. Tests A**: `tests/RnRomManager.Api.Tests`, `tests/RnRomManager.Core.Tests`. Tests: both projects (build + the moved fixtures' classes) + `CodeStyleTests`. Done when: no baseline line for those projects.
 - [ ] **10. Tests B**: `tests/RnRomManager.Data.Tests`, `tests/RnRomManager.Systems.*.Tests`, `tests/RnRomManager.TestData`. Tests: those projects + `CodeStyleTests`. Done when: no `CS1`/`CS2` lines left in the baseline.
 
 Phase 2: C# shared helpers (D1–D5)

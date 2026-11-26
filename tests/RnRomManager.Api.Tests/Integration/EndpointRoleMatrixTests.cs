@@ -15,13 +15,6 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public partial class EndpointRoleMatrixTests
 {
-    private enum Role
-    {
-        Anonymous,
-        User,
-        Admin,
-    }
-
     private static readonly Dictionary<string, Role> Expected = new(StringComparer.Ordinal)
     {
         ["GET /api/auth/antiforgery"] = Role.Anonymous,

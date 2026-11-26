@@ -460,7 +460,11 @@ public class InfoJsonTests
 
     private const string ExtRomName = "Orbit Test [0100000000010000][v0].nsp";
 
-    private static InfoJsonRom ExtRom(string? pointer, string fileName = ExtRomName, bool isPrimary = true, char hash = 'b') =>
+    private static InfoJsonRom ExtRom(
+        string? pointer,
+        string fileName = ExtRomName,
+        bool isPrimary = true,
+        char hash = 'b') =>
         Rom(fileName, isPrimary) with
         {
             ExternalFileName = pointer,

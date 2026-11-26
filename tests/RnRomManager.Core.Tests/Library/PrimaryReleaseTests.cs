@@ -9,7 +9,11 @@ public class PrimaryReleaseTests
 {
     private static readonly DateTimeOffset When = new(2026, 11, 10, 0, 0, 0, TimeSpan.Zero);
 
-    private static InfoJsonRom Rom(string fileName, IReadOnlyList<string>? regions = null, string? revision = null, params string[] flags) => new()
+    private static InfoJsonRom Rom(
+        string fileName,
+        IReadOnlyList<string>? regions = null,
+        string? revision = null,
+        params string[] flags) => new()
     {
         FileName = fileName,
         OriginalFileName = fileName,

@@ -18,7 +18,7 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class IngestReviewTests
 {
-    private const string Gb = "Nintendo - Game Boy";
+    internal const string Gb = "Nintendo - Game Boy";
     private static readonly byte[] Unknown = new SyntheticRomBuilder { Seed = 929, Title = "TETRIS" }.Build();
     private static readonly byte[] Known = new SyntheticRomBuilder { Seed = 1, Title = "TETRIS" }.Build();
     private ApiFactory _factory = null!;
@@ -283,27 +283,13 @@ public class IngestReviewTests
     [Test]
     public async Task AllNullHeaders_UseIngestFoldersHandler_AndRemainPlausible()
     {
-        var registry = new SystemRegistry([new Headerless("gb"), new Headerless("gbc")]);
+        var registry = new SystemRegistry([new IngestReviewHeaderless("gb"), new IngestReviewHeaderless("gbc")]);
         var pipeline = ActivatorUtilities.CreateInstance<IngestPipeline>(_factory.Services, registry);
         var file = Drop("headerless.gb", new byte[0x150]);
         var result = await pipeline.ProcessAsync(file, Guid.NewGuid(), new CircuitBreaker(), default);
         var row = (await Reviews.GetBySha1Async(result!.Sha1!, default))!;
         Assert.That((result.Outcome, result.SystemId, row.Header), Is.EqualTo(("Review", "gb", (string?)null)));
         Assert.That(File.Exists(file.FullPath), Is.True);
-    }
-
-    private sealed class Headerless(string id) : ISystemHandler
-    {
-        public string Id => id;
-        public string DisplayName => id;
-        public string Family => "gameboy";
-        public IReadOnlyList<string> RomExtensions => ["." + id];
-        public long MinRomSizeBytes => 0x150;
-        public long MaxRomSizeBytes => 16 * 1024 * 1024;
-        public string DatName => id == "gb" ? Gb : "Nintendo - Game Boy Color";
-        public bool EmbedRomsInZip => true;
-        public ReadOnlyMemory<byte> DefaultBoxArtPng => ReadOnlyMemory<byte>.Empty;
-        public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
     }
 
     [Test]

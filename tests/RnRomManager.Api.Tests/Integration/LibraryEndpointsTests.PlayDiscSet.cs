@@ -13,11 +13,19 @@ namespace RnRomManager.Api.Tests.Integration;
 public partial class LibraryEndpointsTests
 {
     /// <summary>Disc <paramref name="n"/> of <c>Odyssey (USA)</c> as a standalone image (M1's identifying fields shared).</summary>
-    private static InfoJsonRom OdysseyDisc(int n, byte[] bytes, string ext = ".chd", string title = "Odyssey") =>
+    private static InfoJsonRom OdysseyDisc(
+        int n,
+        byte[] bytes,
+        string ext = ".chd",
+        string title = "Odyssey") =>
         PsxSolo($"{title} (USA) (Disc {n}){ext}", bytes, isPrimary: n == 1) with { BaseTitle = title, Regions = ["USA"], Flags = [$"Disc {n}"] };
 
     /// <summary>Disc <paramref name="n"/> of <c>Odyssey (USA)</c> as a two-track cue set.</summary>
-    private static InfoJsonRom OdysseyCueDisc(int n, byte[] track1, byte[] track2, string title = "Odyssey")
+    private static InfoJsonRom OdysseyCueDisc(
+        int n,
+        byte[] track1,
+        byte[] track2,
+        string title = "Odyssey")
     {
         var disc = $"{title} (USA) (Disc {n})";
         return PsxSet(disc, track1, OdysseyCue(disc), track2, isPrimary: n == 1)

@@ -137,9 +137,4 @@ public partial class DatRefreshJobTests
         Assert.That(ex!.Message, Is.EqualTo("Systems 'fbneo' and 'fbneo2' both use Sources:FbneoDatUrl; nothing was refreshed."));
         Assert.That(server.Requests, Is.Empty);
     }
-
-    private sealed class FixedTime(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

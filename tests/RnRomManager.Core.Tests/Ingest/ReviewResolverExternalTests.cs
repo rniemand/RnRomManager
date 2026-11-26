@@ -10,7 +10,6 @@ using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
-using RnRomManager.Core.Media;
 using RnRomManager.Core.Naming;
 using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
@@ -501,7 +500,11 @@ public class ReviewResolverExternalTests
             return target.Game!.Roms.Single(r => r.FileName == fileName);
     }
 
-    private async Task AssertAddedAsync(ReviewResolutionResult result, Guid gameId, string zipPath, string fileName)
+    private async Task AssertAddedAsync(
+        ReviewResolutionResult result,
+        Guid gameId,
+        string zipPath,
+        string fileName)
     {
         Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
         Assert.That(result.GameId, Is.EqualTo(gameId));
@@ -584,21 +587,6 @@ public class ReviewResolverExternalTests
         var result = await _resolver.ResolveInJobAsync(1, request, Actor, default);
 
         await AssertAddedAsync(result, gameId, zipPath, "My Game (disc 2).iso");
-    }
-
-    /// <summary>A same-family sibling of <see cref="ExternalTestHandler"/> with its own extensions and size cap.</summary>
-    private sealed class Sibling(IReadOnlyList<string> extensions, long maxBytes) : ISystemHandler
-    {
-        public string Id => "ext2";
-        public string DisplayName => "External Sibling";
-        public string Family => ExternalTestHandler.SystemId;
-        public IReadOnlyList<string> RomExtensions => extensions;
-        public long MinRomSizeBytes => 1;
-        public long MaxRomSizeBytes => maxBytes;
-        public string DatName => "Test - External Sibling";
-        public bool EmbedRomsInZip => false;
-        public ReadOnlyMemory<byte> DefaultBoxArtPng => ExternalTestHandler.FixtureBoxArtPng;
-        public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
     }
 
     [Test]

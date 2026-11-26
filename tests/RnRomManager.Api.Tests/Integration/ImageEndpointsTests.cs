@@ -1,11 +1,10 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 using Dapper;
+using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
@@ -152,7 +151,11 @@ public class ImageEndpointsTests
         return form;
     }
 
-    private Task<HttpResponseMessage> Upload(AuthClient client, byte[]? file, string? type, bool sendXsrf = true) =>
+    private Task<HttpResponseMessage> Upload(
+        AuthClient client,
+        byte[]? file,
+        string? type,
+        bool sendXsrf = true) =>
         client.SendContentAsync(HttpMethod.Post, $"/api/games/{_game}/images", Form(file, type), sendXsrf);
 
     private static async Task<JsonElement[]> Images(HttpResponseMessage response) =>
@@ -243,36 +246,6 @@ public class ImageEndpointsTests
         Assert.That(_held, Is.Not.Null, "the lock was free, and taken just before the check");
         Assert.That(await GameChecksAsync(), Is.Empty);
         Assert.That(await OpenTypesAsync(), Is.EqualTo(new[] { IntegrityIssueType.DefaultBoxArt }), "cleared by the next Quick or Deep run");
-    }
-
-    /// <summary>Forwards every call; runs <c>beforeGet</c> first on each <see cref="IGameRepository.GetAsync"/>.</summary>
-    public class LockingGames : DispatchProxy
-    {
-        private IGameRepository _inner = null!;
-        private Action _beforeGet = null!;
-
-        public static IGameRepository Wrap(IGameRepository inner, Action beforeGet)
-        {
-            var proxy = Create<IGameRepository, LockingGames>();
-            ((LockingGames)(object)proxy)._inner = inner;
-            ((LockingGames)(object)proxy)._beforeGet = beforeGet;
-            return proxy;
-        }
-
-        protected override object? Invoke(MethodInfo? method, object?[]? args)
-        {
-            if (method!.Name == nameof(IGameRepository.GetAsync))
-                _beforeGet();
-            try
-            {
-                return method.Invoke(_inner, args);
-            }
-            catch (TargetInvocationException ex) when (ex.InnerException is not null)
-            {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex.InnerException);
-                throw;
-            }
-        }
     }
 
     private static readonly byte[] SpaceGame = RandomNumberGenerator.GetBytes(4096);

@@ -5,7 +5,12 @@ namespace RnRomManager.Core.Tests.Ingest;
 
 public class MameMatcherTests
 {
-    private static MameRom Rom(string name, string? crc, string? merge = null, string? bios = null, bool noDump = false) =>
+    private static MameRom Rom(
+        string name,
+        string? crc,
+        string? merge = null,
+        string? bios = null,
+        bool noDump = false) =>
         new(name, 1, crc, merge, bios, noDump);
 
     private static MameSet Set(params MameRom[] roms) => new("s", "S", null, null, null, null, false, roms);

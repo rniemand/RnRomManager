@@ -31,7 +31,11 @@ public class UserAdminServiceTests
         _users.UpdateUnlessLastAdminAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns(true);
     }
 
-    private static User NewUser(int id, string username, IReadOnlySet<string> roles, bool disabled = false) => new()
+    private static User NewUser(
+        int id,
+        string username,
+        IReadOnlySet<string> roles,
+        bool disabled = false) => new()
     {
         Id = id,
         Username = username,
@@ -63,7 +67,11 @@ public class UserAdminServiceTests
     [TestCase("newbie", "root", NewPassword, "roles")]
     [TestCase("newbie", "rom-manager", NewPassword, "roles")]
     [TestCase("newbie", "", "short", "password")]
-    public async Task Create_Invalid_NamesTheField(string? username, string roles, string? password, string field)
+    public async Task Create_Invalid_NamesTheField(
+        string? username,
+        string roles,
+        string? password,
+        string field)
     {
         var result = await _service.CreateAsync(username, roles.Split(',', StringSplitOptions.RemoveEmptyEntries), password, Actor, CancellationToken.None);
 

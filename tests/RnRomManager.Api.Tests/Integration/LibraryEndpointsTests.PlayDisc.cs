@@ -3,7 +3,6 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Api.Endpoints;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
@@ -22,7 +21,12 @@ public partial class LibraryEndpointsTests
         $"REM COMMENT test\r\nFILE \"{track1}\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n" +
         $"FILE \"{track2}\" BINARY\r\n  TRACK 02 AUDIO\r\n    INDEX 00 00:00:00\r\n    INDEX 01 00:00:01\r\n");
 
-    private static InfoJsonRom PsxSet(string disc, byte[] track1, byte[] cue, byte[] track2, bool isPrimary = true) =>
+    private static InfoJsonRom PsxSet(
+        string disc,
+        byte[] track1,
+        byte[] cue,
+        byte[] track2,
+        bool isPrimary = true) =>
         TestLibrary.Rom($"{disc} (Track 1).bin", track1, isPrimary) with
         {
             ExternalFileName = $"{disc} (Track 1).bin",
@@ -932,7 +936,12 @@ public partial class LibraryEndpointsTests
         Encoding.UTF8.GetBytes($"[Disc]\nSessions={sessions}\n[TRACK 1]\nMODE=2\nINDEX 1=0\n");
 
     /// <summary>A CloneCD release: <c>&lt;stem&gt;.img</c> the main file, its <c>.ccd</c> and (unless null) its <c>.sub</c>.</summary>
-    private static InfoJsonRom CloneCdRom(string stem, byte[] img, byte[] ccd, byte[]? sub, bool isPrimary = true) =>
+    private static InfoJsonRom CloneCdRom(
+        string stem,
+        byte[] img,
+        byte[] ccd,
+        byte[]? sub,
+        bool isPrimary = true) =>
         PsxSolo($"{stem}.img", img, isPrimary) with
         {
             Files = [SetFile($"{stem}.ccd", ccd), .. sub is null ? Array.Empty<InfoJsonRomFile>() : [SetFile($"{stem}.sub", sub)]],

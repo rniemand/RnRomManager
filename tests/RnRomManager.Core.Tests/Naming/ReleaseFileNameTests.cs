@@ -6,7 +6,11 @@ public class ReleaseFileNameTests
 {
     private static readonly ReleaseTags None = new([], [], null, false, false, null);
 
-    private static string Edit(string fileName, string baseTitle, ReleaseTags before, Func<ReleaseTags, ReleaseTags> change) =>
+    private static string Edit(
+        string fileName,
+        string baseTitle,
+        ReleaseTags before,
+        Func<ReleaseTags, ReleaseTags> change) =>
         ReleaseFileName.Edit(fileName, baseTitle, before, change(before));
 
     [Test]

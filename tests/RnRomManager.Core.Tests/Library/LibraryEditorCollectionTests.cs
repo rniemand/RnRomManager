@@ -8,7 +8,6 @@ using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
-using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 using static RnRomManager.TestData.TestLibrary;
@@ -69,7 +68,11 @@ public class LibraryEditorCollectionTests
     public void TearDown() => _dir.Dispose();
 
     /// <summary>Writes the game's ZIP with <paramref name="releases"/> ROMs and stubs its DB rows; returns its first ROM's row id.</summary>
-    private async Task<long> SeedAsync(Guid id, string title, int releases, InfoJsonIdentification? identification = null)
+    private async Task<long> SeedAsync(
+        Guid id,
+        string title,
+        int releases,
+        InfoJsonIdentification? identification = null)
     {
         var zipPath = $"gb/{title[0]}/{title}.zip";
         var bytes = Enumerable.Range(0, releases).Select(_ => RomBytes(++_seed)).ToArray();

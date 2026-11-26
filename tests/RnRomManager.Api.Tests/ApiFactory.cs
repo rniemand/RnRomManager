@@ -1,21 +1,17 @@
-using System.Xml.Linq;
 using Microsoft.AspNetCore.DataProtection.Repositories;
-using System.Net;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using NSubstitute;
+using RnRomManager.Api.Tests.Integration;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
-using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Dats;
-using RnRomManager.Api.Tests.Integration;
+using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Storage;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
@@ -213,37 +209,5 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         // NLog keeps today's log file open; release it before deleting the folder.
         LogManager.Shutdown();
         Directory.Delete(Root, recursive: true);
-    }
-
-    private sealed class ClientIpStartupFilter : IStartupFilter
-    {
-        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
-        {
-            app.Use((context, nextMiddleware) =>
-            {
-                if (context.Request.Headers.TryGetValue(ClientHeader, out var client) && int.TryParse(client, out var id))
-                    context.Connection.RemoteIpAddress = IPAddress.Parse($"10.{(id >> 16) & 255}.{(id >> 8) & 255}.{id & 255}");
-                return nextMiddleware(context);
-            });
-            next(app);
-        };
-    }
-
-    /// <summary>Stub-mode key ring: keys live as long as the host.</summary>
-    private sealed class InMemoryXmlRepository : IXmlRepository
-    {
-        private readonly List<XElement> _elements = [];
-
-        public IReadOnlyCollection<XElement> GetAllElements()
-        {
-            lock (_elements)
-                return _elements.Select(e => new XElement(e)).ToList();
-        }
-
-        public void StoreElement(XElement element, string friendlyName)
-        {
-            lock (_elements)
-                _elements.Add(new XElement(element));
-        }
     }
 }

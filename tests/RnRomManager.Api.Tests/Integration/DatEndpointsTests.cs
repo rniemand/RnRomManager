@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Api.Http;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
-using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -80,7 +79,14 @@ public class DatEndpointsTests
         File.WriteAllText(Path.Combine(_remote, "fbneo.xml"), IngestSeeder.MinimalMame["FBNeo - Arcade Games"], new System.Text.UTF8Encoding(false));
         // What a previous refresh left behind; loaded at startup (step 9).
         FixtureDatWriter.Write(Path.Combine(_factory.Root, "cache", DatCache.FolderName), Games(), version: "2026.01.01",
-            downloadedAt: new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
+            downloadedAt: new DateTimeOffset(
+                2026,
+                1,
+                2,
+                3,
+                4,
+                5,
+                TimeSpan.Zero), titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         await _factory.StartSharedAsync();
     }
 

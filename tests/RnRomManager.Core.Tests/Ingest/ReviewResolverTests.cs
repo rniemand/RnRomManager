@@ -8,7 +8,6 @@ using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
-using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 
@@ -36,7 +35,7 @@ public class ReviewResolverTests
     private IngestPipeline _pipeline = null!;
 
     [SetUp]
-    public void SetUp() => Build(new Headerless());
+    public void SetUp() => Build(new ReviewResolverHeaderless());
 
     private void Build(ISystemHandler handler)
     {
@@ -198,34 +197,16 @@ public class ReviewResolverTests
     [TestCase("extset", "Game.mdf", false, false)]
     [TestCase("psx", "Game.mdf", true, false)]
     [TestCase("psx", "Game.cbn", false, true)]
-    public void IsDismissible_CloneCdB7(string systemId, string fileName, bool inSet, bool expected)
+    public void IsDismissible_CloneCdB7(
+        string systemId,
+        string fileName,
+        bool inSet,
+        bool expected)
     {
-        var systems = new SystemRegistry([new ExternalSetTestHandler(), new PsxSetTestHandler(), new Headerless(".img")]);
+        var systems = new SystemRegistry([new ExternalSetTestHandler(), new PsxSetTestHandler(), new ReviewResolverHeaderless(".img")]);
         var item = new ReviewItem { Id = 1, SystemId = systemId, Status = "Pending", SourcePath = fileName, OriginalFileName = fileName };
 
         Assert.That(ReviewResolver.IsDismissible(item, systems, inSet), Is.EqualTo(expected));
-    }
-
-    private sealed class Headerless(params string[] extensions) : ISystemHandler
-    {
-        public string Id => "gb";
-        public string DisplayName => "Test";
-        public string Family => "gameboy";
-        public IReadOnlyList<string> RomExtensions => extensions.Length == 0 ? [".gb"] : extensions;
-        public long MinRomSizeBytes => 1;
-        public long MaxRomSizeBytes => 1024;
-        public string DatName => "GB";
-        public bool EmbedRomsInZip => true;
-        public bool KeepsSourceExtension { get; init; }
-        public Func<string, string?>? MapSourceExtension { get; init; }
-        public string? SourceExtension(string fileName) => MapSourceExtension?.Invoke(fileName) ?? Path.GetExtension(fileName).ToLowerInvariant();
-        // A 512×512 PNG header: enough for MediaService's default-art check when a resolve stores a new game.
-        public ReadOnlyMemory<byte> DefaultBoxArtPng { get; } = new byte[]
-        {
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 2, 0, 0, 0, 2, 0,
-            8, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-        };
-        public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
     }
 
     [Test]
@@ -333,7 +314,7 @@ public class ReviewResolverTests
     public async Task Dat_UsesTheDatRomNamesExtension()
     {
         _dir.Dispose();
-        Build(new Headerless(".gb", ".sms"));
+        Build(new ReviewResolverHeaderless(".gb", ".sms"));
         var bytes = new byte[] { 1, 2, 3 };
         _item = _item with
         {
@@ -356,12 +337,16 @@ public class ReviewResolverTests
     }
 
     /// <summary>Rebuilds with a <c>KeepsSourceExtension</c> handler (<c>.aaa</c> first) and a pending <c>test.bbb</c> holding <paramref name="bytes"/>.</summary>
-    private void KeepsSourceExtensionItem(byte[] bytes, string reason = "NoDatMatch", bool rebuild = true, string name = "test.bbb")
+    private void KeepsSourceExtensionItem(
+        byte[] bytes,
+        string reason = "NoDatMatch",
+        bool rebuild = true,
+        string name = "test.bbb")
     {
         if (rebuild)
         {
             _dir.Dispose();
-            Build(new Headerless(".aaa", ".bbb") { KeepsSourceExtension = true });
+            Build(new ReviewResolverHeaderless(".aaa", ".bbb") { KeepsSourceExtension = true });
         }
         var path = Path.Combine(_paths.Ingest, name);
         if (File.Exists(_item.SourcePath))
@@ -444,7 +429,7 @@ public class ReviewResolverTests
     public async Task Manual_StoresTheExtensionSourceExtensionNames()
     {
         _dir.Dispose();
-        Build(new Headerless(".aaa", ".bbb", ".bbz") { KeepsSourceExtension = true, MapSourceExtension = _ => ".bbb" });
+        Build(new ReviewResolverHeaderless(".aaa", ".bbb", ".bbz") { KeepsSourceExtension = true, MapSourceExtension = _ => ".bbb" });
         KeepsSourceExtensionItem([1, 2, 3], rebuild: false, name: "test.bbz");
 
         var result = await _resolver.ResolveInJobAsync(1, Manual(), Actor, default);
@@ -500,7 +485,7 @@ public class ReviewResolverTests
 
     private static InfoJsonRom StoredRom(string zip, string fileName)
     {
-        using var archive = LibraryZip.Open(zip, new InfoJsonReader([], new SystemRegistry([new Headerless()])));
+        using var archive = LibraryZip.Open(zip, new InfoJsonReader([], new SystemRegistry([new ReviewResolverHeaderless()])));
         return archive.InfoJson!.Game!.Roms.Single(r => r.FileName == fileName);
     }
 
@@ -563,7 +548,7 @@ public class ReviewResolverTests
     public async Task Dat_PrefersTheDatRomWithTheFilesExtension(string source, string stored, int year)
     {
         _dir.Dispose();
-        Build(new Headerless(".a78", ".bin"));
+        Build(new ReviewResolverHeaderless(".a78", ".bin"));
         var bytes = new byte[] { 1, 2, 3 };
         var path = Path.Combine(_paths.Ingest, source);
         File.Move(_item.SourcePath, path);
@@ -588,7 +573,7 @@ public class ReviewResolverTests
 
         Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
         var zip = Directory.GetFiles(_paths.Roms, "*.zip", SearchOption.AllDirectories).Single();
-        using var archive = LibraryZip.Open(zip, new InfoJsonReader([], new SystemRegistry([new Headerless(".a78", ".bin")])));
+        using var archive = LibraryZip.Open(zip, new InfoJsonReader([], new SystemRegistry([new ReviewResolverHeaderless(".a78", ".bin")])));
         var game = archive.InfoJson!.Game!;
         Assert.That((game.Roms.Single().FileName, game.ReleaseYear), Is.EqualTo((stored, (int?)year)));
     }

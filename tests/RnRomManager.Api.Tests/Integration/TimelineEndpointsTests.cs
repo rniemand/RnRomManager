@@ -43,7 +43,11 @@ public class TimelineEndpointsTests
     [TearDown]
     public void TearDown() => _user?.Dispose();
 
-    private async Task AddGameAsync(string title, int? year, int? igdbId, string system = "gb")
+    private async Task AddGameAsync(
+        string title,
+        int? year,
+        int? igdbId,
+        string system = "gb")
     {
         var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with { System = system, ReleaseYear = year, IgdbId = igdbId };
         await _factory.Services.GetRequiredService<ILibraryMirror>()

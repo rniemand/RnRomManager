@@ -3,7 +3,6 @@ using System.Net;
 using System.Security.Cryptography;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Storage;
-using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
 
@@ -11,17 +10,6 @@ namespace RnRomManager.Api.Tests.Integration;
 public partial class ExternalLibraryTests
 {
     private string MovedEurope => Path.Combine(MysteryFolder, $"Mystery Game.{EuropeName}.nsp");
-
-    /// <summary>Runs <c>before</c>, the mirror write, then <c>after</c>; either may throw.</summary>
-    private sealed class HookedMirror(ILibraryMirror inner, Action? before = null, Action? after = null) : ILibraryMirror
-    {
-        public async Task ApplyAsync(IReadOnlyList<MirrorEntry> replace, IReadOnlyCollection<Guid> delete, CancellationToken cancellationToken)
-        {
-            before?.Invoke();
-            await inner.ApplyAsync(replace, delete, cancellationToken);
-            after?.Invoke();
-        }
-    }
 
     /// <summary>Puts a copy in place of <paramref name="path"/>: same bytes, but not the file that was published.</summary>
     private static void Replace(string path)

@@ -45,6 +45,7 @@ public static partial class CodeStyleScanner
         var rules = new List<string>();
         if (path.EndsWith(".cs", StringComparison.Ordinal))
         {
+            BlankRawStrings(lines);
             if (HasCs1(lines)) rules.Add("CS1");
             if (HasCs2(lines)) rules.Add("CS2");
         }
@@ -109,6 +110,23 @@ public static partial class CodeStyleScanner
     {
         var t = line.TrimStart();
         return t.StartsWith("//", StringComparison.Ordinal) || t.StartsWith('*') || t.StartsWith("/*", StringComparison.Ordinal);
+    }
+
+    [GeneratedRegex("\"{3,}")]
+    private static partial Regex RawQuotes();
+
+    /// <summary>Blanks the lines inside multi-line raw string literals (SQL, JSON), which are text, not declarations.</summary>
+    private static void BlankRawStrings(string[] lines)
+    {
+        var inside = false;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var toggles = RawQuotes().Matches(lines[i]).Count % 2 == 1;
+            if (inside)
+                lines[i] = "";
+            if (toggles)
+                inside = !inside;
+        }
     }
 
     // ---- CS1: one top-level type per file, no nesting ----

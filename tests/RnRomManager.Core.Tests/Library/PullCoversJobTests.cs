@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Integrity;
@@ -67,7 +66,11 @@ public class PullCoversJobTests
     private PullCoversJob Job() => new(_games, _igdb, _mirror, _reader, _systems, _items, _issues,
         Options.Create(new PathsOptions { Roms = _dir.Path }), _audit, new FakeTimeProvider(Now), NullLogger<PullCoversJob>.Instance);
 
-    private static InfoJsonImage Image(string name, byte[] bytes, bool cover, bool isDefault = false) => new()
+    private static InfoJsonImage Image(
+        string name,
+        byte[] bytes,
+        bool cover,
+        bool isDefault = false) => new()
     {
         FileName = name,
         Type = ImageType.BoxArt,
@@ -84,7 +87,11 @@ public class PullCoversJobTests
     private async Task<GameRow> Add(string title, int? igdbId, params (InfoJsonImage Image, byte[] Bytes)[] images) =>
         await Add(title, igdbId, g => g, images);
 
-    private async Task<GameRow> Add(string title, int? igdbId, Func<InfoJsonGame, InfoJsonGame> edit, params (InfoJsonImage Image, byte[] Bytes)[] images)
+    private async Task<GameRow> Add(
+        string title,
+        int? igdbId,
+        Func<InfoJsonGame, InfoJsonGame> edit,
+        params (InfoJsonImage Image, byte[] Bytes)[] images)
     {
         var rom = RomBytes(++_seed);
         var info = Rom($"{title}.gb", rom);
@@ -116,7 +123,12 @@ public class PullCoversJobTests
         return JsonSerializer.Serialize(await Job().RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None));
     }
 
-    private static string Summary(int pulled = 0, int noCover = 0, int imageLimit = 0, int skipped = 0, int error = 0) =>
+    private static string Summary(
+        int pulled = 0,
+        int noCover = 0,
+        int imageLimit = 0,
+        int skipped = 0,
+        int error = 0) =>
         JsonSerializer.Serialize(new { pulled, noCover, imageLimit, skipped, error });
 
     [Test]

@@ -79,7 +79,11 @@ public class SaveFoldersJobTests
     };
 
     /// <summary>A one-ROM game ZIP (mirrored as a row) with <paramref name="saves"/>: raw bytes for its index and entries.</summary>
-    private async Task<GameRow> Add(string title, string system = "gb", byte[]? index = null, params (string Entry, byte[] Bytes)[] saves)
+    private async Task<GameRow> Add(
+        string title,
+        string system = "gb",
+        byte[]? index = null,
+        params (string Entry, byte[] Bytes)[] saves)
     {
         var bytes = RomBytes(++_seed);
         var game = Game(title, Rom(title + ".gb", bytes)) with { System = system };

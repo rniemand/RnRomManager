@@ -19,7 +19,7 @@ public class DatRefreshSchedulerTests
     private ConcurrentDictionary<string, string> _stored = null!;
     private IJobRepository _jobs = null!;
     private JobLock _lock = null!;
-    private ListLogger _log = null!;
+    private DatRefreshSchedulerListLogger _log = null!;
     private List<DatJob> _created = null!;
     private DatRefreshSettingsService _settings = null!;
     private DatRefreshScheduler? _scheduler;
@@ -43,7 +43,7 @@ public class DatRefreshSchedulerTests
         _settings = new DatRefreshSettingsService(repository, TimeZoneInfo.Utc, _time, NullLogger<DatRefreshSettingsService>.Instance);
         _jobs = Substitute.For<IJobRepository>();
         _lock = new JobLock();
-        _log = new ListLogger();
+        _log = new DatRefreshSchedulerListLogger();
         _created = [];
     }
 
@@ -201,25 +201,5 @@ public class DatRefreshSchedulerTests
 
         await Eventually(() => Logged("Next scheduled DAT refresh: 2026-11-06T04:00:00"));
         Assert.That(_created, Is.Empty);
-    }
-
-    /// <summary>A DAT refresh stand-in that finishes at once.</summary>
-    private sealed class DatJob : IJob
-    {
-        public JobType Type => JobType.DatRefresh;
-        public JobMode? Mode => null;
-        public Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken) => Task.FromResult<object?>(null);
-    }
-
-    private sealed class ListLogger : ILogger<DatRefreshScheduler>
-    {
-        public ConcurrentQueue<(LogLevel Level, string Message)> Entries { get; } = new();
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Entries.Enqueue((logLevel, formatter(state, exception)));
     }
 }

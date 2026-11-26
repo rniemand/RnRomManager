@@ -58,7 +58,11 @@ public class ActivityReportEndpointTests
         return game.GameId;
     }
 
-    private Task Audit(string action, Guid? game, DateTime at, string? details = null) =>
+    private Task Audit(
+        string action,
+        Guid? game,
+        DateTime at,
+        string? details = null) =>
         Service<IAuditRepository>().InsertAsync(new AuditEvent(action, new AuditActor(1, "boss", null), "gb", game,
             "roms/gb/T/Gone Game.zip", Details: details) { OccurredAt = at }, default);
 

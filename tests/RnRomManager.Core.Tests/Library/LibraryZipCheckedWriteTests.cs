@@ -49,7 +49,11 @@ public class LibraryZipCheckedWriteTests
 
     private static byte[] Bytes(int seed, int length = 64) => [.. Enumerable.Range(0, length).Select(i => (byte)(seed * 31 + i))];
 
-    private static InfoJsonRom Rom(string fileName, byte[] bytes, string? pointer, bool isPrimary = true) => new()
+    private static InfoJsonRom Rom(
+        string fileName,
+        byte[] bytes,
+        string? pointer,
+        bool isPrimary = true) => new()
     {
         FileName = fileName,
         ExternalFileName = pointer,

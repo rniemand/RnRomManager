@@ -7,7 +7,6 @@ using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Integrity;
-using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
@@ -92,7 +91,11 @@ public class IngestPipelineSerialTests
     [TestCase("bowling.wbfs", "iso", "RWBE01", false)]
     [TestCase("bowling.iso", "iso", "RWBE01", false)]
     [TestCase("bowling.iso", "wbfs", "RWBE01", false)]
-    public async Task WithoutOneEligibleSerialMatch_WaitsInReview(string filename, string container, string id, bool ambiguous)
+    public async Task WithoutOneEligibleSerialMatch_WaitsInReview(
+        string filename,
+        string container,
+        string id,
+        bool ambiguous)
     {
         LoadDat(ambiguous ? [Entry(Title), Entry("Wave Bowling (Europe)")] : [Entry(Title)]);
         _handler.Header = Header(container, id);
@@ -145,7 +148,11 @@ public class IngestPipelineSerialTests
         Assert.That(identity["method"]?.GetValue<string>(), Is.EqualTo(expected));
     }
 
-    private static RomHeader Header(string container = "wbfs", string id = "RWBE01", byte disc = 0, byte version = 0) =>
+    private static RomHeader Header(
+        string container = "wbfs",
+        string id = "RWBE01",
+        byte disc = 0,
+        byte version = 0) =>
         new("wii", "WAVE BOWLING", true, new Dictionary<string, object?>
         {
             ["container"] = container, ["gameId"] = id, ["discNumber"] = disc, ["version"] = version,
@@ -173,23 +180,5 @@ public class IngestPipelineSerialTests
     {
         using var zip = LibraryZip.Open(Path.Combine(_paths.Roms, ZipPath), _reader);
         return zip.InfoJson!.Game!;
-    }
-
-    private sealed class WiiTestHandler : ISystemHandler
-    {
-        public required RomHeader Header { get; set; }
-        public string Id => "wii";
-        public string DisplayName => "Wii";
-        public string Family => "nintendo-disc";
-        public IReadOnlyList<string> RomExtensions => [".iso", ".wbfs"];
-        public long MinRomSizeBytes => 32 * 1024;
-        public long MaxRomSizeBytes => 9L * 1024 * 1024 * 1024;
-        public string DatName => "Nintendo - Wii";
-        public string DatFolder => DatKind.Redump;
-        public IReadOnlyList<string> MetadatKinds => [];
-        public bool EmbedRomsInZip => false;
-        public bool FileSets => true;
-        public ReadOnlyMemory<byte> DefaultBoxArtPng => ExternalTestHandler.FixtureBoxArtPng;
-        public RomHeader ReadHeader(ReadOnlySpan<byte> rom) => Header;
     }
 }

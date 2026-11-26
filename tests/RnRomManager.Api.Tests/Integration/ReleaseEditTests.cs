@@ -51,10 +51,8 @@ public class ReleaseEditTests(string system)
     [SetUp]
     public Task SetUp() => _factory.ResetAsync();
 
-    private sealed record TestGame(Guid Id, string Zip, string ZipPath);
-
     /// <summary>A mirrored game "Tetris" whose releases are <paramref name="roms"/> (file names without the extension).</summary>
-    private async Task<TestGame> WriteGame(string? chosenStem, params Func<InfoJsonRom, InfoJsonRom>[] roms)
+    private async Task<ReleaseEditTestGame> WriteGame(string? chosenStem, params Func<InfoJsonRom, InfoJsonRom>[] roms)
     {
         const string title = "Tetris";
         var list = new List<(InfoJsonRom Rom, byte[] Bytes)>();
@@ -95,28 +93,28 @@ public class ReleaseEditTests(string system)
     private async Task<long> RomId(Guid gameId, string fileName) =>
         (await Service<IRomRepository>().ListByGameAsync(gameId, default)).Single(r => r.FileName == fileName).Id;
 
-    private async Task<LibraryEditResult> Edit(TestGame game, string stem, ReleaseEdit patch) =>
+    private async Task<LibraryEditResult> Edit(ReleaseEditTestGame game, string stem, ReleaseEdit patch) =>
         await Editor.EditReleaseAsync(game.Id, await RomId(game.Id, stem + Ext), patch, Boss, default);
 
-    private InfoJsonGame Read(TestGame game)
+    private InfoJsonGame Read(ReleaseEditTestGame game)
     {
         using var zip = LibraryZip.Open(game.Zip, Service<InfoJsonReader>());
         return zip.InfoJson!.Game!;
     }
 
-    private IReadOnlyList<GameSave> Saves(TestGame game)
+    private IReadOnlyList<GameSave> Saves(ReleaseEditTestGame game)
     {
         using var zip = LibraryZip.Open(game.Zip, Service<InfoJsonReader>());
         return GameSaves.Read(zip).Index?.Saves ?? [];
     }
 
-    private static List<string> Entries(TestGame game)
+    private static List<string> Entries(ReleaseEditTestGame game)
     {
         using var archive = ZipFile.OpenRead(game.Zip);
         return [.. archive.Entries.Select(e => e.FullName)];
     }
 
-    private async Task<GameSave> AddSave(TestGame game, string stem)
+    private async Task<GameSave> AddSave(ReleaseEditTestGame game, string stem)
     {
         var bytes = new byte[] { 7, 7 };
         var path = Path.Combine(_factory.Root, $"upload-{Guid.NewGuid():N}.tmp");
