@@ -12,9 +12,7 @@ SV6 src/RnRomManager.Web/src/lib/components/modals/EmulatorModal.svelte
 SV6 src/RnRomManager.Web/src/lib/components/systems/SystemList.svelte
 SV6 src/RnRomManager.Web/src/routes/admin/logs/+page.svelte
 SV6 src/RnRomManager.Web/src/routes/bundle-creator/+page.svelte
-SV6 src/RnRomManager.Web/src/routes/games/[id]/+page.svelte
 SV6 src/RnRomManager.Web/src/routes/jobs/+page.svelte
 SV6 src/RnRomManager.Web/src/routes/jobs/[id]/+page.svelte
 SV6 src/RnRomManager.Web/src/routes/reports/image-resolutions/+page.svelte
 SV6 src/RnRomManager.Web/src/routes/review/+page.svelte
-SV6 src/RnRomManager.Web/src/routes/review/[id]/+page.svelte

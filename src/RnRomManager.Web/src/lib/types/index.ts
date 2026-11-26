@@ -78,6 +78,7 @@ export type { ProblemDetails } from './ProblemDetails.js';
 export type { QueryScope } from './QueryScope.js';
 export type { RatingChange } from './RatingChange.js';
 export type { ReleaseFile } from './ReleaseFile.js';
+export type { ReleaseNoteState } from './ReleaseNoteState.js';
 export type { ReleaseTags } from './ReleaseTags.js';
 export type { RemovedRestoreResponse } from './RemovedRestoreResponse.js';
 export type { RemovedSystem } from './RemovedSystem.js';

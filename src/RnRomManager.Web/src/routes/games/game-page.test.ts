@@ -706,7 +706,7 @@ describe('game detail page', () => {
 		]);
 		// B6: chevron + name on the left (min-width 0); badges then buttons on the right.
 		const left = heading.parentElement!;
-		expect(left.style.minWidth).toBe('0px');
+		expect(left.classList.contains('min-w-0')).toBe(true);
 		expect(left.contains(card.querySelector('.chevron-toggle'))).toBe(true);
 		const right = left.nextElementSibling!;
 		expect(right.className).toBe(

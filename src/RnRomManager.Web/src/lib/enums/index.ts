@@ -1,4 +1,5 @@
 export type { AddResult } from './AddResult.js';
+export type { AttachFlag } from './AttachFlag.js';
 export type { BundleTicketState } from './BundleTicketState.js';
 export type { CollectionsTab } from './CollectionsTab.js';
 export type { DiscoveryKind } from './DiscoveryKind.js';

@@ -1,11 +1,5 @@
 <script lang="ts">
-	import Checkbox from '#lib/components/forms/Checkbox.svelte';
-	import { fromAction } from 'svelte/attachments';
-	import TextInput from '#lib/components/forms/TextInput.svelte';
-	import SearchInput from '#lib/components/forms/SearchInput.svelte';
-	import NumberInput from '#lib/components/forms/NumberInput.svelte';
 	import Button from '#lib/components/forms/Button.svelte';
-	import DataTable from '#lib/components/common/DataTable.svelte';
 	import DismissReviewModal from '#lib/components/modals/DismissReviewModal.svelte';
 	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 	import { onMount, untrack } from 'svelte';
@@ -21,22 +15,24 @@
 		ManualErrors,
 		ManualForm
 	} from '#lib/types/index.js';
+	import type { AttachFlag } from '#lib/enums/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
-	import CopyButton from '#lib/components/forms/CopyButton.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import FileSize from '#lib/components/common/FileSize.svelte';
-	import GameTypeahead from '#lib/components/forms/GameTypeahead.svelte';
 	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import ReviewDeleteModal from '#lib/components/modals/ReviewDeleteModal.svelte';
-	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
-	import { formatCount, formatDateTime, formatKey, formatValue } from '#lib/format.js';
+	import ReviewAttachTab from '#lib/components/review/ReviewAttachTab.svelte';
+	import ReviewManualTab from '#lib/components/review/ReviewManualTab.svelte';
+	import ReviewHeader from '#lib/components/review/ReviewHeader.svelte';
+	import ReviewItemInfo from '#lib/components/review/ReviewItemInfo.svelte';
+	import ReviewMatchedTab from '#lib/components/review/ReviewMatchedTab.svelte';
+	import ReviewSuggestionsTab from '#lib/components/review/ReviewSuggestionsTab.svelte';
+	import { formatCount } from '#lib/format.js';
 	import { navCounts } from '#lib/stores/navCounts.svelte.js';
 	import {
 		discError,
 		emptyManualForm,
-		manualFileStem,
 		titleFromFileName,
 		toManualRequest,
 		validateManual
@@ -44,10 +40,8 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { reviewJobs } from '#lib/stores/reviewJobs.svelte.js';
-	import { googleSearchUrl, reviewSearchQuery } from '#lib/googleSearch.js';
 	import { deleteReviewItem, nextReviewItem, toastDeleteFailed } from '#lib/review.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import { tooltip } from '#lib/tooltip.js';
 
 	let item = $state<ReviewDetail | null>(null);
 	let notFound = $state(false);
@@ -78,11 +72,11 @@
 
 	let attachTarget = $state<GameListItem | null>(null);
 	let attachTargetError = $state<string | undefined>();
-	let attachFlag = $state<'Release' | 'Hack' | 'Translated' | 'Disc' | 'DLC'>('Release');
+	let attachFlag = $state<AttachFlag>('Release');
 	let attachDisc = $state<number | null>(null);
 	let attachDiscError = $state<string | undefined>();
 	// B16: Disc only on a disc system; DLC only on a titledb (Switch) system.
-	const attachFlags = $derived<readonly ('Release' | 'Hack' | 'Translated' | 'Disc' | 'DLC')[]>([
+	const attachFlags = $derived<readonly AttachFlag[]>([
 		'Release',
 		'Hack',
 		'Translated',
@@ -331,8 +325,6 @@
 		}
 	}
 
-	const percent = (score: number) => `${Math.round(score * 100)}%`;
-
 	async function askDelete(event: MouseEvent): Promise<void> {
 		// RV1: Shift+click skips the modal, except for an archive (deleting it deletes every file in it).
 		if (!event.shiftKey || !item || item.archivePath) {
@@ -377,41 +369,12 @@
 	{:else if !item}
 		<Loading />
 	{:else}
-		<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-			<h1 class="h4 mb-0 text-truncate" style="max-width: 32rem" title={item.originalFileName}>
-				{item.originalFileName}
-			</h1>
-			<SystemBadge system={item.system} />
-			<span class="badge text-bg-secondary">{item.reason}</span>
-			{#if item.status !== 'Pending'}<span class="badge text-bg-light border">{item.status}</span
-				>{/if}
-			<div class="ms-auto d-flex gap-2">
-				<!-- External link: resolve() is for app routes. -->
-				<!-- eslint-disable svelte/no-navigation-without-resolve -->
-				<Button
-					variant="secondary"
-					outline
-					icon="google"
-					href={googleSearchUrl(reviewSearchQuery(item, item.systemName))}
-					target="_blank"
-					rel="noopener noreferrer">Google it</Button
-				>
-				<!-- eslint-enable svelte/no-navigation-without-resolve -->
-				{#if item.dismissible}
-					<Button variant="secondary" outline {disabled} onclick={() => (confirmDismiss = true)}
-						>Dismiss</Button
-					>
-				{/if}
-				<Button
-					variant="danger"
-					outline
-					icon="delete"
-					{disabled}
-					{@attach fromAction(tooltip, () => 'Delete (Shift+click to skip confirmation)')}
-					onclick={askDelete}>Delete</Button
-				>
-			</div>
-		</div>
+		<ReviewHeader
+			{item}
+			{disabled}
+			ondismiss={() => (confirmDismiss = true)}
+			ondelete={askDelete}
+		/>
 		{#if navCounts.review !== null}
 			<!-- U3: the pending count; the layout refreshes it on every navigation and job end. -->
 			<p class="small text-body-secondary mb-3">
@@ -440,83 +403,7 @@
 
 		<div class="row g-4">
 			<div class="col-12 col-lg-5">
-				<div class="card mb-4">
-					<div class="card-header"><h2 class="h6 mb-0">File</h2></div>
-					<div class="card-body">
-						<dl class="row small mb-0">
-							<dt class="col-4">Size</dt>
-							<dd class="col-8"><FileSize bytes={item.sizeBytes} /></dd>
-							{#each [['CRC32', item.crc32], ['MD5', item.md5], ['SHA1', item.sha1]] as [label, value] (label)}
-								<dt class="col-4">{label}</dt>
-								<dd class="col-8 font-monospace text-break">
-									{value}
-									<CopyButton {value} {label} />
-								</dd>
-							{/each}
-							<dt class="col-4">Source</dt>
-							<dd class="col-8 text-break">
-								{item.archiveEntry ? `${item.archivePath} › ${item.archiveEntry}` : item.sourcePath}
-							</dd>
-							<dt class="col-4">Added</dt>
-							<dd class="col-8">{formatDateTime(item.createdAt)}</dd>
-						</dl>
-					</div>
-				</div>
-				{#if item.setMembers}
-					<div class="card mb-4">
-						<div class="card-header"><h2 class="h6 mb-0">Set</h2></div>
-						<div class="card-body">
-							<p class="small text-body-secondary">
-								Resolving this item adds all {item.setMembers.length} files as one release.
-							</p>
-							<ul class="list-unstyled small mb-0">
-								{#each item.setMembers as member (member.reviewId)}
-									<li class="d-flex gap-2">
-										{#if member.reviewId === item.id}
-											<strong class="me-auto text-break">{member.fileName}</strong>
-										{:else}
-											<a
-												class="me-auto text-break"
-												href={resolve('/review/[id]', { id: String(member.reviewId) })}
-												>{member.fileName}</a
-											>
-										{/if}
-										<span class="text-body-secondary text-nowrap"
-											><FileSize bytes={member.sizeBytes} /></span
-										>
-									</li>
-								{/each}
-							</ul>
-						</div>
-					</div>
-				{/if}
-				<div class="card mb-4">
-					<div class="card-header"><h2 class="h6 mb-0">Header</h2></div>
-					{#if item.header}
-						<div class="table-responsive">
-							<table class="table table-sm table-striped table-hover align-middle mb-0">
-								<thead class="table-dark">
-									<tr class="small text-uppercase text-body-secondary">
-										<th scope="col">Field</th>
-										<th scope="col">Value</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each Object.entries(item.header) as [key, value] (key)}
-										<tr>
-											<th scope="row" class="fw-normal text-body-secondary">{formatKey(key)}</th>
-											<td>{formatValue(value, { counts: true })}</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					{:else}
-						<div class="card-body">
-							<p class="text-body-secondary mb-0">The header couldn't be read.</p>
-						</div>
-					{/if}
-				</div>
+				<ReviewItemInfo {item} />
 			</div>
 
 			<div class="col-12 col-lg-7">
@@ -541,263 +428,50 @@
 
 					<div id="panel-{tab}" role="tabpanel" aria-labelledby="tab-{tab}">
 						{#if tab === 'matched'}
-							{#if item.datIdentification}
-								<p>
-									{item.datIdentification.romName}
-									<span class="text-body-secondary small">
-										({item.datIdentification.datName}
-										{item.datIdentification.datVersion})
-									</span>
-								</p>
-							{/if}
-							<p>Several games share its title. Attach it to one of them:</p>
-							<ul class="list-group">
-								{#each item.candidateGames as game (game.id)}
-									<li class="list-group-item d-flex align-items-center gap-2">
-										<a class="me-auto" href={resolve('/games/[id]', { id: game.id })}
-											>{game.displayTitle}</a
-										>
-										<Button
-											variant="primary"
-											size="sm"
-											{disabled}
-											onclick={() =>
-												resolveWith(
-													{ action: 'Attach', targetGameId: game.id, flag: 'None' },
-													`Attached to ${game.displayTitle}.`
-												)}>Attach</Button
-										>
-									</li>
-								{:else}
-									<li class="list-group-item text-body-secondary">
-										None of the candidate games exist any more. Run ingestion again.
-									</li>
-								{/each}
-							</ul>
+							<ReviewMatchedTab
+								{item}
+								{disabled}
+								onattach={(game) =>
+									resolveWith(
+										{ action: 'Attach', targetGameId: game.id, flag: 'None' },
+										`Attached to ${game.displayTitle}.`
+									)}
+							/>
 						{:else if tab === 'suggestions'}
-							<p class="small text-body-secondary">
-								{#if titleDb}
-									Choose a titledb result to identify this release by title ID.
-								{:else}
-									Picking a DAT entry adds the file as an unverified release, because its hashes
-									differ.
-								{/if}
-							</p>
-							{#if titleDb}
-								<div class="form-check mb-3">
-									<Checkbox
-										id="as-update"
-										checked={asUpdate}
-										onchange={(e) => (updateChoice = e.currentTarget.checked)}
-									/>
-									<label class="form-check-label" for="as-update">This file is an update</label>
-								</div>
-							{/if}
-							{#if item.suggestions?.length}
-								<DataTable
-									items={item.suggestions}
-									key={(suggestion) => suggestion.romName}
-									class="mb-3"
-								>
-									{#snippet head()}
-										<tr class="small text-uppercase text-body-secondary">
-											<th scope="col">DAT entry</th>
-											<th scope="col" class="text-end">Score</th>
-											<th scope="col" class="text-end"
-												><span class="visually-hidden">Actions</span></th
-											>
-										</tr>
-									{/snippet}
-									{#snippet row(suggestion)}
-										<tr>
-											<td class="text-break">{suggestion.romName}</td>
-											<td class="text-end text-nowrap">{percent(suggestion.score)}</td>
-											<td class="text-end text-nowrap">
-												<Button
-													variant="primary"
-													size="sm"
-													{disabled}
-													onclick={() => useDat(suggestion.datGameName)}>Use</Button
-												>
-												<Button
-													variant="primary"
-													outline
-													size="sm"
-													class="ms-1"
-													disabled={disabled || typeof next !== 'number'}
-													title={next === 'none' ? 'No more items in the review queue.' : undefined}
-													onclick={() => useDat(suggestion.datGameName, true)}>Use and Next</Button
-												>
-											</td>
-										</tr>
-									{/snippet}
-								</DataTable>
-							{:else}
-								<p class="text-body-secondary">No close DAT matches.</p>
-							{/if}
-
-							<form class="row g-2 align-items-end" role="search" onsubmit={search}>
-								<div class="col">
-									<label class="form-label" for="dat-search">Search the {item.system} DAT</label>
-									<SearchInput id="dat-search" bind:value={searchText} />
-								</div>
-								<div class="col-auto">
-									<Button variant="secondary" outline type="submit" disabled={searching}
-										>Search</Button
-									>
-								</div>
-							</form>
-							{#if searchResults}
-								{#if searchResults.length}
-									<ul class="list-group mt-2">
-										{#each searchResults as result (result.romName)}
-											<li class="list-group-item d-flex align-items-center gap-2">
-												<span class="me-auto text-break">{result.romName}</span>
-												{#if !(titleDb && result.sizeBytes === 0)}
-													<!-- G8: titledb results carry no size (T3). -->
-													<span class="small text-body-secondary text-nowrap"
-														><FileSize bytes={result.sizeBytes} /></span
-													>
-												{/if}
-												<Button
-													variant="primary"
-													size="sm"
-													{disabled}
-													onclick={() => useDat(result.gameName)}>Use</Button
-												>
-											</li>
-										{/each}
-									</ul>
-								{:else}
-									<p class="text-body-secondary mt-2">No DAT entries match.</p>
-								{/if}
-							{/if}
+							<ReviewSuggestionsTab
+								{item}
+								{titleDb}
+								{asUpdate}
+								{disabled}
+								{next}
+								bind:searchText
+								{searchResults}
+								{searching}
+								onupdatechange={(checked) => (updateChoice = checked)}
+								onuse={useDat}
+								onsearch={search}
+							/>
 						{:else if tab === 'attach'}
-							<p class="small text-body-secondary">
-								{item.fileSets
-									? 'Attach to a game as a new release, a hack, a translation or another disc.'
-									: item.addOns
-										? 'Attach to a game as a new release, a hack, a translation or a DLC.'
-										: 'Attach to a game as a new release, a hack or a translation.'}
-							</p>
-							<form onsubmit={attach} novalidate>
-								<div class="mb-2">
-									<!-- B21: a fresh typeahead (its typed text too) per item. -->
-									{#key item.id}
-										<GameTypeahead
-											id="attach-target"
-											label="Game"
-											system={item.system}
-											bind:selected={attachTarget}
-											invalid={attachTargetError}
-										/>
-									{/key}
-								</div>
-								<fieldset class="mb-2">
-									<legend class="form-label fs-6">Attach as</legend>
-									{#each attachFlags as flag (flag)}
-										<Checkbox
-											type="radio"
-											id="flag-{flag}"
-											label={flag}
-											inline
-											value={flag}
-											bind:group={attachFlag}
-										/>
-									{/each}
-								</fieldset>
-								{#if attachFlag === 'Disc'}
-									<div class="mb-2" style="max-width: 10rem">
-										<label class="form-label" for="attach-disc">Disc</label>
-										<NumberInput
-											class={attachDiscError ? 'is-invalid' : undefined}
-											id="attach-disc"
-											min="1"
-											max="99"
-											required
-											bind:value={attachDisc}
-										/>
-										{#if attachDiscError}<div class="invalid-feedback">{attachDiscError}</div>{/if}
-									</div>
-								{/if}
-								<Button variant="primary" type="submit" {disabled}>Attach</Button>
-							</form>
+							<ReviewAttachTab
+								{item}
+								{attachFlags}
+								bind:attachTarget
+								{attachTargetError}
+								bind:attachFlag
+								bind:attachDisc
+								{attachDiscError}
+								{disabled}
+								onsubmit={attach}
+							/>
 						{:else}
-							<form onsubmit={submitManual} novalidate>
-								<div class="mb-2">
-									<label class="form-label" for="manual-title">Title</label>
-									<TextInput
-										class={manualErrors.title ? 'is-invalid' : undefined}
-										id="manual-title"
-										maxlength={255}
-										bind:value={manual.title}
-									/>
-									{#if manualErrors.title}<div class="invalid-feedback">
-											{manualErrors.title}
-										</div>{/if}
-								</div>
-								<div class="row g-2 mb-2">
-									{#each [['regions', 'Regions', 'e.g. USA, Europe'], ['languages', 'Languages', 'e.g. En, Fr'], ['flags', 'Flags', 'e.g. Proto, Unl']] as const as [field, label, hint] (field)}
-										<div class="col-12 col-md-4">
-											<label class="form-label" for="manual-{field}">{label}</label>
-											<TextInput
-												class={manualErrors[field] ? 'is-invalid' : undefined}
-												id="manual-{field}"
-												aria-describedby="manual-{field}-help"
-												bind:value={manual[field]}
-											/>
-											{#if manualErrors[field]}<div class="invalid-feedback">
-													{manualErrors[field]}
-												</div>{/if}
-											<div id="manual-{field}-help" class="form-text">Comma-separated, {hint}.</div>
-										</div>
-									{/each}
-								</div>
-								<div class="mb-2">
-									<label class="form-label" for="manual-revision">Revision</label>
-									<TextInput
-										class={manualErrors.revision ? 'is-invalid' : undefined}
-										id="manual-revision"
-										placeholder="e.g. Rev 1"
-										maxlength={32}
-										bind:value={manual.revision}
-									/>
-									{#if manualErrors.revision}<div class="invalid-feedback">
-											{manualErrors.revision}
-										</div>{/if}
-								</div>
-								{#if item.fileSets}
-									<div class="mb-2" style="max-width: 10rem">
-										<label class="form-label" for="manual-disc">Disc</label>
-										<NumberInput
-											class={manualErrors.disc ? 'is-invalid' : undefined}
-											id="manual-disc"
-											min="1"
-											max="99"
-											aria-describedby="manual-disc-help"
-											bind:value={manual.disc}
-										/>
-										{#if manualErrors.disc}<div class="invalid-feedback">
-												{manualErrors.disc}
-											</div>{/if}
-										<div id="manual-disc-help" class="form-text">Optional, 1–99.</div>
-									</div>
-								{/if}
-								{#if manual.title.trim()}
-									<p class="form-text">File name: {manualFileStem(manual)}</p>
-								{/if}
-								<Button variant="primary" type="submit" {disabled}>Add manually</Button>
-								{#if item.hasDat === false}
-									<Button
-										variant="primary"
-										outline
-										class="ms-1"
-										disabled={disabled || typeof next !== 'number'}
-										title={next === 'none' ? 'No more items in the review queue.' : undefined}
-										onclick={() => submitManual(null, true)}>Add and Next</Button
-									>
-								{/if}
-							</form>
+							<ReviewManualTab
+								{item}
+								bind:manual
+								{manualErrors}
+								{disabled}
+								{next}
+								onsubmit={submitManual}
+							/>
 						{/if}
 					</div>
 				{/if}
