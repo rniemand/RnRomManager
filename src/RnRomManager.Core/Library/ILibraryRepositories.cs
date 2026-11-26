@@ -36,6 +36,13 @@ public interface IGameRepository
     /// <summary>R4: the game's <c>game_actions</c> row, or null when it has none.</summary>
     Task<GameActionsRow?> GetActionsAsync(Guid gameId, CancellationToken cancellationToken);
 
+    /// <summary>A5: <c>cover_image_pulled_at</c> (UTC) of every <c>game_actions</c> row that has one.</summary>
+    Task<IReadOnlyDictionary<Guid, DateTime>> ListCoverPulledAsync(CancellationToken cancellationToken);
+
+    /// <summary>A5: deletes the <c>game_actions</c> rows whose game is gone.</summary>
+    /// <returns>How many were deleted.</returns>
+    Task<int> DeleteOrphanActionsAsync(CancellationToken cancellationToken);
+
     /// <summary>The library list: filters, sort (year nulls last), tie-break <c>id</c>, one page (spec §23, §14.2).</summary>
     Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken);
 
@@ -135,7 +142,13 @@ public interface IImageRepository
 
     /// <summary>null when the image doesn't exist or belongs to another game.</summary>
     Task<ImageRow?> GetAsync(Guid gameId, long id, CancellationToken cancellationToken);
+
+    /// <summary>C5: every game's cover (its lowest-id <c>is_cover</c> image), with the game's ZIP.</summary>
+    Task<IReadOnlyList<CoverRow>> ListCoversAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>C5: a game's cover image and the ZIP holding it (relative to <c>Paths:Roms</c>).</summary>
+public sealed record CoverRow(Guid GameId, string ZipPath, string FileName, string Sha1);
 
 /// <summary>
 /// The only writer of <c>games</c>/<c>roms</c>/<c>images</c> (spec §14.2 sync rule: ZIP first, then one transaction).

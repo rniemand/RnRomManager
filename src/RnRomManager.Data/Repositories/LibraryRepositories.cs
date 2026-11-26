@@ -107,6 +107,21 @@ public sealed class GameRepository : IGameRepository
             """, new { gameId }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyDictionary<Guid, DateTime>> ListCoverPulledAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<(Guid GameId, DateTime PulledAt)>(new CommandDefinition(
+                "SELECT game_id, cover_image_pulled_at FROM game_actions WHERE cover_image_pulled_at IS NOT NULL", cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.GameId, r => DateTime.SpecifyKind(r.PulledAt, DateTimeKind.Utc));
+    }
+
+    public async Task<int> DeleteOrphanActionsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM game_actions WHERE NOT EXISTS (SELECT 1 FROM games g WHERE g.id = game_actions.game_id)", cancellationToken: cancellationToken));
+    }
+
     public async Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
@@ -676,6 +691,17 @@ public sealed class ImageRepository(IDbConnectionFactory connections) : IImageRe
         await using var connection = connections.Create();
         return await connection.QuerySingleOrDefaultAsync<ImageRow>(new CommandDefinition(
             $"{Select} WHERE id = @id AND game_id = @gameId", new { gameId, id }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<IReadOnlyList<CoverRow>> ListCoversAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return (await connection.QueryAsync<CoverRow>(new CommandDefinition("""
+            SELECT g.id AS GameId, g.zip_path AS ZipPath, i.file_name AS FileName, i.sha1 AS Sha1
+            FROM images i JOIN games g ON g.id = i.game_id
+            WHERE i.id = (SELECT MIN(c.id) FROM images c WHERE c.game_id = i.game_id AND c.is_cover = 1)
+            ORDER BY g.id
+            """, cancellationToken: cancellationToken))).AsList();
     }
 }
 

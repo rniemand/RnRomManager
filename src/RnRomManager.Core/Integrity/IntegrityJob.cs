@@ -25,8 +25,17 @@ namespace RnRomManager.Core.Integrity;
 /// </summary>
 public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomRepository roms, DbSync dbSync, IIntegrityIssueRepository issues,
     IJobRepository jobs, InfoJsonReader reader, ISystemRegistry systems, IOptions<PathsOptions> paths, TimeProvider time,
-    ILogger<IntegrityJob> logger) : IJob
+    ILogger<IntegrityJob> logger, IImageRepository images, CoverCache cache, ILibraryMirror mirror) : IJob
 {
+    /// <summary>C5: a <c>.tmp</c> file younger than this may belong to a generation in flight.</summary>
+    public static readonly TimeSpan TmpGrace = TimeSpan.FromHours(1);
+
+    /// <summary>A5: <c>cover_image_pulled_at</c> per game, read for runs that open ZIPs with hashing (Deep, Game).</summary>
+    private IReadOnlyDictionary<Guid, DateTime>? _pulled;
+
+    /// <summary>A5: the action mismatches this run repaired.</summary>
+    private readonly List<IntegrityFinding> _actionRepairs = [];
+
     public static readonly TimeSpan Retention = TimeSpan.FromDays(180);
 
     /// <summary>Re-checked on every run, whatever was opened.</summary>
@@ -57,6 +66,10 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         var before = (await games.ListAllAsync(cancellationToken).ConfigureAwait(false))
             .ToDictionary(g => g.ZipPath, StringComparer.OrdinalIgnoreCase);
         var sync = await dbSync.SyncAllAsync(cancellationToken).ConfigureAwait(false);
+        // A5: housekeeping of rows whose game the repair (or a delete) removed; not skipped by a cancel.
+        var orphanActions = await games.DeleteOrphanActionsAsync(CancellationToken.None).ConfigureAwait(false);
+        if (Hashes)
+            _pulled = await games.ListCoverPulledAsync(CancellationToken.None).ConfigureAwait(false);
 
         var findings = new Dictionary<(string, string, string), IntegrityFinding>();
         void Add(IntegrityFinding finding) => findings.TryAdd(finding.Key, finding);
@@ -133,7 +146,11 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         }
         cancelled |= cancellationToken.IsCancellationRequested;
 
+        var (cacheGenerated, cacheRemoved, cacheFailed) = cancelled ? (0, 0, 0) : await RefreshImageCacheAsync(cancellationToken).ConfigureAwait(false);
+        cancelled |= cancellationToken.IsCancellationRequested;
+
         var now = time.GetUtcNow().UtcDateTime;
+        repairs.AddRange(_actionRepairs);
         var (added, resolved) = await ApplyAsync(context.JobId, findings.Values, repairs, zips, checkedZips, checks, resolve: !cancelled, now)
             .ConfigureAwait(false);
 
@@ -145,12 +162,123 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             purgedIssues = await issues.PurgeAsync(now - Retention, CancellationToken.None).ConfigureAwait(false);
         }
 
-        logger.LogInformation("Integrity {Mode}: {Zips} ZIPs ({Opened} opened), {Issues} issues ({New} new, {Resolved} resolved), {Repairs} DB repairs",
-            mode, checkedZips.Count, opened, findings.Count, added, resolved, repairs.Count);
+        logger.LogInformation("Integrity {Mode}: {Zips} ZIPs ({Opened} opened), {Issues} issues ({New} new, {Resolved} resolved), {Repairs} DB repairs, " +
+            "{OrphanActions} orphan action rows; image cache {Generated} generated, {Removed} removed, {Failed} failed",
+            mode, checkedZips.Count, opened, findings.Count, added, resolved, repairs.Count, orphanActions, cacheGenerated, cacheRemoved, cacheFailed);
         return new
         {
             zips = checkedZips.Count, opened, issues = findings.Count, newIssues = added, resolved, repaired = repairs.Count, purgedJobs, purgedIssues,
+            cacheGenerated, cacheRemoved, cacheFailed,
         };
+    }
+
+    /// <summary>
+    /// A5: when the mirrored cover-pulled time differs from the ZIP's (both whole UTC seconds), the game is mirrored again
+    /// and the repair recorded as <c>DbRowUpdated</c>.
+    /// </summary>
+    private async Task CheckActionsAsync(string zipPath, InfoJsonGame game, GameRow? row)
+    {
+        if (_pulled is null || row is null || row.Id != game.GameId)
+            return;
+        DateTime? inZip = InfoJsonActions.Parse(game.Actions?.CoverImagePulled) is { } pulled ? MirrorEntry.WholeSeconds(pulled.UtcDateTime) : null;
+        DateTime? inDb = _pulled.TryGetValue(game.GameId, out var stored) ? MirrorEntry.WholeSeconds(stored) : null;
+        if (inZip == inDb)
+            return;
+        var file = new FileInfo(Path.Combine(paths.Value.Roms, zipPath));
+        await mirror.ReplaceAsync(new MirrorEntry(game, zipPath, file.Length, file.LastWriteTimeUtc), CancellationToken.None).ConfigureAwait(false);
+        _actionRepairs.Add(new IntegrityFinding(DbRowUpdated, zipPath, SystemId: game.System, GameId: game.GameId));
+    }
+
+    /// <summary>
+    /// C5: generates each missing cached cover, then (unless cancelled) deletes everything under the cache that isn't a
+    /// current cover, a <c>.tmp</c> younger than <see cref="TmpGrace"/>, or the startup probe. A game's failure is logged and counted.
+    /// </summary>
+    private async Task<(int Generated, int Removed, int Failed)> RefreshImageCacheAsync(CancellationToken ct)
+    {
+        var covers = await images.ListCoversAsync(CancellationToken.None).ConfigureAwait(false);
+        int generated = 0, failed = 0;
+        foreach (var cover in covers)
+        {
+            if (ct.IsCancellationRequested)
+                return (generated, 0, failed);
+            if (cache.CachedPath(cover.GameId, cover.Sha1) is not null)
+                continue;
+            try
+            {
+                using var zip = OpenChecked(cover.ZipPath);
+                await using var stream = zip.OpenEntry(LibraryZip.ImageEntry(cover.FileName), ImageFormats.MaxBytes);
+                var result = await cache.GenerateAsync(cover.GameId, cover.Sha1, stream, ct).ConfigureAwait(false);
+                if (result.Stored)
+                    generated++;
+                else
+                {
+                    failed++;
+                    if (result.Webp is null)
+                        logger.LogWarning("Image cache: the cover of game {GameId} couldn't be converted to WebP", cover.GameId);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return (generated, 0, failed);
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                logger.LogWarning("Image cache: the cover of game {GameId} in {Zip} couldn't be cached: {Message}", cover.GameId, cover.ZipPath, ex.Message);
+            }
+        }
+        return (generated, SweepImageCache(covers.ToDictionary(c => c.GameId, c => c.Sha1)), failed);
+    }
+
+    /// <returns>How many files (and links) were deleted.</returns>
+    private int SweepImageCache(IReadOnlyDictionary<Guid, string> current)
+    {
+        var root = new DirectoryInfo(cache.Root);
+        if (!root.Exists)
+            return 0;
+        var tmpCutoff = time.GetUtcNow().UtcDateTime - TmpGrace;
+        var removed = 0;
+        foreach (var entry in root.EnumerateFileSystemInfos())
+        {
+            if (entry is DirectoryInfo { LinkTarget: null } folder && Guid.TryParseExact(folder.Name, "D", out var id)
+                && folder.Name == id.ToString("D") && current.TryGetValue(id, out var sha1))
+            {
+                foreach (var inner in folder.EnumerateFileSystemInfos())
+                {
+                    var fresh = inner is FileInfo { LinkTarget: null } && inner.Name.EndsWith(".tmp", StringComparison.Ordinal) && inner.LastWriteTimeUtc > tmpCutoff;
+                    if (!fresh && !(inner is FileInfo { LinkTarget: null } && inner.Name == sha1 + CoverCache.Extension))
+                        removed += Remove(inner);
+                }
+                continue;
+            }
+            if (entry is FileInfo && entry.Name == StorageFolders.ProbeFileName)
+                continue;
+            removed += Remove(entry);
+        }
+        return removed;
+    }
+
+    /// <summary>Deletes a file, a link (never its target) or a folder tree.</summary>
+    private int Remove(FileSystemInfo entry)
+    {
+        try
+        {
+            if (entry is DirectoryInfo { LinkTarget: null } folder)
+            {
+                // Recursion doesn't enter links, and Delete(true) removes a link inside without following it.
+                var files = folder.EnumerateFileSystemInfos("*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0 })
+                    .Count(e => e is FileInfo || e.LinkTarget is not null);
+                folder.Delete(recursive: true);
+                return files;
+            }
+            entry.Delete();
+            return 1;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning("Image cache: {Path} couldn't be deleted: {Message}", entry.FullName, ex.Message);
+            return 0;
+        }
     }
 
     private static string FileKey(ExternalRomRow r) => r.ZipPath[..(r.ZipPath.LastIndexOf('/') + 1)] + r.ExternalFileName;
@@ -180,6 +308,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             .FirstOrDefault(g => string.Equals(g.ZipPath, zip, StringComparison.OrdinalIgnoreCase));
         var external = await roms.ListExternalAsync(CancellationToken.None).ConfigureAwait(false);
         var checks = new ExternalChecks(external.ToLookup(r => r.ZipPath, StringComparer.OrdinalIgnoreCase), Claimants(external), [], []);
+        _pulled = await games.ListCoverPulledAsync(CancellationToken.None).ConfigureAwait(false);
         var findings = new Dictionary<(string, string, string), IntegrityFinding>();
         void Add(IntegrityFinding finding) => findings.TryAdd(finding.Key, finding);
 
@@ -201,7 +330,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         }
         cancelled |= cancellationToken.IsCancellationRequested;
 
-        var (added, resolved) = await ApplyAsync(context.JobId, findings.Values, [], [zip],
+        var (added, resolved) = await ApplyAsync(context.JobId, findings.Values, _actionRepairs, [zip],
             new Dictionary<string, Checked>(StringComparer.OrdinalIgnoreCase) { [zip] = Checked.Opened }, checks, resolve: !cancelled,
             time.GetUtcNow().UtcDateTime, onlyZip: zip).ConfigureAwait(false);
         logger.LogInformation("Integrity Game {Zip}: {Issues} issues ({New} new, {Resolved} resolved), cancelled {Cancelled}",
@@ -283,6 +412,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
 
             var game = zip.InfoJson!.Game!;
             CheckLocation(zipPath, game.System, game.Title, game.GameId, add);
+            await CheckActionsAsync(zipPath, game, row).ConfigureAwait(false);
             IntegrityFinding Finding(string type, string? entry = null, string? details = null) =>
                 new(type, zipPath, entry, game.System, game.GameId, details);
             // S7: its roms/ entries are checked below as for any embedded game.
