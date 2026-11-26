@@ -54,7 +54,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         Jobs.AbortRunningAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
     }
 
-    public string Root { get; } = Directory.CreateTempSubdirectory("rnrm-api-").FullName;
+    private readonly TempDir _temp = new();
+
+    public string Root => _temp.Path;
 
     public Dictionary<string, string?> Settings { get; }
 
@@ -208,6 +210,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             return;
         // NLog keeps today's log file open; release it before deleting the folder.
         LogManager.Shutdown();
-        Directory.Delete(Root, recursive: true);
+        _temp.Dispose();
     }
 }

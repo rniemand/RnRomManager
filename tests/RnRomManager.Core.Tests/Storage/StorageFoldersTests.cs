@@ -11,10 +11,15 @@ namespace RnRomManager.Core.Tests.Storage;
 
 public class StorageFoldersTests
 {
+    private TempDir _temp = null!;
     private string _root = null!;
 
     [SetUp]
-    public void SetUp() => _root = Directory.CreateTempSubdirectory("rnrm-storage-").FullName;
+    public void SetUp()
+    {
+        _temp = new TempDir();
+        _root = _temp.Path;
+    }
 
     [TearDown]
     public void TearDown()
@@ -24,7 +29,7 @@ public class StorageFoldersTests
             if (!OperatingSystem.IsWindows())
                 File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
-        Directory.Delete(_root, recursive: true);
+        _temp.Dispose();
     }
 
     private PathsOptions Paths() => new()

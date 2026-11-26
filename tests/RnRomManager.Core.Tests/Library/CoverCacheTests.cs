@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Library;
 using SkiaSharp;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Library;
 
@@ -10,14 +11,19 @@ namespace RnRomManager.Core.Tests.Library;
 public class CoverCacheTests
 {
     private const string Sha1 = "0123456789abcdef0123456789abcdef01234567";
+    private TempDir _temp = null!;
     private string _root = null!;
     private readonly Guid _game = Guid.NewGuid();
 
     [SetUp]
-    public void SetUp() => _root = Directory.CreateTempSubdirectory("rnrm-covers-").FullName;
+    public void SetUp()
+    {
+        _temp = new TempDir();
+        _root = _temp.Path;
+    }
 
     [TearDown]
-    public void TearDown() => Directory.Delete(_root, recursive: true);
+    public void TearDown() => _temp.Dispose();
 
     private CoverCache Cache(string? imageCache = null) =>
         new(Options.Create(new PathsOptions { ImageCache = imageCache ?? Path.Combine(_root, "imagecache") }), NullLogger<CoverCache>.Instance);

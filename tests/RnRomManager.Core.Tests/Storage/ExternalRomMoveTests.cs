@@ -1,12 +1,14 @@
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using RnRomManager.Core.Storage;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Storage;
 
 /// <summary>Spec W6 within one filesystem: staged no-replace placement, the promoted snapshot, and undo.</summary>
 public class ExternalRomMoveTests
 {
+    private TempDir _temp = null!;
     private string _root = null!;
     private string _source = null!;
     private string _destination = null!;
@@ -14,7 +16,8 @@ public class ExternalRomMoveTests
     [SetUp]
     public void SetUp()
     {
-        _root = Directory.CreateTempSubdirectory("rnrm-move-").FullName;
+        _temp = new TempDir();
+        _root = _temp.Path;
         Directory.CreateDirectory(Path.Combine(_root, "ingest"));
         Directory.CreateDirectory(Path.Combine(_root, "roms"));
         _source = Path.Combine(_root, "ingest", "game.nsp");
@@ -23,7 +26,7 @@ public class ExternalRomMoveTests
     }
 
     [TearDown]
-    public void TearDown() => Directory.Delete(_root, recursive: true);
+    public void TearDown() => _temp.Dispose();
 
     private ExternalFileSnapshot Snapshot(string path) => ExternalRomPath.ClassifyFile(_root, path).Snapshot!;
 
