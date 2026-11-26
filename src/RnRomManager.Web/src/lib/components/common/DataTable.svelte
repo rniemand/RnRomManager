@@ -19,6 +19,8 @@
 		class?: string;
 		/** Appended to the table's classes. */
 		tableClass?: string;
+		/** A visually hidden `<caption>`. */
+		caption?: string;
 	}
 
 	let {
@@ -30,6 +32,7 @@
 		emptyInCard = false,
 		class: className,
 		tableClass,
+		caption,
 		...rest
 	}: Props = $props();
 
@@ -51,6 +54,7 @@
 						: ''}"
 					{...rest}
 				>
+					{#if caption}<caption class="visually-hidden">{caption}</caption>{/if}
 					<thead class="table-dark">{@render head()}</thead>
 					<tbody>
 						{#each items as item, i (key ? key(item) : i)}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { resolve } from '$app/paths';
 	import { ApiError } from '#lib/api/errors.js';
 	import type { GameListItem, Page, DiscoveryState } from '#lib/types/index.js';
@@ -76,10 +77,11 @@
 	{#if gone}
 		<EmptyState message="No games have this {noun} any more." icon="collections">
 			{#snippet action()}
-				<a
-					class="btn btn-outline-primary"
+				<Button
+					variant="primary"
+					outline
 					href="{resolve('/collections')}{discoverySearch({ ...view, key: null, gamePage: 1 })}"
-					>Back to all {discoveryText[view.kind].plural}</a
+					>Back to all {discoveryText[view.kind].plural}</Button
 				>
 			{/snippet}
 		</EmptyState>

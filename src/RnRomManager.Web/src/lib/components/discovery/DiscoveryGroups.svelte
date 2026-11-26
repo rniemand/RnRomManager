@@ -1,4 +1,7 @@
 <script lang="ts">
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import SortHeader from '#lib/components/common/SortHeader.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { untrack } from 'svelte';
@@ -19,7 +22,6 @@
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import GroupLogo from './GroupLogo.svelte';
 	import LogoModal from '#lib/components/modals/LogoModal.svelte';
 
@@ -135,18 +137,18 @@
 <!-- B16: outside the loading branch, so it keeps focus while results reload. -->
 <div class="d-flex gap-2 mb-2">
 	<label class="visually-hidden" for="find-{view.kind}">Search {noun}</label>
-	<input
+	<SearchInput
+		size="sm"
+		class="flex-grow-1"
 		id="find-{view.kind}"
-		type="search"
-		class="form-control form-control-sm flex-grow-1"
 		placeholder="Search {noun}"
 		maxlength={maxFind}
 		bind:value={findText}
 		oninput={onFindInput}
 	/>
 	{#if view.find || sort !== 'name' || dir !== 'asc'}
-		<button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" onclick={clear}
-			><Icon name="clear" /> Clear</button
+		<Button variant="secondary" outline size="sm" class="text-nowrap" icon="clear" onclick={clear}
+			>Clear</Button
 		>
 	{/if}
 </div>
@@ -164,63 +166,54 @@
 		<EmptyState message="There are no {noun} on this page." />
 	{/if}
 {:else}
-	<div class="card">
-		<div class="table-responsive">
-			<table
-				class="table table-sm table-striped table-hover align-middle mb-0"
-				aria-label={text.label}
-			>
-				<thead class="table-dark">
-					<tr>
-						<SortHeader
-							columns={columns.map((c) => ({
-								...c,
-								class: c.numeric ? 'text-end text-nowrap' : undefined
-							}))}
-							{sort}
-							{dir}
-							onsort={sortBy}
+	<DataTable items={result.items} key={(group) => group.key} aria-label={text.label}>
+		{#snippet head()}
+			<tr>
+				<SortHeader
+					columns={columns.map((c) => ({
+						...c,
+						class: c.numeric ? 'text-end text-nowrap' : undefined
+					}))}
+					{sort}
+					{dir}
+					onsort={sortBy}
+				/>
+				{#if auth.isAdmin}
+					<th scope="col"><span class="visually-hidden">Actions</span></th>
+				{/if}
+			</tr>
+		{/snippet}
+		{#snippet row(group)}
+			<tr class:table-primary={group.key === view.key}>
+				<td class="w-100 text-truncate" style="max-width: 0">
+					<a
+						class="text-decoration-none d-flex align-items-center gap-2 min-w-0"
+						class:text-reset={group.key === view.key}
+						aria-current={group.key === view.key ? 'true' : undefined}
+						href="{resolve('/collections')}{selection(group)}"
+					>
+						<GroupLogo kind={view.kind} item={group} />
+						<span class="text-truncate" title={group.name}>{group.name}</span>
+					</a>
+				</td>
+				<td class="text-end text-nowrap">{formatCount(group.gameCount)}</td>
+				{#if auth.isAdmin}
+					<td>
+						<Button
+							icon="edit"
+							class="btn btn-link btn-sm p-0"
+							aria-label="Change logo for {group.name}"
+							title="Change logo"
+							onclick={() => {
+								editing = group;
+								logoOpen = true;
+							}}
 						/>
-						{#if auth.isAdmin}
-							<th scope="col"><span class="visually-hidden">Actions</span></th>
-						{/if}
-					</tr>
-				</thead>
-				<tbody>
-					{#each result.items as group (group.key)}
-						<tr class:table-primary={group.key === view.key}>
-							<td class="w-100 text-truncate" style="max-width: 0">
-								<a
-									class="text-decoration-none d-flex align-items-center gap-2 min-w-0"
-									class:text-reset={group.key === view.key}
-									aria-current={group.key === view.key ? 'true' : undefined}
-									href="{resolve('/collections')}{selection(group)}"
-								>
-									<GroupLogo kind={view.kind} item={group} />
-									<span class="text-truncate" title={group.name}>{group.name}</span>
-								</a>
-							</td>
-							<td class="text-end text-nowrap">{formatCount(group.gameCount)}</td>
-							{#if auth.isAdmin}
-								<td>
-									<button
-										type="button"
-										class="btn btn-link btn-sm p-0"
-										aria-label="Change logo for {group.name}"
-										title="Change logo"
-										onclick={() => {
-											editing = group;
-											logoOpen = true;
-										}}><Icon name="edit" /></button
-									>
-								</td>
-							{/if}
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	</div>
+					</td>
+				{/if}
+			</tr>
+		{/snippet}
+	</DataTable>
 {/if}
 
 {#if result}

@@ -1,11 +1,8 @@
 # CodeStyleTests baseline (docs/style-guide.md): existing violations, one "<rule> <path>" per line.
 # It may only shrink: delete the lines you fix; never add new ones.
-SV4 src/RnRomManager.Web/src/lib/components/bundles/BundleDownload.svelte
-SV4 src/RnRomManager.Web/src/lib/components/bundles/SavedBundleQueues.svelte
 SV4 src/RnRomManager.Web/src/lib/components/common/ErrorAlert.svelte
 SV4 src/RnRomManager.Web/src/lib/components/common/JsonTree.svelte
 SV4 src/RnRomManager.Web/src/lib/components/common/Pagination.svelte
-SV4 src/RnRomManager.Web/src/lib/components/discovery/DiscoveryGroups.svelte
 SV4 src/RnRomManager.Web/src/lib/components/games/GameImages.svelte
 SV4 src/RnRomManager.Web/src/lib/components/games/GameResults.svelte
 SV4 src/RnRomManager.Web/src/lib/components/games/GameSaves.svelte
@@ -29,20 +26,11 @@ SV4 src/RnRomManager.Web/src/lib/components/modals/GlobalSearch.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/HotkeysModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/LogoModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/ReleaseNoteModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/systems/SystemGames.svelte
-SV4 src/RnRomManager.Web/src/lib/components/systems/SystemList.svelte
-SV4 src/RnRomManager.Web/src/routes/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/bundle-creator/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/change-password/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/collections/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/collections/[id]/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/deleted/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/games/[id]/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/ingestion/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/login/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/review/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/review/[id]/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/timeline/+page.svelte
 SV6 src/RnRomManager.Web/src/lib/components/bundles/BundleDownload.svelte
 SV6 src/RnRomManager.Web/src/lib/components/bundles/SavedBundleQueues.svelte
 SV6 src/RnRomManager.Web/src/lib/components/common/JobStepProgress.svelte

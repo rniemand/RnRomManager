@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import ViewToggle from '#lib/components/common/ViewToggle.svelte';
 	import DeleteCollectionModal from '#lib/components/modals/DeleteCollectionModal.svelte';
 	import { debounced } from '#lib/debounce.js';
@@ -193,8 +196,8 @@
 <svelte:head><title>{collection?.name ?? 'Collection'} · RnRomManager</title></svelte:head>
 
 <div class="mb-3">
-	<a class="btn btn-sm btn-outline-primary" href={resolve('/collections')}
-		><Icon name="back" /> Back to Collections</a
+	<Button variant="primary" outline size="sm" icon="back" href={resolve('/collections')}
+		>Back to Collections</Button
 	>
 </div>
 
@@ -203,7 +206,7 @@
 {:else if notFound}
 	<EmptyState icon="not-found" message="This collection doesn't exist.">
 		{#snippet action()}
-			<a class="btn btn-primary" href={resolve('/collections')}>Go to Collections</a>
+			<Button variant="primary" href={resolve('/collections')}>Go to Collections</Button>
 		{/snippet}
 	</EmptyState>
 {:else if !collection}
@@ -227,12 +230,12 @@
 			<div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
 				<h1 class="h3 mb-1 text-break">{collection.name}</h1>
 				<div class="d-flex gap-2">
-					<button type="button" class="btn btn-outline-secondary" onclick={() => (editing = true)}>
-						<Icon name="edit" /> Edit
-					</button>
-					<button type="button" class="btn btn-outline-danger" onclick={() => (deleting = true)}>
-						<Icon name="delete" /> Delete
-					</button>
+					<Button variant="secondary" outline icon="edit" onclick={() => (editing = true)}
+						>Edit</Button
+					>
+					<Button variant="danger" outline icon="delete" onclick={() => (deleting = true)}
+						>Delete</Button
+					>
 				</div>
 			</div>
 			<p class="text-body-secondary small mb-2">
@@ -265,66 +268,59 @@
 	<form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
 		<div class="col-12 col-md-4 col-lg-3">
 			<label class="form-label" for="q">Search</label>
-			<input
+			<SearchInput
 				id="q"
-				type="search"
-				class="form-control"
 				placeholder="At least 2 characters"
-				maxlength="255"
+				maxlength={255}
 				bind:value={search}
 				oninput={onSearchInput}
 			/>
 		</div>
 		<div class="col-6 col-md-4 col-lg-2">
 			<label class="form-label" for="system">System</label>
-			<select
+			<Select
 				id="system"
-				class="form-select"
 				value={filters.system ?? ''}
 				onchange={(e) => update({ system: e.currentTarget.value || null })}
-			>
-				<option value="">All systems</option>
+				><option value="">All systems</option>
 				{#each systems as system (system.id)}
 					<option value={system.id}>{system.displayName}</option>
-				{/each}
-			</select>
+				{/each}</Select
+			>
 		</div>
 		<div class="col-6 col-md-4 col-lg-3">
 			<label class="form-label" for="sort">Sort by</label>
 			<div class="input-group">
-				<select
+				<Select
 					id="sort"
-					class="form-select"
 					value={filters.sort}
 					onchange={(e) => update({ sort: e.currentTarget.value as LibrarySort, dir: null })}
-				>
-					<option value="added">Added to collection</option>
+					><option value="added">Added to collection</option>
 					<option value="title">Title</option>
 					<option value="year">Year</option>
-					<option value="rating">Rating</option>
-				</select>
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
+					<option value="rating">Rating</option></Select
+				>
+				<Button
+					variant="secondary"
+					outline
+					icon={dir === 'asc' ? 'sort-asc' : 'sort-desc'}
 					aria-label={dir === 'asc'
 						? 'Ascending, switch to descending'
 						: 'Descending, switch to ascending'}
 					onclick={() => update({ dir: dir === 'asc' ? 'desc' : 'asc' })}
-				>
-					<Icon name={dir === 'asc' ? 'sort-asc' : 'sort-desc'} />
-				</button>
+				/>
 			</div>
 		</div>
 		<div class="col-12 col-md-12 col-lg-4 d-flex gap-2 justify-content-lg-end">
-			<button
-				type="button"
-				class="btn btn-outline-secondary"
-				class:active={filters.favourite}
+			<Button
+				variant="secondary"
+				outline
+				class={filters.favourite ? 'active' : undefined}
+				icon={filters.favourite ? 'favourite-fill' : 'favourite'}
 				aria-pressed={filters.favourite}
 				aria-label="Favourites"
 				onclick={() => update({ favourite: !filters.favourite })}
-				><Icon name={filters.favourite ? 'favourite-fill' : 'favourite'} /></button
-			>
+			/>
 			<ViewToggle {view} onchange={setView} />
 		</div>
 	</form>
@@ -346,13 +342,15 @@
 		</p>
 		<GameResults bind:games={result.items} {view}>
 			{#snippet action(game)}
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-danger"
+				<Button
+					variant="danger"
+					outline
+					size="sm"
+					icon="delete"
 					aria-label="Remove {game.displayTitle} from collection"
 					title="Remove from collection"
-					onclick={() => remove(game)}><Icon name="delete" /></button
-				>
+					onclick={() => remove(game)}
+				/>
 			{/snippet}
 		</GameResults>
 		<Pagination page={filters.page} {pages} onpage={(p) => go({ ...filters, page: p })} />

@@ -57,6 +57,14 @@ describe('DataTable', () => {
 		expect(responsive.textContent).toContain('Nothing here.');
 	});
 
+	it('caption renders a visually hidden caption before the head', () => {
+		const { container } = render(DataTable, { items: [1], head, row, caption: 'Saved queues' });
+		const caption = container.querySelector('table > caption')!;
+		expect(caption.className).toBe('visually-hidden');
+		expect(caption.textContent).toBe('Saved queues');
+		expect(caption.nextElementSibling?.tagName).toBe('THEAD');
+	});
+
 	it('emptyInCard renders the table when there are items', () => {
 		const { container } = render(DataTable, {
 			items: [1],

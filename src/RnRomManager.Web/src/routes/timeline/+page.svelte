@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
@@ -13,7 +14,6 @@
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import GameResults from '#lib/components/games/GameResults.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
@@ -173,39 +173,43 @@
 		</div>
 		{#if view && range && disabled}
 			<div class="btn-group btn-group-sm">
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
+				<Button
+					variant="secondary"
+					outline
+					icon="zoom-in"
 					aria-label="Zoom in"
 					disabled={disabled.zoomIn}
-					onclick={() => show(zoomIn(view))}><Icon name="zoom-in" /></button
-				>
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
+					onclick={() => show(zoomIn(view))}
+				/>
+				<Button
+					variant="secondary"
+					outline
+					icon="zoom-out"
 					aria-label="Zoom out"
 					disabled={disabled.zoomOut}
-					onclick={() => show(zoomOut(view, range))}><Icon name="zoom-out" /></button
-				>
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
+					onclick={() => show(zoomOut(view, range))}
+				/>
+				<Button
+					variant="secondary"
+					outline
+					icon="earlier"
 					aria-label="Earlier"
 					disabled={disabled.earlier}
-					onclick={() => show(pan(view, range, -1))}><Icon name="earlier" /></button
-				>
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
+					onclick={() => show(pan(view, range, -1))}
+				/>
+				<Button
+					variant="secondary"
+					outline
+					icon="later"
 					aria-label="Later"
 					disabled={disabled.later}
-					onclick={() => show(pan(view, range, 1))}><Icon name="later" /></button
-				>
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
+					onclick={() => show(pan(view, range, 1))}
+				/>
+				<Button
+					variant="secondary"
+					outline
 					disabled={disabled.showAll}
-					onclick={() => show({ from: range.min, to: range.max })}>Show all</button
+					onclick={() => show({ from: range.min, to: range.max })}>Show all</Button
 				>
 			</div>
 			<span class="small text-body-secondary" aria-live="polite">{rangeLabel(view)}</span>
@@ -221,14 +225,12 @@
 					{@const pressed = view.from === year && view.to === year}
 					<div class="timeline-year">
 						{#if side}
-							<button
-								type="button"
+							<Button
 								class="timeline-point {side}"
 								aria-label="{year}: {gamesLabel(count)}"
 								aria-pressed={pressed}
 								onclick={() => show({ from: year, to: year })}
-							>
-								<span class="timeline-stem"></span>
+								><span class="timeline-stem"></span>
 								<span class="timeline-dot bg-primary"></span>
 								<span
 									class="timeline-card border rounded px-2 py-1 small {pressed
@@ -237,8 +239,8 @@
 								>
 									<span class="d-block fw-semibold">{year}</span>
 									<span class="d-block">{formatCount(count)}</span>
-								</span>
-							</button>
+								</span></Button
+							>
 						{:else}
 							<span class="timeline-tick" aria-hidden="true" title="{year}: no games">
 								{#if labelled}<span class="timeline-tick-label small text-body-secondary"
@@ -277,14 +279,17 @@
 {#snippet viewOnIgdb(game: GameListItem)}
 	<!-- A server redirect to IGDB: resolve() is for app routes. -->
 	<!-- eslint-disable svelte/no-navigation-without-resolve -->
-	<a
-		class="btn btn-sm btn-outline-secondary"
+	<Button
+		variant="secondary"
+		outline
+		size="sm"
+		icon="external"
 		href="/api/igdb/games/{game.igdbId}/page"
 		target="_blank"
 		rel="noopener noreferrer"
 		title="View on IGDB"
-		aria-label="View {game.displayTitle} on IGDB"><Icon name="external" /></a
-	>
+		aria-label="View {game.displayTitle} on IGDB"
+	/>
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/snippet}
 
@@ -307,7 +312,8 @@
 		flex: 1 0 5rem;
 	}
 	/* T2, T6: a point fills its column, with no button chrome. */
-	.timeline-point {
+	/* .timeline-point is on the kit Button's element, which this page doesn't render itself. */
+	.timeline-year :global(.timeline-point) {
 		position: absolute;
 		inset: 0;
 		background: none;
@@ -315,7 +321,7 @@
 		padding: 0;
 		color: inherit;
 	}
-	.timeline-point:focus-visible {
+	.timeline-year :global(.timeline-point:focus-visible) {
 		outline: 2px solid var(--bs-focus-ring-color);
 	}
 	.timeline-dot {
@@ -328,7 +334,7 @@
 		transform: translate(-50%, -50%);
 	}
 	/* T5: the pressed year's dot is larger with a ring. */
-	.timeline-point[aria-pressed='true'] .timeline-dot {
+	.timeline-year :global(.timeline-point[aria-pressed='true'] .timeline-dot) {
 		width: 1.25rem;
 		height: 1.25rem;
 		box-shadow: 0 0 0 0.25rem var(--bs-primary-bg-subtle);
@@ -347,20 +353,20 @@
 		white-space: nowrap;
 	}
 	/* T3: cards alternate above and below the line. */
-	.above .timeline-stem {
+	.timeline-year :global(.above .timeline-stem) {
 		bottom: 50%;
 	}
-	.above .timeline-card {
+	.timeline-year :global(.above .timeline-card) {
 		bottom: calc(50% + 1.5rem);
 	}
-	.below .timeline-stem {
+	.timeline-year :global(.below .timeline-stem) {
 		top: 50%;
 	}
-	.below .timeline-card {
+	.timeline-year :global(.below .timeline-card) {
 		top: calc(50% + 1.5rem);
 	}
 	/* bg-body is !important, so the hover colour must be too. */
-	.timeline-point:not([aria-pressed='true']):hover .timeline-card {
+	.timeline-year :global(.timeline-point:not([aria-pressed='true']):hover .timeline-card) {
 		background-color: var(--bs-tertiary-bg) !important;
 	}
 	/* T4: an empty year is a small tick crossing the line, some labelled underneath. */

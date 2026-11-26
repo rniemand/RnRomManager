@@ -326,7 +326,7 @@
 
 <style>
 	/* On the SearchInput's input, which this page doesn't render itself. */
-	form :global(.audit-search) {
+	:global(.audit-search) {
 		min-width: 12rem;
 		max-width: 24rem;
 	}
@@ -335,7 +335,7 @@
 	}
 	/* Release editing B35: below md the search takes the toolbar's first row. */
 	@media (max-width: 767.98px) {
-		form :global(.audit-search) {
+		:global(.audit-search) {
 			flex-basis: 100%;
 			max-width: none;
 		}

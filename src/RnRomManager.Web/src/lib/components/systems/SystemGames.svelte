@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { api } from '#lib/api/client.js';
 	import type { GameListItem, Page, SystemInfo } from '#lib/types/index.js';
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
@@ -7,7 +8,6 @@
 	import GameResults from '#lib/components/games/GameResults.svelte';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import GroupLogo from '#lib/components/discovery/GroupLogo.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
 	import SystemEmulatorsModal from '#lib/components/modals/SystemEmulatorsModal.svelte';
@@ -89,15 +89,16 @@
 	</h2>
 
 	<div class="mb-3">
-		<button
-			bind:this={emulatorsButton}
-			type="button"
-			class="btn btn-outline-primary"
-			onclick={() => (emulatorsOpen = true)}><Icon name="emulators" /> Emulators</button
+		<Button
+			variant="primary"
+			outline
+			icon="emulators"
+			bind:ref={emulatorsButton}
+			onclick={() => (emulatorsOpen = true)}>Emulators</Button
 		>
 		{#if auth.isAdmin && onedit}
-			<button type="button" class="btn btn-outline-secondary ms-2" onclick={() => onedit(system)}
-				><Icon name="edit" /> Change logo</button
+			<Button variant="secondary" outline class="ms-2" icon="edit" onclick={() => onedit(system)}
+				>Change logo</Button
 			>
 		{/if}
 	</div>

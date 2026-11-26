@@ -1,4 +1,7 @@
 <script lang="ts">
+	import DataTable from '#lib/components/common/DataTable.svelte';
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { BundleQueue, BundleQueueSummary } from '#lib/types/index.js';
@@ -12,7 +15,6 @@
 	import { bundle } from '#lib/stores/bundle.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * B2/B4: the signed-in user's saved queues. Save snapshots the working cart (a clashing name asks before saving over
@@ -197,12 +199,12 @@
 	>
 		<div class="col-sm">
 			<label class="visually-hidden" for="queue-name">Queue name</label>
-			<input
+			<TextInput
+				size="sm"
+				class={nameProblem ? 'is-invalid' : undefined}
 				id="queue-name"
-				class="form-control form-control-sm"
-				class:is-invalid={nameProblem}
 				placeholder="Queue name"
-				maxlength="200"
+				maxlength={200}
 				bind:value={name}
 				aria-describedby={nameProblem ? 'queue-name-error' : undefined}
 				oninput={() => (nameTouched = true)}
@@ -210,9 +212,13 @@
 			{#if nameProblem}<div class="invalid-feedback" id="queue-name-error">{nameProblem}</div>{/if}
 		</div>
 		<div class="col-sm-auto">
-			<button type="submit" class="btn btn-sm btn-primary" disabled={busy || !bundle.count}>
-				<Icon name="upload" /> Save cart as queue
-			</button>
+			<Button
+				variant="primary"
+				size="sm"
+				icon="upload"
+				type="submit"
+				disabled={busy || !bundle.count}>Save cart as queue</Button
+			>
 		</div>
 	</form>
 
@@ -223,57 +229,48 @@
 	{#if listError}
 		<div class="alert alert-danger py-2" role="alert">
 			{listError}
-			<button type="button" class="btn btn-sm btn-link" onclick={() => void reload()}>Retry</button>
+			<Button variant="link" size="sm" onclick={() => void reload()}>Retry</Button>
 		</div>
 	{:else if queues === null}
 		<p class="text-body-secondary small">Loading saved queues…</p>
 	{:else if !queues.length}
 		<div class="card"><EmptyState message="No saved queues yet." icon="list" /></div>
 	{:else}
-		<div class="card">
-			<div class="table-responsive">
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<caption class="visually-hidden">Saved queues</caption>
-					<thead class="table-dark">
-						<tr>
-							<th scope="col">Name</th>
-							<th scope="col" class="text-end">Files</th>
-							<th scope="col"><span class="visually-hidden">Actions</span></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each queues as queue (queue.id)}
-							<tr>
-								<td class="text-truncate" style="max-width: 32rem" title={queue.name}
-									>{queue.name}</td
-								>
-								<td class="text-end text-nowrap">{formatCount(queue.itemCount)}</td>
-								<td class="text-end text-nowrap">
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-primary"
-										aria-label="Load {queue.name} into the cart"
-										disabled={busy}
-										onclick={() => void load(queue)}
-									>
-										<Icon name="download" /> Load
-									</button>
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-danger"
-										aria-label="Delete {queue.name}"
-										disabled={busy}
-										onclick={() => ask({ kind: 'delete', queue })}
-									>
-										<Icon name="delete" />
-									</button>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		</div>
+		<DataTable items={queues} key={(queue) => queue.id} caption="Saved queues">
+			{#snippet head()}
+				<tr>
+					<th scope="col">Name</th>
+					<th scope="col" class="text-end">Files</th>
+					<th scope="col"><span class="visually-hidden">Actions</span></th>
+				</tr>
+			{/snippet}
+			{#snippet row(queue)}
+				<tr>
+					<td class="text-truncate" style="max-width: 32rem" title={queue.name}>{queue.name}</td>
+					<td class="text-end text-nowrap">{formatCount(queue.itemCount)}</td>
+					<td class="text-end text-nowrap">
+						<Button
+							variant="primary"
+							outline
+							size="sm"
+							icon="download"
+							aria-label="Load {queue.name} into the cart"
+							disabled={busy}
+							onclick={() => void load(queue)}>Load</Button
+						>
+						<Button
+							variant="danger"
+							outline
+							size="sm"
+							icon="delete"
+							aria-label="Delete {queue.name}"
+							disabled={busy}
+							onclick={() => ask({ kind: 'delete', queue })}
+						/>
+					</td>
+				</tr>
+			{/snippet}
+		</DataTable>
 	{/if}
 </section>
 

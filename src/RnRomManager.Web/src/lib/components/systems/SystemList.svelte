@@ -1,4 +1,6 @@
 <script lang="ts">
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import SortHeader from '#lib/components/common/SortHeader.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { untrack } from 'svelte';
@@ -10,7 +12,6 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import GroupLogo from '#lib/components/discovery/GroupLogo.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * Systems tab B3: every supported system (0 games included) in a sortable table, each name a link selecting it, with
@@ -88,18 +89,18 @@
 
 <div class="d-flex gap-2 mb-2">
 	<label class="visually-hidden" for="find-systems">Search systems</label>
-	<input
+	<SearchInput
+		size="sm"
+		class="flex-grow-1"
 		id="find-systems"
-		type="search"
-		class="form-control form-control-sm flex-grow-1"
 		placeholder="Search systems"
 		maxlength={maxFind}
 		bind:value={findText}
 		oninput={onFindInput}
 	/>
 	{#if find || sortKey !== 'name' || direction !== 'asc'}
-		<button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" onclick={clear}
-			><Icon name="clear" /> Clear</button
+		<Button variant="secondary" outline size="sm" class="text-nowrap" icon="clear" onclick={clear}
+			>Clear</Button
 		>
 	{/if}
 </div>
@@ -152,13 +153,13 @@
 						<td class="text-end text-nowrap">{formatCount(system.gameCount)}</td>
 						{#if admin}
 							<td>
-								<button
-									type="button"
+								<Button
+									icon="edit"
 									class="btn btn-link btn-sm p-0"
 									aria-label="Change logo for {system.displayName}"
 									title="Change logo"
-									onclick={() => onedit?.(system)}><Icon name="edit" /></button
-								>
+									onclick={() => onedit?.(system)}
+								/>
 							</td>
 						{/if}
 					</tr>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { onDestroy } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { BundleDownloadRun, runItemLabel } from '#lib/bundleDownload.js';
@@ -6,7 +7,6 @@
 	import type { PauseReason } from '#lib/enums/index.js';
 	import { formatCount } from '#lib/format.js';
 	import { bundle } from '#lib/stores/bundle.svelte.js';
-	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {
 		/** The runner; tests pass one with a fake server. */
@@ -92,46 +92,35 @@
 		<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 			<h2 id="bundle-download-heading" class="h5 mb-0 me-auto">Download</h2>
 			{#if view.status === 'running'}
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-secondary"
+				<Button
+					variant="secondary"
+					outline
+					size="sm"
 					disabled={view.stopRequested}
-					onclick={() => run.stopAfterCurrent()}
+					onclick={() => run.stopAfterCurrent()}>Stop after current file</Button
 				>
-					Stop after current file
-				</button>
 			{:else if view.status === 'paused'}
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-secondary"
-					onclick={() => run.stopAfterCurrent()}
+				<Button variant="secondary" outline size="sm" onclick={() => run.stopAfterCurrent()}
+					>Stop</Button
 				>
-					Stop
-				</button>
 			{/if}
 			{#if view.canRetry && view.pause !== 'signIn'}
-				<button type="button" class="btn btn-sm btn-outline-primary" onclick={() => run.retry()}>
-					<Icon name="retry" />
-					{view.pause === 'unknown' ? 'Send it again' : 'Retry'}
-				</button>
+				<Button variant="primary" outline size="sm" icon="retry" onclick={() => run.retry()}
+					>{view.pause === 'unknown' ? 'Send it again' : 'Retry'}</Button
+				>
 			{/if}
 			{#if view.pause === 'unknown'}
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-secondary"
-					onclick={() => run.skipUnknown()}
+				<Button variant="secondary" outline size="sm" onclick={() => run.skipUnknown()}
+					>Skip it</Button
 				>
-					Skip it
-				</button>
 			{/if}
-			<button
-				type="button"
-				class="btn btn-sm btn-primary"
+			<Button
+				variant="primary"
+				size="sm"
+				icon="download"
 				disabled={busy || !bundle.count}
-				onclick={startRun}
+				onclick={startRun}>Download queue</Button
 			>
-				<Icon name="download" /> Download queue
-			</button>
 		</div>
 
 		<p class="text-body-secondary small mb-2">
@@ -145,7 +134,7 @@
 				<span class="me-auto">{pauseText[view.pause]}</span>
 				{#if view.pause === 'signIn'}
 					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved paths plus a query -->
-					<a class="btn btn-sm btn-warning" href={signInHref}>Sign in</a>
+					<Button variant="warning" size="sm" href={signInHref}>Sign in</Button>
 				{/if}
 			</div>
 		{/if}

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import ViewToggle from '#lib/components/common/ViewToggle.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { replaceUrl } from '#lib/urlState.js';
@@ -24,7 +26,6 @@
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import GameResults from '#lib/components/games/GameResults.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import {
 		defaultDir,
@@ -243,12 +244,12 @@
 	onsubmit={(e) => e.preventDefault()}
 >
 	<label class="visually-hidden" for="q">Search</label>
-	<input
+	<SearchInput
+		size="sm"
+		class="flex-grow-1 search-input"
 		id="q"
-		type="search"
-		class="form-control form-control-sm flex-grow-1 search-input"
 		placeholder="At least 2 characters"
-		maxlength="255"
+		maxlength={255}
 		bind:value={search}
 		oninput={onSearchInput}
 	/>
@@ -284,38 +285,43 @@
 		active={filters.sort !== 'title'}
 		onselect={(sort) => update({ sort: (sort ?? 'title') as LibrarySort, dir: null })}
 	/>
-	<button
-		type="button"
-		class="btn btn-sm btn-outline-secondary"
+	<Button
+		variant="secondary"
+		outline
+		size="sm"
+		icon={dir === 'asc' ? 'sort-asc' : 'sort-desc'}
 		aria-label={dir === 'asc'
 			? 'Ascending, switch to descending'
 			: 'Descending, switch to ascending'}
 		onclick={() => update({ dir: dir === 'asc' ? 'desc' : 'asc' })}
-	>
-		<Icon name={dir === 'asc' ? 'sort-asc' : 'sort-desc'} />
-	</button>
-	<button
-		type="button"
-		class="btn btn-sm btn-outline-secondary"
-		class:active={filters.favourite}
+	/>
+	<Button
+		variant="secondary"
+		outline
+		size="sm"
+		class={filters.favourite ? 'active' : undefined}
+		icon={filters.favourite ? 'favourite-fill' : 'favourite'}
 		aria-pressed={filters.favourite}
 		aria-label="Favourites"
 		onclick={() => update({ favourite: !filters.favourite })}
-		><Icon name={filters.favourite ? 'favourite-fill' : 'favourite'} /></button
-	>
+	/>
 	<!-- B1/B2: Clear all, then Select, then the View toggle last. -->
-	<button
-		type="button"
-		class="btn btn-sm btn-outline-secondary"
+	<Button
+		variant="secondary"
+		outline
+		size="sm"
+		icon="clear"
 		disabled={!canClear}
-		onclick={resetFilters}><Icon name="clear" /> Clear all</button
+		onclick={resetFilters}>Clear all</Button
 	>
-	<button
-		type="button"
-		class="btn btn-sm btn-outline-secondary"
-		class:active={selecting}
+	<Button
+		variant="secondary"
+		outline
+		size="sm"
+		class={selecting ? 'active' : undefined}
+		icon="select"
 		aria-pressed={selecting}
-		onclick={toggleSelecting}><Icon name="select" /> Select</button
+		onclick={toggleSelecting}>Select</Button
 	>
 	<ViewToggle {view} onchange={setView} size="sm" />
 </form>
@@ -325,12 +331,11 @@
 		{#each chips as chip (chip.field)}
 			<span class="badge rounded-pill text-bg-secondary d-inline-flex align-items-center gap-1">
 				{chip.text}
-				<button
-					type="button"
+				<Button
 					class="btn-close btn-close-white chip-close"
 					aria-label="Remove {chip.field} filter"
 					onclick={() => update(chip.clear)}
-				></button>
+				/>
 			</span>
 		{/each}
 	</div>
@@ -338,18 +343,20 @@
 
 {#if selecting}
 	<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-		<button
-			type="button"
-			class="btn btn-sm btn-outline-secondary"
+		<Button
+			variant="secondary"
+			outline
+			size="sm"
 			disabled={!result?.items.length}
 			onclick={() => result?.items.forEach((g) => selected.add(g.id))}
-			>Select all on this page</button
+			>Select all on this page</Button
 		>
-		<button
-			type="button"
-			class="btn btn-sm btn-primary"
+		<Button
+			variant="primary"
+			size="sm"
+			icon="collections"
 			disabled={selected.size === 0}
-			onclick={() => (picking = true)}><Icon name="collections" /> Add to collection…</button
+			onclick={() => (picking = true)}>Add to collection…</Button
 		>
 		<span class="small text-body-secondary" aria-live="polite">{selected.size} selected</span>
 	</div>
@@ -363,16 +370,13 @@
 	{#if hasFilters(filters) || filters.page > 1}
 		<EmptyState message="No games match these filters.">
 			{#snippet action()}
-				<button type="button" class="btn btn-outline-primary" onclick={resetFilters}>
-					Clear filters
-				</button>
+				<Button variant="primary" outline onclick={resetFilters}>Clear filters</Button>
 			{/snippet}
 		</EmptyState>
 	{:else if auth.isAdmin}
 		<EmptyState message="The library is empty.">
 			{#snippet action()}
-				<a class="btn btn-primary" href={resolve('/ingestion')}
-					><Icon name="ingest" /> Go to Ingestion</a
+				<Button variant="primary" icon="ingest" href={resolve('/ingestion')}>Go to Ingestion</Button
 				>
 			{/snippet}
 		</EmptyState>
@@ -388,18 +392,18 @@
 
 	{#if pages > 1}
 		<nav class="d-flex justify-content-center align-items-center gap-3 mt-4" aria-label="Pages">
-			<button
-				type="button"
-				class="btn btn-outline-secondary"
+			<Button
+				variant="secondary"
+				outline
 				disabled={filters.page <= 1}
-				onclick={() => go({ ...filters, page: filters.page - 1 })}>Previous</button
+				onclick={() => go({ ...filters, page: filters.page - 1 })}>Previous</Button
 			>
 			<span>Page {filters.page} of {pages}</span>
-			<button
-				type="button"
-				class="btn btn-outline-secondary"
+			<Button
+				variant="secondary"
+				outline
 				disabled={filters.page >= pages}
-				onclick={() => go({ ...filters, page: filters.page + 1 })}>Next</button
+				onclick={() => go({ ...filters, page: filters.page + 1 })}>Next</Button
 			>
 		</nav>
 	{/if}
@@ -412,19 +416,20 @@
 />
 
 <style>
-	.search-input {
+	/* Classes on kit components' elements, which this page doesn't render itself. */
+	:global(.search-input) {
 		min-width: 12rem;
 		width: auto;
 	}
 
 	/* Release editing B36: below md the search takes the toolbar's first row; the controls wrap after it. */
 	@media (max-width: 767.98px) {
-		.search-input {
+		:global(.search-input) {
 			flex-basis: 100%;
 		}
 	}
 
-	.chip-close {
+	:global(.chip-close) {
 		font-size: 0.6em;
 	}
 </style>

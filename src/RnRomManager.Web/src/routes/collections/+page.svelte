@@ -1,4 +1,6 @@
 <script lang="ts">
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { pageParam, replaceUrl } from '#lib/urlState.js';
 	import NavTabs from '#lib/components/layout/NavTabs.svelte';
@@ -204,9 +206,9 @@
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 	<PageTitle icon="collections" text="Collections" class="mb-0" />
 	{#if tab === 'collections'}
-		<button type="button" class="btn btn-primary ms-auto" onclick={() => (creating = true)}>
-			<Icon name="add" /> New collection
-		</button>
+		<Button variant="primary" class="ms-auto" icon="add" onclick={() => (creating = true)}
+			>New collection</Button
+		>
 	{/if}
 </div>
 
@@ -225,12 +227,10 @@
 	<form class="row g-2 mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
 		<div class="col-12 col-md-6 col-lg-4">
 			<label class="visually-hidden" for="collection-filter">Filter collections</label>
-			<input
+			<SearchInput
 				id="collection-filter"
-				type="search"
-				class="form-control"
 				placeholder="Filter by name"
-				maxlength="255"
+				maxlength={255}
 				bind:value={filter}
 				oninput={onFilterInput}
 			/>
@@ -247,9 +247,9 @@
 		{:else}
 			<EmptyState message="You have no collections yet." icon="collections">
 				{#snippet action()}
-					<button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
-						<Icon name="add" /> New collection
-					</button>
+					<Button variant="primary" icon="add" onclick={() => (creating = true)}
+						>New collection</Button
+					>
 				{/snippet}
 			</EmptyState>
 		{/if}
@@ -391,9 +391,8 @@
 			{:else}
 				<EmptyState message="This system isn't supported.">
 					{#snippet action()}
-						<a
-							class="btn btn-outline-primary"
-							href="{resolve('/collections')}{tabSearch('systems')}">Back to all systems</a
+						<Button variant="primary" outline href="{resolve('/collections')}{tabSearch('systems')}"
+							>Back to all systems</Button
 						>
 					{/snippet}
 				</EmptyState>
