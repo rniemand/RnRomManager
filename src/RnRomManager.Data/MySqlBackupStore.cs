@@ -1,7 +1,7 @@
 using System.Data;
 using System.Globalization;
-using System.Reflection;
 using System.IO.Compression;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using MySqlConnector;
@@ -38,7 +38,10 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
         .ToHashSet(StringComparer.Ordinal);
 
     public async Task<BackupManifest> DumpAsync(
-        Stream destination, Guid backupId, DateTimeOffset createdAt, CancellationToken cancellationToken)
+        Stream destination,
+        Guid backupId,
+        DateTimeOffset createdAt,
+        CancellationToken cancellationToken)
     {
         await using var connection = (MySqlConnection)connections.Create();
         await connection.OpenAsync(cancellationToken);
@@ -101,7 +104,10 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
     }
 
     private static async Task WriteSchemaAsync(
-        ZipArchive zip, MySqlConnection connection, List<string> tables, CancellationToken cancellationToken)
+        ZipArchive zip,
+        MySqlConnection connection,
+        List<string> tables,
+        CancellationToken cancellationToken)
     {
         await using var entry = await zip.CreateEntry(BackupManifest.SchemaFileName, CompressionLevel.Optimal).OpenAsync(cancellationToken);
         await using var writer = new StreamWriter(entry, Utf8);
@@ -117,7 +123,10 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
     }
 
     private static async Task<long> WriteRowsAsync(
-        ZipArchive zip, MySqlConnection connection, string table, CancellationToken cancellationToken)
+        ZipArchive zip,
+        MySqlConnection connection,
+        string table,
+        CancellationToken cancellationToken)
     {
         await using var entry = await zip.CreateEntry(BackupManifest.DataEntry(table), CompressionLevel.Optimal).OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
@@ -251,7 +260,10 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
     }
 
     private static async Task<long> InsertRowsAsync(
-        MySqlConnection connection, ZipArchiveEntry entry, string table, CancellationToken cancellationToken)
+        MySqlConnection connection,
+        ZipArchiveEntry entry,
+        string table,
+        CancellationToken cancellationToken)
     {
         var types = await ColumnTypesAsync(connection, table, cancellationToken);
         var batch = new List<JsonElement>(InsertBatchSize);
@@ -299,8 +311,12 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
         return types;
     }
 
-    private static async Task<int> InsertBatchAsync(MySqlConnection connection, string table,
-        Dictionary<string, string> types, List<JsonElement> rows, CancellationToken cancellationToken)
+    private static async Task<int> InsertBatchAsync(
+        MySqlConnection connection,
+        string table,
+        Dictionary<string, string> types,
+        List<JsonElement> rows,
+        CancellationToken cancellationToken)
     {
         // Columns of the first row; every row of a dump has the same keys.
         var columns = rows[0].EnumerateObject().Select(p => p.Name).ToList();

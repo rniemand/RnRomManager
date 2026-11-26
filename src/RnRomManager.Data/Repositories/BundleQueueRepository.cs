@@ -17,8 +17,6 @@ public sealed class BundleQueueRepository(IDbConnectionFactory connections) : IB
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private sealed record Row(Guid Id, string Name, int Revision, string Entries);
-
     public async Task<IReadOnlyList<BundleQueueSummary>> ListAsync(int userId, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
@@ -31,15 +29,20 @@ public sealed class BundleQueueRepository(IDbConnectionFactory connections) : IB
     public async Task<BundleQueue?> GetAsync(Guid id, int userId, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
-        var row = await connection.QuerySingleOrDefaultAsync<Row>(new CommandDefinition("""
+        var row = await connection.QuerySingleOrDefaultAsync<BundleQueueRepositoryRow>(new CommandDefinition("""
             SELECT id AS Id, name AS Name, revision AS Revision, entries AS Entries
             FROM bundle_queues WHERE id = @id AND user_id = @userId
             """, new { id, userId }, cancellationToken: cancellationToken));
         return row is null ? null : ToQueue(row);
     }
 
-    public async Task<BundleQueueWrite> CreateAsync(int userId, Guid id, string name, IReadOnlyList<BundleEntry> entries,
-        DateTime now, CancellationToken cancellationToken)
+    public async Task<BundleQueueWrite> CreateAsync(
+        int userId,
+        Guid id,
+        string name,
+        IReadOnlyList<BundleEntry> entries,
+        DateTime now,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         await connection.OpenAsync(cancellationToken);
@@ -72,8 +75,14 @@ public sealed class BundleQueueRepository(IDbConnectionFactory connections) : IB
         return new BundleQueueWrite(BundleQueueWriteStatus.Ok, new BundleQueue(id, name, 1, entries));
     }
 
-    public async Task<BundleQueueWrite> ReplaceAsync(Guid id, int userId, string name, IReadOnlyList<BundleEntry> entries,
-        int revision, DateTime now, CancellationToken cancellationToken)
+    public async Task<BundleQueueWrite> ReplaceAsync(
+        Guid id,
+        int userId,
+        string name,
+        IReadOnlyList<BundleEntry> entries,
+        int revision,
+        DateTime now,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         await connection.OpenAsync(cancellationToken);
@@ -103,7 +112,11 @@ public sealed class BundleQueueRepository(IDbConnectionFactory connections) : IB
         return new BundleQueueWrite(BundleQueueWriteStatus.Ok, new BundleQueue(id, name, revision + 1, entries));
     }
 
-    public async Task<BundleQueueWriteStatus> DeleteAsync(Guid id, int userId, int revision, CancellationToken cancellationToken)
+    public async Task<BundleQueueWriteStatus> DeleteAsync(
+        Guid id,
+        int userId,
+        int revision,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         await connection.OpenAsync(cancellationToken);
@@ -121,8 +134,13 @@ public sealed class BundleQueueRepository(IDbConnectionFactory connections) : IB
     }
 
     /// <summary>Ownership first (locking the row), then the revision.</summary>
-    private static async Task<BundleQueueWriteStatus> CheckAsync(DbConnection connection, DbTransaction transaction,
-        Guid id, int userId, int revision, CancellationToken cancellationToken)
+    private static async Task<BundleQueueWriteStatus> CheckAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        Guid id,
+        int userId,
+        int revision,
+        CancellationToken cancellationToken)
     {
         var current = await connection.ExecuteScalarAsync<int?>(new CommandDefinition(
             "SELECT revision FROM bundle_queues WHERE id = @id AND user_id = @userId FOR UPDATE",
@@ -131,15 +149,20 @@ public sealed class BundleQueueRepository(IDbConnectionFactory connections) : IB
         return current == revision ? BundleQueueWriteStatus.Ok : BundleQueueWriteStatus.Changed;
     }
 
-    private static Task<bool> NameTakenAsync(DbConnection connection, DbTransaction transaction, int userId, string name,
-        Guid? except, CancellationToken cancellationToken) =>
+    private static Task<bool> NameTakenAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        int userId,
+        string name,
+        Guid? except,
+        CancellationToken cancellationToken) =>
         connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
             SELECT EXISTS (SELECT 1 FROM bundle_queues WHERE user_id = @userId AND name = @name AND (@except IS NULL OR id <> @except))
             """, new { userId, name, except }, transaction, cancellationToken: cancellationToken));
 
     private static string Serialize(IReadOnlyList<BundleEntry> entries) => JsonSerializer.Serialize(entries, StoredJson);
 
-    private static BundleQueue ToQueue(Row row) => new(
+    private static BundleQueue ToQueue(BundleQueueRepositoryRow row) => new(
         row.Id, row.Name, row.Revision,
         JsonSerializer.Deserialize<List<BundleEntry>>(row.Entries, StoredJson) ?? []);
 }

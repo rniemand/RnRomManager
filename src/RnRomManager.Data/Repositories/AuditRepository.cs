@@ -15,7 +15,11 @@ public sealed class AuditRepository(IDbConnectionFactory connections) : IAuditRe
         FROM audit_events a LEFT JOIN games g ON g.id = a.game_id
         """;
 
-    public async Task<Page<AuditItem>> ListAsync(AuditQuery query, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<Page<AuditItem>> ListAsync(
+        AuditQuery query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         var clauses = new List<string>();
         if (query.Action is not null) clauses.Add("a.action = @Action");

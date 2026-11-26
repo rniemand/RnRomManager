@@ -18,7 +18,10 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
 
     private const string MissingImageOrder = "g.system_id, g.display_title, g.id";
 
-    public async Task<Page<MissingImageItem>> ListMissingImagesAsync(string? systemId, int page, int pageSize,
+    public async Task<Page<MissingImageItem>> ListMissingImagesAsync(
+        string? systemId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken)
     {
         var where = $"WHERE {MissingImage}" + (systemId is null ? "" : " AND g.system_id = @systemId");
@@ -36,8 +39,14 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<MissingImageItem>(rows.AsList(), page, pageSize, total);
     }
 
-    public async Task<Page<ImageResolutionItem>> ListImageResolutionsAsync(string? systemId, ImageType? type, int? maxWidth, int? maxHeight,
-        int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<Page<ImageResolutionItem>> ListImageResolutionsAsync(
+        string? systemId,
+        ImageType? type,
+        int? maxWidth,
+        int? maxHeight,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         var limits = (maxWidth, maxHeight) switch
         {
@@ -95,8 +104,15 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
     private const string MissingMetadata = $"({MissingYear} OR {MissingDeveloper} OR {MissingPublisher})";
     private const string MissingMetadataOrder = "g.display_title, g.id";
 
-    public async Task<Page<MissingMetadataItem>> ListMissingMetadataAsync(string? systemId, MissingMetadataField missing, string? q,
-        MissingMetadataSort sort, bool descending, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<Page<MissingMetadataItem>> ListMissingMetadataAsync(
+        string? systemId,
+        MissingMetadataField missing,
+        string? q,
+        MissingMetadataSort sort,
+        bool descending,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         // M2: the predicate, key and direction come only from the enums and bool, never from input text.
         var where = "WHERE " + missing switch
@@ -130,8 +146,15 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<MissingMetadataItem>(items, page, pageSize, total);
     }
 
-    public async Task<Page<MissingIgdbItem>> ListMissingIgdbIdsAsync(string? systemId, MissingIgdbStatus status, string? q,
-        MissingMetadataSort sort, bool descending, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<Page<MissingIgdbItem>> ListMissingIgdbIdsAsync(
+        string? systemId,
+        MissingIgdbStatus status,
+        string? q,
+        MissingMetadataSort sort,
+        bool descending,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         // As ListMissingMetadataAsync: the predicate, key and direction come only from the enums and bool.
         var where = "WHERE " + status switch
@@ -224,8 +247,14 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         FROM ({GameBytes}) g
         """;
 
-    public async Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(string? systemId, int min, MultipleReleaseSort sort, bool descending, int page,
-        int pageSize, CancellationToken cancellationToken)
+    public async Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(
+        string? systemId,
+        int min,
+        MultipleReleaseSort sort,
+        bool descending,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         // B17: the key and direction come only from the enum and bool, never from input text.
         var dir = descending ? "DESC" : "";
@@ -254,7 +283,12 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<MultipleReleaseItem>(items, page, pageSize, total);
     }
 
-    public async Task<Page<HackedGameItem>> ListHackedGamesAsync(string? systemId, HackedGameSort sort, bool descending, int page, int pageSize,
+    public async Task<Page<HackedGameItem>> ListHackedGamesAsync(
+        string? systemId,
+        HackedGameSort sort,
+        bool descending,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken)
     {
         // The key and direction come only from the enum and bool, never from input text.
@@ -379,7 +413,11 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
 
     private static string MatchKind(DuplicateMatch match) => match == DuplicateMatch.Igdb ? "igdb" : "title";
 
-    public async Task<Page<DuplicateGroup>> ListDuplicatesAsync(DuplicateMatch match, string? systemId, int page, int pageSize,
+    public async Task<Page<DuplicateGroup>> ListDuplicatesAsync(
+        DuplicateMatch match,
+        string? systemId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken)
     {
         var groupsSql = match == DuplicateMatch.Igdb ? IgdbGroups : TitleGroups;
@@ -411,7 +449,13 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<DuplicateGroup>(items, page, pageSize, total);
     }
 
-    public async Task DismissDuplicateAsync(DuplicateMatch match, string systemId, string baseTitle, string gamesKey, int? userId, DateTime now,
+    public async Task DismissDuplicateAsync(
+        DuplicateMatch match,
+        string systemId,
+        string baseTitle,
+        string gamesKey,
+        int? userId,
+        DateTime now,
         CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
@@ -419,82 +463,5 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             INSERT IGNORE INTO duplicate_dismissals (match_kind, system_id, base_title, games_key, dismissed_by, dismissed_at)
             VALUES (@matchKind, @systemId, @baseTitle, @gamesKey, @userId, @now)
             """, new { matchKind = MatchKind(match), systemId, baseTitle, gamesKey, userId, now }, cancellationToken: cancellationToken));
-    }
-
-    private sealed class MissingMetadataRow
-    {
-        public Guid Id { get; init; }
-        public string DisplayTitle { get; init; } = "";
-        public string SystemId { get; init; } = "";
-        public int? ReleaseYear { get; init; }
-        public IReadOnlyList<string> Developers { get; init; } = [];
-        public IReadOnlyList<string> Publishers { get; init; } = [];
-    }
-
-    private sealed class DuplicateGameRow
-    {
-        public Guid Id { get; init; }
-        public string DisplayTitle { get; init; } = "";
-        public long RomCount { get; init; }
-        public long ZipSizeBytes { get; init; }
-        public DateTime CreatedAt { get; init; }
-        public long? BoxArtImageId { get; init; }
-        public string? BoxArtSha1 { get; init; }
-    }
-
-    private sealed class GroupRow
-    {
-        public string SystemId { get; init; } = "";
-        public string BaseTitle { get; init; } = "";
-        public string GamesKey { get; init; } = "";
-        public string GameIds { get; init; } = "";
-        public int? IgdbId { get; init; }
-    }
-
-    // SUM() is DECIMAL and COUNT() BIGINT on MariaDB: map loosely, then narrow.
-    private sealed class SystemSizeRow
-    {
-        public string SystemId { get; init; } = "";
-        public decimal Bytes { get; init; }
-        public long GameCount { get; init; }
-        public decimal UpdateCount { get; init; }
-    }
-
-    private sealed class MultipleReleaseRow
-    {
-        public Guid Id { get; init; }
-        public string DisplayTitle { get; init; } = "";
-        public string SystemId { get; init; } = "";
-        public long ReleaseCount { get; init; }
-        public long UpdateCount { get; init; }
-        public long Bytes { get; init; }
-    }
-
-    private sealed class HackedGameRow
-    {
-        public Guid Id { get; init; }
-        public string DisplayTitle { get; init; } = "";
-        public string SystemId { get; init; } = "";
-        public long HackCount { get; init; }
-        public long ReleaseCount { get; init; }
-        public long Bytes { get; init; }
-    }
-
-    private sealed class NewGameRow
-    {
-        public Guid Id { get; init; }
-        public string DisplayTitle { get; init; } = "";
-        public string SystemId { get; init; } = "";
-        public DateTime AddedAt { get; init; }
-        public long ReleaseCount { get; init; }
-    }
-
-    private sealed class GameSizeRow
-    {
-        public Guid Id { get; init; }
-        public string DisplayTitle { get; init; } = "";
-        public long Bytes { get; init; }
-        public long RomCount { get; init; }
-        public long UpdateCount { get; init; }
     }
 }

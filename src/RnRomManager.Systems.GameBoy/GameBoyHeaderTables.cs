@@ -15,16 +15,6 @@ public static class GameBoyHeaderTables
     /// <summary>Keyed by the two ASCII characters at 0x0144.</summary>
     public static IReadOnlyDictionary<string, string> NewLicensees => Loaded.Value.NewLicensees;
 
-    private sealed record Tables(
-        IReadOnlyDictionary<byte, string> CartridgeTypes,
-        IReadOnlyDictionary<byte, string> OldLicensees,
-        IReadOnlyDictionary<string, string> NewLicensees);
-
-    private sealed record Document(
-        Dictionary<string, string> CartridgeTypes,
-        Dictionary<string, string> OldLicensees,
-        Dictionary<string, string> NewLicensees);
-
     private static Tables Load()
     {
         var doc = JsonSerializer.Deserialize<Document>(EmbeddedResources.Load("header-tables.json"), new JsonSerializerOptions(JsonSerializerDefaults.Web))

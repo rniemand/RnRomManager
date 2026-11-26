@@ -30,7 +30,11 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
             Select + " WHERE id = @id", new { id }, cancellationToken: cancellationToken));
     }
 
-    public async Task<Page<ReviewItem>> ListAsync(string status, int page, int pageSize, CancellationToken cancellationToken,
+    public async Task<Page<ReviewItem>> ListAsync(
+        string status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken,
         ReviewFilter? filter = null)
     {
         await using var connection = connections.Create();
@@ -53,7 +57,13 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
         return new Page<ReviewItem>(rows.AsList(), page, pageSize, total);
     }
 
-    public async Task SetResolutionAsync(long id, string status, Guid? gameId, int userId, DateTime now, CancellationToken cancellationToken)
+    public async Task SetResolutionAsync(
+        long id,
+        string status,
+        Guid? gameId,
+        int userId,
+        DateTime now,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         await connection.ExecuteAsync(new CommandDefinition("""
@@ -62,7 +72,13 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
             """, new { id, status, gameId, userId, now }, cancellationToken: cancellationToken));
     }
 
-    public async Task SetResolutionAsync(IReadOnlyList<long> ids, string status, Guid? gameId, int userId, DateTime now, CancellationToken cancellationToken)
+    public async Task SetResolutionAsync(
+        IReadOnlyList<long> ids,
+        string status,
+        Guid? gameId,
+        int userId,
+        DateTime now,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         await connection.OpenAsync(cancellationToken);
@@ -96,7 +112,13 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
             """, item, cancellationToken: cancellationToken));
     }
 
-    public async Task CompleteSourceAsync(string sourcePath, string? archiveEntry, IngestItemResult result, Guid jobId, DateTime now, CancellationToken cancellationToken)
+    public async Task CompleteSourceAsync(
+        string sourcePath,
+        string? archiveEntry,
+        IngestItemResult result,
+        Guid jobId,
+        DateTime now,
+        CancellationToken cancellationToken)
     {
         if (result.Outcome is IngestOutcome.Review or IngestOutcome.Skipped)
             return;
@@ -117,7 +139,11 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
             cancellationToken: cancellationToken))).AsList();
     }
 
-    public async Task RetargetPendingAsync(string originalPath, string sha1, string restoredPath, CancellationToken cancellationToken)
+    public async Task RetargetPendingAsync(
+        string originalPath,
+        string sha1,
+        string restoredPath,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         await connection.ExecuteAsync(new CommandDefinition("""

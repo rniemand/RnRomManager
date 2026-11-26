@@ -41,7 +41,11 @@ public sealed class CollectionRepository(IDbConnectionFactory connections) : ICo
     }
 
     public async Task<Page<Collection>> ListAsync(
-        int userId, IReadOnlyList<string> words, int page, int pageSize, CancellationToken cancellationToken)
+        int userId,
+        IReadOnlyList<string> words,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         var where = "WHERE c.user_id = @userId";
         var args = new DynamicParameters(new { userId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) });
@@ -85,7 +89,11 @@ public sealed class CollectionRepository(IDbConnectionFactory connections) : ICo
             "DELETE FROM collections WHERE id = @id AND user_id = @userId", new { id, userId }, cancellationToken: cancellationToken)) > 0;
     }
 
-    public async Task<int> AddGamesAsync(Guid collectionId, IReadOnlyCollection<Guid> gameIds, DateTime addedAt, CancellationToken cancellationToken)
+    public async Task<int> AddGamesAsync(
+        Guid collectionId,
+        IReadOnlyCollection<Guid> gameIds,
+        DateTime addedAt,
+        CancellationToken cancellationToken)
     {
         if (gameIds.Count == 0) return 0;
         await using var connection = connections.Create();

@@ -1,11 +1,5 @@
 # CodeStyleTests baseline (docs/style-guide.md): existing violations, one "<rule> <path>" per line.
 # It may only shrink: delete the lines you fix; never add new ones.
-CS1 src/RnRomManager.Data/Repositories/BundleQueueRepository.cs
-CS1 src/RnRomManager.Data/Repositories/DiscoveryRepository.cs
-CS1 src/RnRomManager.Data/Repositories/JobRepository.cs
-CS1 src/RnRomManager.Data/Repositories/LibraryRepositories.cs
-CS1 src/RnRomManager.Data/Repositories/ReportRepository.cs
-CS1 src/RnRomManager.Systems.GameBoy/GameBoyHeaderTables.cs
 CS1 tests/RnRomManager.Api.Tests/ApiFactory.cs
 CS1 tests/RnRomManager.Api.Tests/BackupSchedulerTests.cs
 CS1 tests/RnRomManager.Api.Tests/DatRefreshSchedulerTests.cs
@@ -63,19 +57,6 @@ CS1 tests/RnRomManager.TestData/SyntheticN64RomBuilder.cs
 CS1 tests/RnRomManager.TestData/SyntheticNesRomBuilder.cs
 CS1 tests/RnRomManager.TestData/SyntheticNrgBuilder.cs
 CS1 tests/RnRomManager.TestData/SyntheticSnesRomBuilder.cs
-CS2 src/RnRomManager.Data/DbUpLogger.cs
-CS2 src/RnRomManager.Data/MySqlBackupStore.cs
-CS2 src/RnRomManager.Data/Repositories/AuditRepository.cs
-CS2 src/RnRomManager.Data/Repositories/BundleQueueRepository.cs
-CS2 src/RnRomManager.Data/Repositories/CollectionRepository.cs
-CS2 src/RnRomManager.Data/Repositories/DiscoveryRepository.cs
-CS2 src/RnRomManager.Data/Repositories/IngestReviewRepository.cs
-CS2 src/RnRomManager.Data/Repositories/IntegrityIssueRepository.cs
-CS2 src/RnRomManager.Data/Repositories/JobRepository.cs
-CS2 src/RnRomManager.Data/Repositories/LibraryRepositories.cs
-CS2 src/RnRomManager.Data/Repositories/ReportRepository.cs
-CS2 src/RnRomManager.Data/Repositories/UserRepository.cs
-CS2 src/RnRomManager.Systems.NintendoDisc/NintendoDiscHeader.cs
 CS2 tests/RnRomManager.Api.Tests/BackupSchedulerTests.cs
 CS2 tests/RnRomManager.Api.Tests/DatRefreshSchedulerTests.cs
 CS2 tests/RnRomManager.Api.Tests/Endpoints/PlayDiscCopyTests.cs

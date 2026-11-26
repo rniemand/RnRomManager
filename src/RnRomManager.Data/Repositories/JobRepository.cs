@@ -42,7 +42,13 @@ public sealed class JobRepository(IDbConnectionFactory connections) : IJobReposi
             "DELETE FROM jobs WHERE started_at < @cutoff AND status <> 'Running'", new { cutoff }, cancellationToken: cancellationToken));
     }
 
-    public async Task FinishAsync(Guid id, JobStatus status, DateTime finishedAt, string? summary, string? error, CancellationToken cancellationToken)
+    public async Task FinishAsync(
+        Guid id,
+        JobStatus status,
+        DateTime finishedAt,
+        string? summary,
+        string? error,
+        CancellationToken cancellationToken)
     {
         const string sql = "UPDATE jobs SET status = @status, finished_at = @finishedAt, summary = @summary, error = @error WHERE id = @id";
         await using var connection = connections.Create();
@@ -57,7 +63,11 @@ public sealed class JobRepository(IDbConnectionFactory connections) : IJobReposi
             new CommandDefinition($"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken));
     }
 
-    public async Task<Page<Job>> ListAsync(JobType? type, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<Page<Job>> ListAsync(
+        JobType? type,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         const string where = "WHERE @type IS NULL OR type = @type";
         var args = new { type = type?.ToString(), offset = Page<Job>.Offset(page, pageSize), pageSize };
@@ -89,35 +99,5 @@ public sealed class JobRepository(IDbConnectionFactory connections) : IJobReposi
             new { finishedAt }, transaction, cancellationToken: cancellationToken));
         await transaction.CommitAsync(cancellationToken);
         return ids;
-    }
-}
-
-public sealed class JobItemRepository(IDbConnectionFactory connections) : IJobItemRepository
-{
-    public async Task<long> InsertAsync(JobItem item, CancellationToken cancellationToken)
-    {
-        const string sql = """
-            INSERT INTO job_items (job_id, file_id, system_id, source_path, archive_entry, outcome, reason, details, game_id, sha1, created_at)
-            VALUES (@JobId, @FileId, @SystemId, @SourcePath, @ArchiveEntry, @Outcome, @Reason, @Details, @GameId, @Sha1, @CreatedAt);
-            SELECT LAST_INSERT_ID();
-            """;
-        await using var connection = connections.Create();
-        return await connection.ExecuteScalarAsync<long>(new CommandDefinition(sql, item, cancellationToken: cancellationToken));
-    }
-
-    public async Task<Page<JobItem>> ListAsync(Guid jobId, string? outcome, int page, int pageSize, CancellationToken cancellationToken)
-    {
-        const string where = "WHERE job_id = @jobId AND (@outcome IS NULL OR outcome = @outcome)";
-        var args = new { jobId, outcome, offset = Page<JobItem>.Offset(page, pageSize), pageSize };
-        await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition($"SELECT COUNT(*) FROM job_items {where}", args, cancellationToken: cancellationToken));
-        var items = await connection.QueryAsync<JobItem>(new CommandDefinition($"""
-            SELECT id AS Id, job_id AS JobId, file_id AS FileId, system_id AS SystemId, source_path AS SourcePath,
-                   archive_entry AS ArchiveEntry, outcome AS Outcome, reason AS Reason, details AS Details,
-                   game_id AS GameId, sha1 AS Sha1, created_at AS CreatedAt
-            FROM job_items {where} ORDER BY id LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
-        return new Page<JobItem>(items.AsList(), page, pageSize, total);
     }
 }
