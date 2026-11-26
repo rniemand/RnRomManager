@@ -89,9 +89,8 @@
 		{#snippet row(item, index)}
 			<tr>
 				<td class="text-end text-nowrap">{index + 1}</td>
-				<td class="text-truncate" style="max-width: 32rem" title={item.fileName}>{item.fileName}</td
-				>
-				<td class="text-truncate" style="max-width: 20rem" title={item.gameTitle}>
+				<td class="text-truncate file-cell" title={item.fileName}>{item.fileName}</td>
+				<td class="text-truncate game-cell" title={item.gameTitle}>
 					{#if item.status === 'unavailable'}
 						{item.gameTitle}
 					{:else}
@@ -136,3 +135,12 @@
 	confirmClass="btn-danger"
 	onconfirm={clearCart}
 />
+
+<style>
+	.file-cell {
+		max-width: 32rem;
+	}
+	.game-cell {
+		max-width: 20rem;
+	}
+</style>

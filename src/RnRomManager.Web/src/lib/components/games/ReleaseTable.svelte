@@ -436,4 +436,21 @@
 	.file-name {
 		max-width: 32rem;
 	}
+	/* R2: the release header is clickable. It is bg-body-tertiary, where the light theme's default outline colours
+	   fall under 4.5:1, so it uses the text-emphasis colours in both themes (app.css does this in the dark theme). */
+	.release-header {
+		cursor: pointer;
+		:global(.btn-outline-primary) {
+			--bs-btn-color: var(--bs-primary-text-emphasis);
+			--bs-btn-border-color: var(--bs-primary-text-emphasis);
+		}
+		:global(.btn-outline-secondary) {
+			--bs-btn-color: var(--bs-secondary-text-emphasis);
+			--bs-btn-border-color: var(--bs-secondary-text-emphasis);
+		}
+		:global(.btn-outline-danger) {
+			--bs-btn-color: var(--bs-danger-text-emphasis);
+			--bs-btn-border-color: var(--bs-danger-text-emphasis);
+		}
+	}
 </style>

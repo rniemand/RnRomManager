@@ -244,7 +244,9 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 			expect(button(container, name)!.closest('.modal-footer')).not.toBeNull();
 		const body = container.querySelector('.modal-body')!;
 		expect(body.querySelectorAll('button')).toHaveLength(0);
-		expect([...body.children].map((c) => c.className)).toEqual(['ratio ratio-4x3 mx-auto']);
+		expect([...body.children].map((c) => c.className)).toEqual([
+			'ratio ratio-4x3 mx-auto emulator-screen'
+		]);
 	});
 
 	it.each(['desmume', 'opera'])('%s offers only the state button', async (core) => {

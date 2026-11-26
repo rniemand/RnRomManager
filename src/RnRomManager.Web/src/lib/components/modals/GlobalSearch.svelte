@@ -485,4 +485,9 @@
 			grid-template-columns: 48px 1fr auto auto auto auto;
 		}
 	}
+
+	/* Global search (spec B13): blur the page behind the modal. */
+	.modal.global-search {
+		backdrop-filter: blur(4px);
+	}
 </style>

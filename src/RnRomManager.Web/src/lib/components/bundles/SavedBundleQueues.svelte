@@ -246,7 +246,7 @@
 			{/snippet}
 			{#snippet row(queue)}
 				<tr>
-					<td class="text-truncate" style="max-width: 32rem" title={queue.name}>{queue.name}</td>
+					<td class="text-truncate name-cell" title={queue.name}>{queue.name}</td>
 					<td class="text-end text-nowrap">{formatCount(queue.itemCount)}</td>
 					<td class="text-end text-nowrap">
 						<Button
@@ -282,3 +282,9 @@
 	confirmClass={confirmText.danger ? 'btn-danger' : 'btn-primary'}
 	onconfirm={confirm}
 />
+
+<style>
+	.name-cell {
+		max-width: 32rem;
+	}
+</style>

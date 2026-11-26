@@ -117,8 +117,8 @@
 	<div class="input-group input-group-sm w-auto">
 		<label class="input-group-text" for="image-resolutions-max-width">Max width</label>
 		<NumberInput
+			class="size-input"
 			id="image-resolutions-max-width"
-			style="width: 6rem"
 			min="1"
 			max="100000"
 			step="1"
@@ -130,8 +130,8 @@
 	<div class="input-group input-group-sm w-auto">
 		<label class="input-group-text" for="image-resolutions-max-height">Max height</label>
 		<NumberInput
+			class="size-input"
 			id="image-resolutions-max-height"
-			style="width: 6rem"
 			min="1"
 			max="100000"
 			step="1"
@@ -173,10 +173,10 @@
 			<tr>
 				<td>
 					<img
+						class="thumb"
 						src="/api/games/{item.gameId}/images/{item.imageId}"
 						alt=""
 						loading="lazy"
-						style="max-width: 4rem; max-height: 4rem; object-fit: contain"
 					/>
 				</td>
 				<td>
@@ -197,3 +197,14 @@
 		label="Image pages"
 	/>
 {/if}
+
+<style>
+	:global(.size-input) {
+		width: 6rem;
+	}
+	.thumb {
+		max-width: 4rem;
+		max-height: 4rem;
+		object-fit: contain;
+	}
+</style>

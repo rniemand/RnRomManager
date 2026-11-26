@@ -410,3 +410,38 @@
 	disc={playing?.disc ?? playing?.game.playDisc ?? false}
 	save={playing?.save ?? null}
 />
+
+<style>
+	/* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
+	:global([data-bs-theme='dark'] .game-card) {
+		--bs-card-bg: var(--bs-tertiary-bg);
+	}
+	:global(.game-card) {
+		transition:
+			transform 150ms ease,
+			box-shadow 150ms ease;
+	}
+	:global(.game-card:hover),
+	:global(.game-card:focus-within) {
+		transform: translateY(-2px);
+		box-shadow: var(--bs-box-shadow-sm);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		:global(.game-card) {
+			transition: none;
+		}
+		:global(.game-card:hover),
+		:global(.game-card:focus-within) {
+			transform: none;
+		}
+	}
+
+	/* U6: library grids show 2 cards per row below 360px and 3 from 360px up to sm (after Bootstrap, so it wins
+	   over .row-cols-2 > * at equal specificity). */
+	@media (min-width: 360px) and (max-width: 575.98px) {
+		:global(.game-grid-xs > *) {
+			flex: 0 0 auto;
+			width: 33.3333%;
+		}
+	}
+</style>

@@ -1,18 +1,2 @@
 # CodeStyleTests baseline (docs/style-guide.md): existing violations, one "<rule> <path>" per line.
 # It may only shrink: delete the lines you fix; never add new ones.
-SV6 src/RnRomManager.Web/src/lib/components/bundles/BundleDownload.svelte
-SV6 src/RnRomManager.Web/src/lib/components/bundles/SavedBundleQueues.svelte
-SV6 src/RnRomManager.Web/src/lib/components/common/JobStepProgress.svelte
-SV6 src/RnRomManager.Web/src/lib/components/discovery/DiscoveryGroups.svelte
-SV6 src/RnRomManager.Web/src/lib/components/forms/GameTypeahead.svelte
-SV6 src/RnRomManager.Web/src/lib/components/games/GameImages.svelte
-SV6 src/RnRomManager.Web/src/lib/components/games/GameSaves.svelte
-SV6 src/RnRomManager.Web/src/lib/components/ingest/IngestFileTable.svelte
-SV6 src/RnRomManager.Web/src/lib/components/modals/EmulatorModal.svelte
-SV6 src/RnRomManager.Web/src/lib/components/systems/SystemList.svelte
-SV6 src/RnRomManager.Web/src/routes/admin/logs/+page.svelte
-SV6 src/RnRomManager.Web/src/routes/bundle-creator/+page.svelte
-SV6 src/RnRomManager.Web/src/routes/jobs/+page.svelte
-SV6 src/RnRomManager.Web/src/routes/jobs/[id]/+page.svelte
-SV6 src/RnRomManager.Web/src/routes/reports/image-resolutions/+page.svelte
-SV6 src/RnRomManager.Web/src/routes/review/+page.svelte

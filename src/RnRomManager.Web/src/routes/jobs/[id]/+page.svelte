@@ -133,9 +133,9 @@
 				>
 					{#if live}
 						<colgroup>
-							<col style="width: 11rem" />
-							<col style="width: 11rem" />
-							<col style="width: 8rem" />
+							<col class="col-11" />
+							<col class="col-11" />
+							<col class="col-8" />
 							<col />
 						</colgroup>
 					{/if}
@@ -292,3 +292,12 @@
 		{/if}
 	{/if}
 </AdminOnly>
+
+<style>
+	.col-11 {
+		width: 11rem;
+	}
+	.col-8 {
+		width: 8rem;
+	}
+</style>

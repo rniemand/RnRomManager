@@ -234,4 +234,15 @@
 		</div>
 	</div>
 {/if}
+
 <!-- eslint-enable svelte/no-navigation-without-resolve -->
+
+<style>
+	/* B22: rows that follow their link on click; a stronger hover than table-hover, in both themes. */
+	.clickable-rows {
+		--bs-table-hover-bg: rgba(var(--bs-emphasis-color-rgb), 0.15);
+	}
+	.clickable-rows > tbody > tr {
+		cursor: pointer;
+	}
+</style>

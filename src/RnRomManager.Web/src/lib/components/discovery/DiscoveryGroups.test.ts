@@ -107,8 +107,7 @@ describe('DiscoveryGroups (discovery B2)', () => {
 		expect(link.className).toBe('text-decoration-none d-flex align-items-center gap-2 min-w-0');
 		expect(link.querySelector('.group-logo-banner')).not.toBeNull();
 		const [name, count] = link.closest('tr')!.cells;
-		expect(name.className).toBe('w-100 text-truncate');
-		expect(name.getAttribute('style')).toBe('max-width: 0');
+		expect(name.className).toBe('w-100 text-truncate discovery-name-cell');
 		expect(count.className).toBe('text-end text-nowrap');
 	});
 

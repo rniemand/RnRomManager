@@ -127,8 +127,7 @@
 							aria-label="View {image.fileName} full size"
 							onclick={() => view(image)}
 							><img
-								class="card-img-top object-fit-contain bg-body-tertiary"
-								style="height: 8rem"
+								class="card-img-top object-fit-contain bg-body-tertiary thumb"
 								src={image.url}
 								alt="{game.displayTitle} {imageTypeLabels[image.type].toLowerCase()}"
 								loading="lazy"
@@ -226,5 +225,8 @@
 		.image-tile:focus-within {
 			transform: none;
 		}
+	}
+	.thumb {
+		height: 8rem;
 	}
 </style>

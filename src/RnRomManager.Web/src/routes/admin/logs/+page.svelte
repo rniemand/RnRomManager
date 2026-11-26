@@ -142,8 +142,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
 	bind:this={view}
-	class="card font-monospace small overflow-auto p-2"
-	style="height: 60vh"
+	class="card font-monospace small overflow-auto p-2 log-view"
 	role="log"
 	aria-label="Live log"
 	tabindex="0"
@@ -163,3 +162,9 @@
 		</p>
 	{/each}
 </div>
+
+<style>
+	.log-view {
+		height: 60vh;
+	}
+</style>

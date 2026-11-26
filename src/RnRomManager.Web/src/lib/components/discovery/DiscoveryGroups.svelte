@@ -185,7 +185,7 @@
 		{/snippet}
 		{#snippet row(group)}
 			<tr class:table-primary={group.key === view.key}>
-				<td class="w-100 text-truncate" style="max-width: 0">
+				<td class="w-100 text-truncate discovery-name-cell">
 					<a
 						class="text-decoration-none d-flex align-items-center gap-2 min-w-0"
 						class:text-reset={group.key === view.key}
@@ -228,3 +228,9 @@
 {/if}
 
 <LogoModal bind:open={logoOpen} kind={view.kind} item={editing} onchanged={() => reload++} />
+
+<style>
+	:global(.discovery-name-cell) {
+		max-width: 0;
+	}
+</style>

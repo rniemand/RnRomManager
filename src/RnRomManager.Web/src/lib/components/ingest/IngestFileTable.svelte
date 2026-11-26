@@ -95,7 +95,7 @@
 					onchange={() => toggle(fileKey(system, file.name))}
 				/>
 			</td>
-			<td class="text-truncate" style="max-width: 32rem" title={file.name}>{file.name}</td>
+			<td class="text-truncate name-cell" title={file.name}>{file.name}</td>
 			{#if showReason}
 				<td
 					>{#if file.reason}<code>{file.reason}</code>{:else}—{/if}</td
@@ -135,3 +135,9 @@
 	onpage={(p) => (requested = p)}
 	label="Pages of {label}"
 />
+
+<style>
+	.name-cell {
+		max-width: 32rem;
+	}
+</style>

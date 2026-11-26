@@ -262,4 +262,27 @@
 			background: transparent;
 		}
 	}
+
+	/*
+	 * Active navbar link (spec B17): primary-shade text, semibold, a 3px primary underline from lg up and a left bar in
+	 * the collapsed menu. The dark theme uses the text-emphasis colour, which keeps AA contrast on the dark navbar.
+	 */
+	.navbar {
+		/* Bootstrap's darker primary shade: plain primary is 4.26:1 on the light navbar, under AA. */
+		--rn-nav-accent: var(--bs-link-hover-color);
+		:global(.nav-link.active) {
+			color: var(--rn-nav-accent);
+			font-weight: 600;
+			box-shadow: inset 3px 0 0 var(--rn-nav-accent);
+			padding-left: 0.5rem;
+		}
+		@media (min-width: 992px) {
+			:global(.nav-link.active) {
+				box-shadow: inset 0 -3px 0 var(--rn-nav-accent);
+			}
+		}
+	}
+	:global([data-bs-theme='dark']) .navbar {
+		--rn-nav-accent: var(--bs-primary-text-emphasis);
+	}
 </style>

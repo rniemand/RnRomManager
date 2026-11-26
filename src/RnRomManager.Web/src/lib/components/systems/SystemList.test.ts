@@ -108,8 +108,7 @@ describe('SystemList (Systems tab B3)', () => {
 		expect(name.className).toBe('text-truncate');
 		expect(name.parentElement!.classList).toContain('min-w-0');
 		const cell = name.closest('td')!;
-		expect(cell.className).toBe('w-100 text-truncate');
-		expect(cell.getAttribute('style')).toBe('max-width: 0');
+		expect(cell.className).toBe('w-100 text-truncate systems-name-cell');
 	});
 
 	it('is a table in the reports style, with an Actions column only for an Admin with onedit (G1, G2)', () => {

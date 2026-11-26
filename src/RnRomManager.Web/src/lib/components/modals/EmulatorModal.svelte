@@ -415,7 +415,7 @@
 		{/if}
 	{/snippet}
 	<!-- Cap the width so the 4:3 frame fits the viewport height (dialog chrome ≈ 14rem): Start Game needs no scrolling. -->
-	<div class="ratio ratio-4x3 mx-auto" style="max-width: calc((100vh - 14rem) * 4 / 3)">
+	<div class="ratio ratio-4x3 mx-auto emulator-screen">
 		{#if open && rom && core && lookingUp}
 			<div class="d-flex align-items-center justify-content-center"><Loading /></div>
 		{:else if open && rom && core}
@@ -428,7 +428,7 @@
 			{#if preview && shown}
 				<!-- E2: over the game, inside the emulator modal (not a second Bootstrap modal). -->
 				<div class="bg-body d-flex flex-column align-items-center justify-content-center gap-2 p-2">
-					<img src={shown.url} alt="Screenshot preview" class="img-fluid" style="max-height: 85%" />
+					<img src={shown.url} alt="Screenshot preview" class="img-fluid preview" />
 					{#if preview.trimmed}
 						<!-- Release editing B26: only when the border was trimmed. -->
 						<div class="form-check">
@@ -447,3 +447,12 @@
 		{/if}
 	</div>
 </BaseModal>
+
+<style>
+	:global(.emulator-screen) {
+		max-width: calc((100vh - 14rem) * 4 / 3);
+	}
+	.preview {
+		max-height: 85%;
+	}
+</style>

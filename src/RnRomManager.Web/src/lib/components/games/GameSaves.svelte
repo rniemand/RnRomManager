@@ -125,7 +125,7 @@
 							<td>
 								<div class="text-break">{save.name}</div>
 								{#if save.description}
-									<div class="small text-body-secondary text-break" style="white-space: pre-line">
+									<div class="small text-body-secondary text-break save-note">
 										{save.description}
 									</div>
 								{/if}
@@ -135,7 +135,7 @@
 									>{kindLabels[save.kind]}</span
 								>
 							</td>
-							<td class="text-truncate" style="max-width: 16rem" title={save.releaseFileName}>
+							<td class="text-truncate release-cell" title={save.releaseFileName}>
 								{#if save.romId === null}
 									<span class="text-body-secondary">Release removed</span>
 								{:else}
@@ -245,3 +245,12 @@
 		void load();
 	}}
 />
+
+<style>
+	.save-note {
+		white-space: pre-line;
+	}
+	.release-cell {
+		max-width: 16rem;
+	}
+</style>

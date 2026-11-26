@@ -142,9 +142,8 @@ describe('GameTypeahead', () => {
 			await show();
 
 			expect(panel()!.className).toBe(
-				'list-group position-absolute start-0 end-0 mt-1 shadow z-3 overflow-y-auto'
+				'list-group position-absolute start-0 end-0 mt-1 shadow z-3 overflow-y-auto typeahead-panel'
 			);
-			expect(panel()!.getAttribute('style')).toBe('max-height: 50vh');
 			expect(panel()!.parentElement!.className).toBe('position-relative');
 			expect(document.getElementById('t-help')!.className).toBe('visually-hidden');
 			expect(box().getAttribute('aria-describedby')).toBe('t-help');

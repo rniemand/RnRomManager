@@ -14,8 +14,7 @@
 {#if step}
 	<div class="job-step mt-2">
 		<div
-			class="progress mb-1"
-			style="height: 0.5rem"
+			class="progress mb-1 step-bar"
 			role="progressbar"
 			aria-label="Current file progress"
 			aria-valuenow={stepPercent(step)}
@@ -29,3 +28,9 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	.step-bar {
+		height: 0.5rem;
+	}
+</style>

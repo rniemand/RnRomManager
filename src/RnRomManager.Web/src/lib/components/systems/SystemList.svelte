@@ -130,7 +130,7 @@
 			<tbody>
 				{#each shown as system (system.id)}
 					<tr class:table-primary={system.id === selected}>
-						<td class="w-100 text-truncate" style="max-width: 0">
+						<td class="w-100 text-truncate systems-name-cell">
 							<a
 								class="text-decoration-none d-flex align-items-center gap-2 min-w-0"
 								class:text-reset={system.id === selected}
@@ -168,3 +168,9 @@
 		</table>
 	</div>
 </div>
+
+<style>
+	:global(.systems-name-cell) {
+		max-width: 0;
+	}
+</style>

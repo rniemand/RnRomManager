@@ -179,7 +179,7 @@
 						{#each view.items as item, index (item.key)}
 							<tr>
 								<td class="text-end text-nowrap">{index + 1}</td>
-								<td class="text-truncate" style="max-width: 32rem" title={item.entry.fileName}
+								<td class="text-truncate file-cell" title={item.entry.fileName}
 									>{item.entry.fileName}</td
 								>
 								<td
@@ -210,3 +210,9 @@
 		{/if}
 	</div>
 </section>
+
+<style>
+	.file-cell {
+		max-width: 32rem;
+	}
+</style>

@@ -322,7 +322,7 @@
 							onchange={(e) => toggle(item, e.currentTarget.checked)}
 						/>
 					</td>
-					<td class="text-truncate" style="max-width: 32rem" title={item.fileName}>
+					<td class="text-truncate name-cell" title={item.fileName}>
 						<a href={resolve('/review/[id]', { id: String(item.id) })}>{item.fileName}</a>
 					</td>
 					<td><SystemBadge system={item.system} /></td>
@@ -362,3 +362,9 @@
 		onconfirm={bulkDelete}
 	/>
 </AdminOnly>
+
+<style>
+	.name-cell {
+		max-width: 32rem;
+	}
+</style>

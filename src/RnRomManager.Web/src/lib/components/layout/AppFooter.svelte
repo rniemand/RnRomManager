@@ -170,7 +170,7 @@
 		vertical-align: -0.125em;
 	}
 
-	/* Below sm the icon buttons are bigger, easier tap targets (the footer height grows to match in app.css). */
+	/* Below sm the icon buttons are bigger, easier tap targets (the footer height grows to match, below). */
 	@media (max-width: 575.98px) {
 		:global(.footer-action) {
 			display: inline-flex;
@@ -190,5 +190,43 @@
 	.footer-job .progress {
 		width: 6rem;
 		height: 0.5rem;
+	}
+
+	/* B10: the fixed footer; the last content and the toasts stay above it. */
+	:global(:root) {
+		--rnrm-footer-height: 2.25rem;
+	}
+	/* Below sm the footer's icon buttons are 2.5rem tap targets, plus the row's padding. */
+	@media (max-width: 575.98px) {
+		:global(:root) {
+			--rnrm-footer-height: 3rem;
+		}
+	}
+	.app-footer {
+		min-height: var(--rnrm-footer-height);
+		/* Release editing B28: clear of the phone's home indicator (viewport-fit=cover). */
+		padding-bottom: env(safe-area-inset-bottom);
+	}
+	:global(main.above-footer) {
+		padding-bottom: calc(
+			var(--rnrm-footer-height) + env(safe-area-inset-bottom) + 1.5rem
+		) !important;
+	}
+	:global(body:has(.app-footer) .toast-container) {
+		bottom: calc(var(--rnrm-footer-height) + env(safe-area-inset-bottom)) !important;
+	}
+	/* B28: below sm the footer's labels stay the accessible names but take no room (Bootstrap's .visually-hidden). */
+	@media (max-width: 575.98px) {
+		.footer-label {
+			width: 1px !important;
+			height: 1px !important;
+			padding: 0 !important;
+			margin: -1px !important;
+			overflow: hidden !important;
+			clip: rect(0, 0, 0, 0) !important;
+			white-space: nowrap !important;
+			border: 0 !important;
+			position: absolute !important;
+		}
 	}
 </style>

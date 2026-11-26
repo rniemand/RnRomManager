@@ -84,11 +84,11 @@
 		<div class="table-responsive">
 			<table class="table table-sm table-striped table-hover align-middle mb-0 job-fixed-table">
 				<colgroup>
-					<col style="width: 14rem" />
+					<col class="col-14" />
 					<col />
-					<col style="width: 11rem" />
-					<col style="width: 5rem" />
-					<col style="width: 6rem" />
+					<col class="col-11" />
+					<col class="col-5" />
+					<col class="col-6" />
 				</colgroup>
 				<thead class="table-dark">
 					<tr>
@@ -179,3 +179,18 @@
 		<Pagination page={listPage} {pages} onpage={(p) => (listPage = p)} label="Job pages" />
 	{/if}
 </AdminOnly>
+
+<style>
+	.col-14 {
+		width: 14rem;
+	}
+	.col-11 {
+		width: 11rem;
+	}
+	.col-5 {
+		width: 5rem;
+	}
+	.col-6 {
+		width: 6rem;
+	}
+</style>

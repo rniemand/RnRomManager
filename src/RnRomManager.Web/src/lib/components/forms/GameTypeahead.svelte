@@ -163,8 +163,7 @@
 			onclick={() => select(game)}
 		>
 			<span
-				class="flex-shrink-0 bg-body-secondary rounded d-flex align-items-center justify-content-center overflow-hidden"
-				style="width: 32px; height: 40px"
+				class="flex-shrink-0 bg-body-secondary rounded d-flex align-items-center justify-content-center overflow-hidden typeahead-thumb"
 			>
 				{#if game.boxArtUrl}
 					<img class="w-100 h-100 object-fit-contain" src={game.boxArtUrl} alt="" loading="lazy" />
@@ -188,8 +187,7 @@
 		{@render field()}
 		{#if panelOpen}
 			<div
-				class="list-group position-absolute start-0 end-0 mt-1 shadow z-3 overflow-y-auto"
-				style="max-height: 50vh"
+				class="list-group position-absolute start-0 end-0 mt-1 shadow z-3 overflow-y-auto typeahead-panel"
 			>
 				{#if status}<div class="list-group-item small text-body-secondary">{status}</div>{/if}
 				{@render items()}
@@ -204,3 +202,13 @@
 		</div>
 	{/if}
 {/if}
+
+<style>
+	:global(.typeahead-thumb) {
+		width: 32px;
+		height: 40px;
+	}
+	:global(.typeahead-panel) {
+		max-height: 50vh;
+	}
+</style>

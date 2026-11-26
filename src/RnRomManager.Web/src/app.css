@@ -19,53 +19,6 @@
 }
 
 /*
- * R2: release headers are bg-body-tertiary, where the light theme's default outline colours fall under 4.5:1. Use the
- * text-emphasis colours there in both themes (the dark theme already does this everywhere, above).
- */
-.release-header {
-	.btn-outline-primary {
-		--bs-btn-color: var(--bs-primary-text-emphasis);
-		--bs-btn-border-color: var(--bs-primary-text-emphasis);
-	}
-	.btn-outline-secondary {
-		--bs-btn-color: var(--bs-secondary-text-emphasis);
-		--bs-btn-border-color: var(--bs-secondary-text-emphasis);
-	}
-	.btn-outline-danger {
-		--bs-btn-color: var(--bs-danger-text-emphasis);
-		--bs-btn-border-color: var(--bs-danger-text-emphasis);
-	}
-}
-
-/*
- * Active navbar link (spec B17): primary-shade text, semibold, a 3px primary underline from lg up and a left bar in the
- * collapsed menu. The dark theme uses the text-emphasis colour, which keeps AA contrast on the dark navbar.
- */
-.navbar {
-	/* Bootstrap's darker primary shade: plain primary is 4.26:1 on the light navbar, under AA. */
-	--rn-nav-accent: var(--bs-link-hover-color);
-	.nav-link.active {
-		color: var(--rn-nav-accent);
-		font-weight: 600;
-		box-shadow: inset 3px 0 0 var(--rn-nav-accent);
-		padding-left: 0.5rem;
-	}
-	@media (min-width: 992px) {
-		.nav-link.active {
-			box-shadow: inset 0 -3px 0 var(--rn-nav-accent);
-		}
-	}
-}
-[data-bs-theme='dark'] .navbar {
-	--rn-nav-accent: var(--bs-primary-text-emphasis);
-}
-
-/* Global search (spec B13): blur the page behind the modal. */
-.modal.global-search {
-	backdrop-filter: blur(4px);
-}
-
-/*
  * SNES system colour (SNES spec S6): a fixed purple in both themes, mirroring Bootstrap's text-bg-* so SystemBadge
  * (text-bg-snes) and the Library Size treemap (var(--bs-snes)) work unchanged. White on it is AA.
  */
@@ -429,31 +382,7 @@
 	background-color: var(--bs-3ds) !important;
 }
 
-/* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
-[data-bs-theme='dark'] .game-card {
-	--bs-card-bg: var(--bs-tertiary-bg);
-}
-.game-card {
-	transition:
-		transform 150ms ease,
-		box-shadow 150ms ease;
-}
-.game-card:hover,
-.game-card:focus-within {
-	transform: translateY(-2px);
-	box-shadow: var(--bs-box-shadow-sm);
-}
-@media (prefers-reduced-motion: reduce) {
-	.game-card {
-		transition: none;
-	}
-	.game-card:hover,
-	.game-card:focus-within {
-		transform: none;
-	}
-}
-
-/* Release cards and the Zip tree (R2, Z4): the chevron points down when expanded; the release header is clickable. */
+/* Release cards and the Zip tree (R2, Z4): the chevron points down when expanded. */
 .chevron-toggle .bi {
 	display: inline-block;
 	transition: transform 150ms ease;
@@ -461,72 +390,10 @@
 .chevron-toggle[aria-expanded='true'] .bi {
 	transform: rotate(90deg);
 }
-.release-header {
-	cursor: pointer;
-}
 @media (prefers-reduced-motion: reduce) {
 	.chevron-toggle .bi {
 		transition: none;
 	}
-}
-
-/* B10: the fixed footer; the last content and the toasts stay above it. */
-:root {
-	--rnrm-footer-height: 2.25rem;
-}
-/* Below sm the footer's icon buttons are 2.5rem tap targets (AppFooter), plus the row's padding. */
-@media (max-width: 575.98px) {
-	:root {
-		--rnrm-footer-height: 3rem;
-	}
-}
-.app-footer {
-	min-height: var(--rnrm-footer-height);
-	/* Release editing B28: clear of the phone's home indicator (viewport-fit=cover). */
-	padding-bottom: env(safe-area-inset-bottom);
-}
-main.above-footer {
-	padding-bottom: calc(var(--rnrm-footer-height) + env(safe-area-inset-bottom) + 1.5rem) !important;
-}
-body:has(.app-footer) .toast-container {
-	bottom: calc(var(--rnrm-footer-height) + env(safe-area-inset-bottom)) !important;
-}
-/* B28: below sm the footer's labels stay the accessible names but take no room (Bootstrap's .visually-hidden). */
-@media (max-width: 575.98px) {
-	.footer-label {
-		width: 1px !important;
-		height: 1px !important;
-		padding: 0 !important;
-		margin: -1px !important;
-		overflow: hidden !important;
-		clip: rect(0, 0, 0, 0) !important;
-		white-space: nowrap !important;
-		border: 0 !important;
-		position: absolute !important;
-	}
-}
-
-/* B1: the section title shows only while the navbar is collapsed; from lg up it stays for screen readers (visually-hidden). */
-@media (min-width: 992px) {
-	.page-title {
-		position: absolute !important;
-		width: 1px !important;
-		height: 1px !important;
-		padding: 0 !important;
-		margin: -1px !important;
-		overflow: hidden !important;
-		clip: rect(0, 0, 0, 0) !important;
-		white-space: nowrap !important;
-		border: 0 !important;
-	}
-}
-
-/* B22: rows that follow their link on click; a stronger hover than table-hover, in both themes. */
-.clickable-rows {
-	--bs-table-hover-bg: rgba(var(--bs-emphasis-color-rgb), 0.15);
-}
-.clickable-rows > tbody > tr {
-	cursor: pointer;
 }
 
 /* B7: rendered release notes, in the note modal and the release card. */
@@ -569,14 +436,5 @@ body:has(.app-footer) .toast-container {
 @media (min-width: 768px) {
 	.missing-metadata-title {
 		width: 16rem;
-	}
-}
-
-/* U6: library grids show 2 cards per row below 360px and 3 from 360px up to sm (after Bootstrap, so it wins over
-   .row-cols-2 > * at equal specificity). */
-@media (min-width: 360px) and (max-width: 575.98px) {
-	.game-grid-xs > * {
-		flex: 0 0 auto;
-		width: 33.3333%;
 	}
 }
