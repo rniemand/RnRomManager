@@ -1,15 +1,17 @@
-<script lang="ts">
+<script lang="ts" generics="T extends string">
 	import type { HTMLAttributes } from 'svelte/elements';
 
 	interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'class' | 'onchange'> {
 		/** The radios' shared `name`; each `id` defaults to `{name}-{value}`. */
 		name: string;
-		options: { value: string; label: string; id?: string }[];
-		value?: string;
+		options: { value: T; label: string; id?: string }[];
+		value?: T;
 		size?: 'sm' | 'lg';
+		/** Disables every radio. */
+		disabled?: boolean;
 		/** Appended to the group's `btn-group`. */
 		class?: string;
-		onchange?: (value: string) => void;
+		onchange?: (value: T) => void;
 	}
 
 	let {
@@ -17,6 +19,7 @@
 		options,
 		value = $bindable(),
 		size,
+		disabled = false,
 		class: className,
 		onchange,
 		...rest
@@ -34,6 +37,7 @@
 			{id}
 			value={option.value}
 			autocomplete="off"
+			{disabled}
 			checked={value === option.value}
 			onchange={() => {
 				value = option.value;

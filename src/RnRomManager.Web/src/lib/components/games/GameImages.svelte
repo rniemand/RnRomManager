@@ -1,21 +1,17 @@
 <script lang="ts">
+	import DeleteImageModal from '#lib/components/modals/DeleteImageModal.svelte';
+	import SuggestImagesModal from '#lib/components/modals/SuggestImagesModal.svelte';
+	import UploadImageModal from '#lib/components/modals/UploadImageModal.svelte';
+	import ViewImageModal from '#lib/components/modals/ViewImageModal.svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import { gameSearchQuery, googleImagesUrl } from '#lib/googleSearch.js';
 	import { imageTypeLabels } from '#lib/imageResolutions.js';
-	import type {
-		GameDetail,
-		ImageInfo,
-		ImageSuggestion,
-		ImageSuggestions
-	} from '#lib/types/index.js';
+	import type { GameDetail, ImageInfo } from '#lib/types/index.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
-	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from '#lib/components/common/Loading.svelte';
 
 	interface Props {
 		game: GameDetail;
@@ -25,9 +21,6 @@
 
 	let { game, onchanged }: Props = $props();
 
-	/** Same limit as the API (I1a); checked here so a big file isn't sent at all. */
-	const maxUploadBytes = 8 * 1024 * 1024;
-
 	let viewing = $state<ImageInfo | null>(null);
 	let viewOpen = $state(false);
 	let deleting = $state<ImageInfo | null>(null);
@@ -35,95 +28,9 @@
 	let busy = $state(false);
 
 	let uploadOpen = $state(false);
-	let fileInput = $state<HTMLInputElement>();
-	let uploadType = $state<'BoxArt' | 'Snap'>('BoxArt');
-	let uploadError = $state<string | undefined>();
-	let typeError = $state<string | undefined>();
-	/** U6: upload a file, or have the server download a URL. */
-	let uploadMode = $state<'file' | 'url'>('url');
-	let imageUrl = $state('');
-	let urlInput = $state<HTMLInputElement>();
-	let urlError = $state<string | undefined>();
-	/** The server couldn't use the URL: offer the file upload instead. */
-	let urlFallback = $state(false);
-	/** I3: a file is being dragged over the modal body. */
-	let dragging = $state(false);
-	/** I3: several files were dropped; the first is used. */
-	let dropNote = $state<string | undefined>();
+	let suggestOpen = $state(false);
 
 	const base = $derived(`/api/games/${encodeURIComponent(game.id)}/images`);
-
-	// IGDB suggestions S12, S13: the Suggest Images dialog.
-	let suggestOpen = $state(false);
-	let suggestType = $state<'BoxArt' | 'Snap'>('BoxArt');
-	let suggestions = $state<ImageSuggestion[] | null>(null);
-	let suggestError = $state<unknown>(null);
-	let suggestNotConfigured = $state(false);
-	/** The tile whose add is running. */
-	let adding = $state<number | null>(null);
-	/** Bumped by each load and each close: a response from an older one is ignored. */
-	let loadSeq = 0;
-	let loadAbort: AbortController | null = null;
-	const suggestLabel = $derived(suggestType === 'BoxArt' ? 'box art' : 'screenshot');
-
-	function openSuggest(): void {
-		suggestType = 'BoxArt';
-		suggestOpen = true;
-		void loadSuggestions();
-	}
-
-	async function loadSuggestions(): Promise<void> {
-		loadAbort?.abort();
-		const controller = new AbortController();
-		loadAbort = controller;
-		const seq = ++loadSeq;
-		suggestions = null;
-		suggestError = null;
-		suggestNotConfigured = false;
-		try {
-			const result = await api.get<ImageSuggestions>(
-				`/api/games/${encodeURIComponent(game.id)}/image-suggestions?type=${suggestType}`,
-				{ signal: controller.signal }
-			);
-			if (seq === loadSeq) suggestions = result.suggestions;
-		} catch (e) {
-			if (seq !== loadSeq) return;
-			if (isApiError(e, 'IgdbNotConfigured')) suggestNotConfigured = true;
-			else suggestError = e;
-		}
-	}
-
-	// S12: closing the dialog aborts its load and makes any late answer stale.
-	$effect(() => {
-		if (suggestOpen) return;
-		loadAbort?.abort();
-		loadAbort = null;
-		loadSeq++;
-	});
-
-	async function addSuggestion(suggestion: ImageSuggestion, index: number): Promise<void> {
-		const seq = loadSeq;
-		adding = index;
-		try {
-			onchanged(
-				await api.post<GameDetail>(`${base}/from-url`, {
-					url: suggestion.imageUrl,
-					type: suggestType
-				})
-			);
-			toasts.show('Image added from IGDB.', 'success');
-			// S1: closes only the same opening and type, never a dialog reopened meanwhile.
-			if (seq === loadSeq) suggestOpen = false;
-		} catch (e) {
-			if (isApiError(e, 'ImageDownloadFailed') || isApiError(e, 'ImageUrlBlocked'))
-				toasts.show(e.title, 'danger');
-			else if (isApiError(e, 'ValidationFailed'))
-				toasts.show(e.errors.url?.[0] ?? e.errors.type?.[0] ?? e.title, 'danger');
-			else failed(e);
-		} finally {
-			adding = null;
-		}
-	}
 
 	function view(image: ImageInfo): void {
 		viewing = image;
@@ -158,122 +65,6 @@
 		}
 	}
 
-	function openUpload(): void {
-		uploadError = typeError = urlError = undefined;
-		urlFallback = false;
-		uploadMode = 'url';
-		dropNote = undefined;
-		dragging = false;
-		imageUrl = '';
-		uploadType = 'BoxArt';
-		if (fileInput) fileInput.value = '';
-		uploadOpen = true;
-	}
-
-	function useFileInstead(): void {
-		uploadMode = 'file';
-		urlError = undefined;
-		urlFallback = false;
-	}
-
-	/** I3: only drags that carry files are taken (text and links are left to the browser). */
-	const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
-
-	function onDragOver(e: DragEvent): void {
-		if (!hasFiles(e)) return;
-		e.preventDefault(); // allow the drop, so the browser never navigates to the file
-		dragging = true;
-	}
-
-	function onDragLeave(e: DragEvent): void {
-		const target = e.currentTarget as HTMLElement;
-		if (!target.contains(e.relatedTarget as Node | null)) dragging = false;
-	}
-
-	function onDrop(e: DragEvent): void {
-		if (!hasFiles(e)) return;
-		e.preventDefault();
-		dragging = false;
-		const files = e.dataTransfer!.files;
-		if (!files.length || !fileInput) return;
-		const transfer = new DataTransfer();
-		transfer.items.add(files[0]);
-		fileInput.files = transfer.files; // as if picked; Upload runs the usual checks
-		uploadMode = 'file';
-		uploadError = undefined;
-		dropNote =
-			files.length > 1
-				? `Only one image can be uploaded at a time; using ${files[0].name}.`
-				: undefined;
-	}
-
-	/** B7: Enter in the URL input submits as Upload does. */
-	function onUrlKeydown(e: KeyboardEvent): void {
-		if (e.key !== 'Enter') return;
-		e.preventDefault();
-		if (!busy) void upload();
-	}
-
-	async function upload(): Promise<void> {
-		uploadError = typeError = urlError = undefined;
-		urlFallback = false;
-		if (uploadMode === 'url') return uploadFromUrl();
-		const file = fileInput?.files?.[0];
-		if (!file) {
-			uploadError = 'Choose an image file.';
-			return;
-		}
-		if (file.size > maxUploadBytes) {
-			uploadError = 'The image must be at most 8 MiB.';
-			return;
-		}
-		const form = new FormData();
-		form.append('file', file);
-		form.append('type', uploadType);
-		busy = true;
-		try {
-			onchanged(await api.post<GameDetail>(base, form));
-			toasts.show(`${file.name} uploaded.`, 'success');
-			if (fileInput) fileInput.value = '';
-			uploadType = 'BoxArt';
-			uploadOpen = false;
-		} catch (e) {
-			if (isApiError(e, 'ValidationFailed')) {
-				uploadError = e.errors.file?.[0];
-				typeError = e.errors.type?.[0];
-			} else if (isApiError(e) && e.status === 413)
-				uploadError = 'The image must be at most 8 MiB.';
-			else failed(e);
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function uploadFromUrl(): Promise<void> {
-		const url = imageUrl;
-		if (!url.trim()) {
-			urlError = 'Enter an http or https image URL.';
-			return;
-		}
-		busy = true;
-		try {
-			onchanged(await api.post<GameDetail>(`${base}/from-url`, { url, type: uploadType }));
-			toasts.show(`Image added from ${new URL(url).hostname}.`, 'success');
-			uploadOpen = false;
-		} catch (e) {
-			if (isApiError(e, 'ImageDownloadFailed') || isApiError(e, 'ImageUrlBlocked')) {
-				urlError = e.title;
-				urlFallback = true;
-			} else if (isApiError(e, 'ValidationFailed')) {
-				urlError = e.errors.url?.[0];
-				typeError = e.errors.type?.[0];
-				urlFallback = urlError !== undefined;
-			} else failed(e);
-		} finally {
-			busy = false;
-		}
-	}
-
 	function setCover(image: ImageInfo): Promise<boolean> {
 		return run(
 			() => api.post<GameDetail>(`${base}/${image.id}/cover`),
@@ -297,7 +88,11 @@
 	<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 		{#if auth.isAdmin}
 			<!-- IGDB suggestions S11: before Google Images, and the start of the right-aligned group. -->
-			<button type="button" class="btn btn-outline-secondary btn-sm ms-auto" onclick={openSuggest}>
+			<button
+				type="button"
+				class="btn btn-outline-secondary btn-sm ms-auto"
+				onclick={() => (suggestOpen = true)}
+			>
 				<Icon name="suggest-images" /> Suggest Images
 			</button>
 			<!-- B8: an external search, not an app page. -->
@@ -309,7 +104,11 @@
 				rel="noopener noreferrer"><Icon name="google" /> Google Images</a
 			>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
-			<button type="button" class="btn btn-outline-primary btn-sm" onclick={openUpload}>
+			<button
+				type="button"
+				class="btn btn-outline-primary btn-sm"
+				onclick={() => (uploadOpen = true)}
+			>
 				<Icon name="upload" /> Upload Image
 			</button>
 		{/if}
@@ -397,249 +196,19 @@
 </section>
 
 {#if auth.isAdmin}
-	<BaseModal
-		bind:open={uploadOpen}
-		title="Upload Image"
-		confirmLabel="Upload"
-		{busy}
-		onconfirm={upload}
-		onshown={() => urlInput?.focus()}
-	>
-		<!-- I3: the whole body takes a dropped image file. -->
-		<div
-			class="position-relative"
-			role="group"
-			aria-label="Image to upload"
-			ondragenter={onDragOver}
-			ondragover={onDragOver}
-			ondragleave={onDragLeave}
-			ondrop={onDrop}
-		>
-			{#if dragging}
-				<div
-					class="drop-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center border border-2 border-primary rounded bg-body"
-					style="border-style: dashed !important"
-				>
-					Drop image to upload
-				</div>
-			{/if}
-			<div class="btn-group mb-3" role="group" aria-label="Image source">
-				<input
-					type="radio"
-					class="btn-check"
-					name="image-source"
-					id="image-source-url"
-					value="url"
-					autocomplete="off"
-					bind:group={uploadMode}
-				/>
-				<label class="btn btn-outline-secondary btn-sm" for="image-source-url">URL</label>
-				<input
-					type="radio"
-					class="btn-check"
-					name="image-source"
-					id="image-source-file"
-					value="file"
-					autocomplete="off"
-					bind:group={uploadMode}
-				/>
-				<label class="btn btn-outline-secondary btn-sm" for="image-source-file">File</label>
-			</div>
-			{#if uploadMode === 'url'}
-				<div class="mb-3">
-					<label class="form-label" for="image-url">Image URL</label>
-					<input
-						id="image-url"
-						class="form-control"
-						class:is-invalid={urlError}
-						type="url"
-						bind:this={urlInput}
-						bind:value={imageUrl}
-						onkeydown={onUrlKeydown}
-						aria-describedby="image-url-help"
-					/>
-					{#if urlError}
-						<div class="invalid-feedback">
-							{urlError}
-							{#if urlFallback}
-								Download the image and upload the file instead.
-								<button
-									type="button"
-									class="btn btn-link btn-sm p-0 align-baseline"
-									onclick={useFileInstead}>Upload a file instead</button
-								>
-							{/if}
-						</div>
-					{/if}
-					<div id="image-url-help" class="form-text">
-						The server downloads the image. PNG, JPEG or WebP (saved as PNG/JPEG), at most 8 MiB.
-					</div>
-				</div>
-			{/if}
-			<div class="mb-3" hidden={uploadMode !== 'file'}>
-				<label class="form-label" for="image-file">Upload an image</label>
-				<input
-					bind:this={fileInput}
-					id="image-file"
-					class="form-control"
-					class:is-invalid={uploadError}
-					type="file"
-					accept="image/png,image/jpeg,image/webp"
-					aria-describedby="image-file-help"
-					onchange={() => (dropNote = undefined)}
-				/>
-				{#if uploadError}<div class="invalid-feedback">{uploadError}</div>{/if}
-				{#if dropNote}<div class="form-text" role="status">{dropNote}</div>{/if}
-				<div id="image-file-help" class="form-text">
-					PNG, JPEG or WebP (saved as PNG/JPEG), at most <FileSize bytes={maxUploadBytes} />, or
-					drop it here
-				</div>
-			</div>
-			<div class="btn-group" role="group" aria-label="Image type">
-				<input
-					type="radio"
-					class="btn-check"
-					name="image-type"
-					id="image-type-boxart"
-					value="BoxArt"
-					autocomplete="off"
-					bind:group={uploadType}
-				/>
-				<label class="btn btn-outline-secondary btn-sm" for="image-type-boxart">Box art</label>
-				<input
-					type="radio"
-					class="btn-check"
-					name="image-type"
-					id="image-type-snap"
-					value="Snap"
-					autocomplete="off"
-					bind:group={uploadType}
-				/>
-				<label class="btn btn-outline-secondary btn-sm" for="image-type-snap">Screenshot</label>
-			</div>
-			{#if typeError}<div class="invalid-feedback d-block">{typeError}</div>{/if}
-		</div>
-	</BaseModal>
+	<UploadImageModal bind:open={uploadOpen} gameId={game.id} {onchanged} onfailed={failed} />
+	<SuggestImagesModal bind:open={suggestOpen} gameId={game.id} {onchanged} onfailed={failed} />
 {/if}
 
-{#if auth.isAdmin}
-	<!-- IGDB suggestions S12: info mode (Close only); Close stays enabled while an add runs (S13). -->
-	<BaseModal bind:open={suggestOpen} title="Suggest Images" size="lg">
-		<!-- Only while open, so its controls never sit next to the Upload Image dialog's in the page. -->
-		{#if suggestOpen}
-			<div class="btn-group mb-3" role="group" aria-label="Image type">
-				<input
-					type="radio"
-					class="btn-check"
-					name="suggest-type"
-					id="suggest-type-boxart"
-					value="BoxArt"
-					autocomplete="off"
-					disabled={adding !== null}
-					bind:group={suggestType}
-					onchange={loadSuggestions}
-				/>
-				<label class="btn btn-outline-secondary btn-sm" for="suggest-type-boxart">Box art</label>
-				<input
-					type="radio"
-					class="btn-check"
-					name="suggest-type"
-					id="suggest-type-snap"
-					value="Snap"
-					autocomplete="off"
-					disabled={adding !== null}
-					bind:group={suggestType}
-					onchange={loadSuggestions}
-				/>
-				<label class="btn btn-outline-secondary btn-sm" for="suggest-type-snap">Screenshot</label>
-			</div>
-			<div aria-live="polite">
-				{#if suggestNotConfigured}
-					<div class="alert alert-info mb-0">
-						Image suggestions need an IGDB Client ID and secret. Set <code class="text-reset"
-							>Sources:IgdbClientId</code
-						>
-						and <code class="text-reset">Sources:IgdbClientSecret</code> and restart.
-					</div>
-				{:else if suggestError}
-					<ErrorAlert error={suggestError} onretry={loadSuggestions} />
-				{:else if !suggestions}
-					<Loading />
-				{:else if suggestions.length === 0}
-					<p class="mb-0">
-						{suggestType === 'BoxArt'
-							? 'IGDB has no box art for this game.'
-							: 'IGDB has no screenshots for this game.'}
-					</p>
-				{:else}
-					<div class="row row-cols-2 row-cols-md-5 g-2">
-						{#each suggestions as suggestion, i (suggestion.imageUrl)}
-							<div class="col">
-								<button
-									type="button"
-									class="btn p-0 border card h-100 w-100 position-relative overflow-hidden"
-									aria-label="Add {suggestion.gameName} {suggestLabel} {i + 1}"
-									disabled={adding !== null}
-									onclick={() => addSuggestion(suggestion, i)}
-								>
-									<img
-										class="card-img-top object-fit-contain bg-body-tertiary"
-										style="height: 8rem"
-										src={suggestion.previewUrl}
-										alt=""
-										loading="lazy"
-									/>
-									{#if adding === i}
-										<span
-											class="spinner-border spinner-border-sm position-absolute top-0 start-0 m-1"
-											aria-hidden="true"
-										></span>
-									{/if}
-									<span class="d-block w-100 p-1 small text-start">
-										<span class="d-block text-truncate" title={suggestion.gameName}
-											>{suggestion.gameName}</span
-										>
-										{#if suggestion.width && suggestion.height}
-											<span class="d-block text-body-secondary"
-												>{suggestion.width}×{suggestion.height}</span
-											>
-										{/if}
-									</span>
-								</button>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-			<div class="form-text">Suggestions from IGDB.com. Click one to add it to the game.</div>
-		{/if}
-	</BaseModal>
-{/if}
+<ViewImageModal bind:open={viewOpen} image={viewing} gameTitle={game.displayTitle} />
 
-<BaseModal bind:open={viewOpen} title={viewing?.fileName ?? 'Image'} size="lg">
-	{#if viewing}
-		<img
-			class="img-fluid d-block mx-auto"
-			src={viewing.url}
-			width={viewing.width}
-			height={viewing.height}
-			alt="{game.displayTitle} {imageTypeLabels[viewing.type].toLowerCase()}, full size"
-		/>
-	{/if}
-</BaseModal>
-
-<BaseModal
+<DeleteImageModal
 	bind:open={deleteOpen}
-	title="Delete image"
-	confirmLabel="Delete image"
-	confirmClass="btn-danger"
+	image={deleting}
+	gameTitle={game.displayTitle}
 	{busy}
 	onconfirm={confirmDelete}
->
-	<p class="mb-0">
-		Delete <code>{deleting?.fileName}</code> from {game.displayTitle}? This can't be undone.
-	</p>
-</BaseModal>
+/>
 
 <style>
 	.image-tile {

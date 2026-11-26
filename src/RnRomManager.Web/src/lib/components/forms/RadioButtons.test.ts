@@ -48,4 +48,10 @@ describe('RadioButtons', () => {
 		expect(value).toBe('file');
 		expect(onchange).toHaveBeenCalledWith('file');
 	});
+
+	it('disabled disables every radio', () => {
+		render(RadioButtons, { name: 'source', options, disabled: true });
+		const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+		expect(radios.every((r) => r.disabled)).toBe(true);
+	});
 });

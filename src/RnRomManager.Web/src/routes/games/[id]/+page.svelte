@@ -1,4 +1,5 @@
 <script lang="ts">
+	import RomHeaderModal from '#lib/components/modals/RomHeaderModal.svelte';
 	import { replaceUrl } from '#lib/urlState.js';
 	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import { untrack } from 'svelte';
@@ -18,7 +19,6 @@
 		AdminOutcome
 	} from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import CopyButton from '#lib/components/forms/CopyButton.svelte';
 	import GameAdminModal from '#lib/components/modals/GameAdminModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
@@ -48,7 +48,7 @@
 	} from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/games/ZipBrowser.svelte';
-	import { formatCount, formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
+	import { formatCount, formatDateTime, formatSize } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { renderMarkdown } from '#lib/markdown.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -370,14 +370,6 @@
 		TitleDb: 'Title DB',
 		Serial: 'Game ID'
 	} as const;
-
-	/** R3: the header's key/value pairs, two per table row. */
-	function headerRows(header: Record<string, unknown>): [string, unknown][][] {
-		const entries = Object.entries(header);
-		const rows: [string, unknown][][] = [];
-		for (let i = 0; i < entries.length; i += 2) rows.push(entries.slice(i, i + 2));
-		return rows;
-	}
 
 	// R1–R4: release cards start collapsed. Open ones are kept by file name (unique within a game; ROM ids change on
 	// every ZIP rewrite), so a reload of the same game keeps them; a new game id starts collapsed again.
@@ -1219,25 +1211,7 @@
 		<ZipBrowser {game} active={tab === 'zip'} bind:selected={zipSelected} expanded={zipExpanded} />
 	</div>
 
-	<BaseModal bind:open={headerOpen} title="Header — {headerRom?.fileName ?? ''}" size="lg">
-		{#if headerRom?.header}
-			<table class="table table-sm table-striped table-hover mb-0">
-				<caption class="visually-hidden">Header of {headerRom.fileName}</caption>
-				<tbody>
-					<!-- R3: two pairs per row; an odd last pair leaves the second half empty. -->
-					{#each headerRows(headerRom.header) as pairs (pairs[0][0])}
-						<tr>
-							{#each pairs as [key, value] (key)}
-								<th scope="row" class="fw-normal text-body-secondary">{formatKey(key)}</th>
-								<td>{formatValue(value)}</td>
-							{/each}
-							{#if pairs.length === 1}<td colspan="2"></td>{/if}
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		{/if}
-	</BaseModal>
+	<RomHeaderModal bind:open={headerOpen} rom={headerRom} />
 
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 

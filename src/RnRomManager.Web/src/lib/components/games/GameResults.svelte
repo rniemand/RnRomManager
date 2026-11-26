@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
@@ -14,7 +15,6 @@
 	import { opensInNewTab, playLinkEvents, playUrl, usesPlayDisc } from '#lib/emulator.js';
 	import { playableRom, savesApi } from '#lib/saves.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmulatorModal from '#lib/components/modals/EmulatorModal.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
@@ -393,14 +393,13 @@
 	</div>
 {/if}
 
-<BaseModal
+<ConfirmModal
 	bind:open={batteryOpen}
 	title="Load battery save"
+	message="Loading this battery save replaces the in-browser save for this release."
 	confirmLabel="Play"
 	onconfirm={playBattery}
->
-	<p class="mb-0">Loading this battery save replaces the in-browser save for this release.</p>
-</BaseModal>
+/>
 
 <EmulatorModal
 	bind:open={playOpen}

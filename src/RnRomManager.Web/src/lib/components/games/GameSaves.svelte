@@ -1,22 +1,12 @@
 <script lang="ts">
+	import SaveFileModal from '#lib/components/modals/SaveFileModal.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import { untrack } from 'svelte';
 	import type { GameDetail, RomDetail, SaveItem } from '#lib/types/index.js';
-	import type { SaveKind } from '#lib/enums/index.js';
 	import { usesPlayDisc } from '#lib/emulator.js';
 	import { formatDateTime } from '#lib/format.js';
-	import {
-		descriptionError,
-		fileError,
-		kindLabels,
-		maxDescriptionLength,
-		maxNameLength,
-		nameError,
-		playableRom,
-		savesApi
-	} from '#lib/saves.js';
+	import { kindLabels, playableRom, savesApi } from '#lib/saves.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
-	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmulatorModal from '#lib/components/modals/EmulatorModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
@@ -45,18 +35,6 @@
 	let mode = $state<Mode | null>(null);
 	let open = $state(false);
 	let target = $state<SaveItem | null>(null);
-	let busy = $state(false);
-	let error = $state<unknown>(null);
-	let submitted = $state(false);
-
-	let romId = $state<number | null>(null);
-	let kind = $state<SaveKind>('state');
-	let name = $state('');
-	let description = $state('');
-	let file = $state<File | null>(null);
-	let fileInput = $state<HTMLInputElement | null>(null);
-
-	const formId = `save-form-${Math.random().toString(36).slice(2)}`;
 
 	let playOpen = $state(false);
 	let playing = $state<{ rom: RomDetail; save: SaveItem } | null>(null);
@@ -78,12 +56,12 @@
 		playing = confirmBattery;
 		playOpen = true;
 	}
-	const errors = $derived({
-		name: mode === 'add' || mode === 'edit' ? nameError(name) : null,
-		description: mode === 'add' || mode === 'edit' ? descriptionError(description) : null,
-		file: mode === 'add' || mode === 'replace' ? fileError(file) : null
-	});
-	const invalid = $derived(Object.values(errors).some((e) => e !== null));
+
+	function start(next: Mode, save: SaveItem | null = null): void {
+		mode = next;
+		target = save;
+		open = true;
+	}
 
 	let controller: AbortController | undefined;
 	async function load(): Promise<void> {
@@ -105,62 +83,6 @@
 		untrack(() => void load());
 		return () => controller?.abort();
 	});
-
-	function start(next: Mode, save: SaveItem | null = null): void {
-		mode = next;
-		target = save;
-		error = null;
-		submitted = false;
-		romId = game.roms[0]?.id ?? null;
-		kind = 'state';
-		name = save?.name ?? '';
-		description = save?.description ?? '';
-		file = null;
-		if (fileInput) fileInput.value = '';
-		open = true;
-	}
-
-	async function confirm(): Promise<void> {
-		submitted = true;
-		if (mode !== 'delete' && invalid) return;
-		busy = true;
-		error = null;
-		try {
-			if (mode === 'add' && romId !== null)
-				await savesApi.add(game.id, {
-					romId,
-					kind,
-					name,
-					description,
-					file: file!,
-					fileName: file!.name
-				});
-			else if (mode === 'edit') await savesApi.update(game.id, target!.id, { name, description });
-			else if (mode === 'replace') await savesApi.replace(game.id, target!.id, file!);
-			else if (mode === 'delete') await savesApi.remove(game.id, target!.id);
-			open = false;
-			onchanged?.();
-			await load();
-		} catch (e) {
-			if (toasts.jobRunning(e)) open = false;
-			else error = e;
-		} finally {
-			busy = false;
-		}
-	}
-
-	const titles: Record<Mode, string> = {
-		add: 'Add save',
-		edit: 'Edit save',
-		replace: 'Replace save file',
-		delete: 'Delete save'
-	};
-	const confirmLabels: Record<Mode, string> = {
-		add: 'Add save',
-		edit: 'Save',
-		replace: 'Replace',
-		delete: 'Delete save'
-	};
 </script>
 
 <!-- B11: one card (T1): the heading and Add save in its header, the table its direct child. -->
@@ -280,98 +202,24 @@
 	{/if}
 </section>
 
-<BaseModal
+<SaveFileModal
 	bind:open
-	title={mode ? titles[mode] : ''}
-	confirmLabel={mode ? confirmLabels[mode] : 'Confirm'}
-	confirmClass={mode === 'delete' ? 'btn-danger' : 'btn-primary'}
-	{busy}
-	onconfirm={confirm}
->
-	{#if error}<ErrorAlert {error} />{/if}
-	{#if mode === 'delete'}
-		<p class="mb-0">Delete the save <strong>{target?.name}</strong>? This can't be undone.</p>
-	{:else}
-		<form id={formId} novalidate onsubmit={(e) => (e.preventDefault(), confirm())}>
-			{#if mode === 'add'}
-				<div class="mb-3">
-					<label class="form-label" for="{formId}-release">Release</label>
-					<select id="{formId}-release" class="form-select" bind:value={romId}>
-						{#each game.roms as rom (rom.id)}<option value={rom.id}>{rom.fileName}</option>{/each}
-					</select>
-				</div>
-				<fieldset class="mb-3" aria-describedby="{formId}-kind-help">
-					<legend class="form-label fs-6">Kind</legend>
-					{#each ['state', 'battery'] as const as value (value)}
-						<div class="form-check form-check-inline">
-							<input
-								class="form-check-input"
-								type="radio"
-								id="{formId}-{value}"
-								{value}
-								bind:group={kind}
-							/>
-							<label class="form-check-label" for="{formId}-{value}">{kindLabels[value]}</label>
-						</div>
-					{/each}
-					<!-- Release editing B21 -->
-					<div id="{formId}-kind-help" class="form-text">
-						Battery saves from other emulators (.sav, .srm) can be uploaded as Battery.
-					</div>
-				</fieldset>
-			{/if}
-			{#if mode === 'add' || mode === 'edit'}
-				<div class="mb-3">
-					<label class="form-label" for="{formId}-name">Name</label>
-					<input
-						id="{formId}-name"
-						class="form-control"
-						class:is-invalid={submitted && errors.name}
-						maxlength={maxNameLength + 50}
-						bind:value={name}
-					/>
-					{#if submitted && errors.name}<div class="invalid-feedback">{errors.name}</div>{/if}
-				</div>
-				<div class="mb-3">
-					<label class="form-label" for="{formId}-description">Description</label>
-					<textarea
-						id="{formId}-description"
-						class="form-control"
-						class:is-invalid={submitted && errors.description}
-						rows="3"
-						maxlength={maxDescriptionLength}
-						bind:value={description}></textarea>
-					{#if submitted && errors.description}
-						<div class="invalid-feedback">{errors.description}</div>
-					{/if}
-				</div>
-			{/if}
-			{#if mode === 'add' || mode === 'replace'}
-				<div>
-					<label class="form-label" for="{formId}-file">File</label>
-					<input
-						id="{formId}-file"
-						type="file"
-						class="form-control"
-						class:is-invalid={submitted && errors.file}
-						bind:this={fileInput}
-						onchange={(e) => (file = e.currentTarget.files?.[0] ?? null)}
-					/>
-					{#if submitted && errors.file}<div class="invalid-feedback">{errors.file}</div>{/if}
-				</div>
-			{/if}
-		</form>
-	{/if}
-</BaseModal>
+	{mode}
+	{game}
+	save={target}
+	onsaved={() => {
+		onchanged?.();
+		void load();
+	}}
+/>
 
-<BaseModal
+<ConfirmModal
 	bind:open={batteryOpen}
 	title="Load battery save"
+	message="Loading this battery save replaces the in-browser save for this release."
 	confirmLabel="Play"
 	onconfirm={playBattery}
->
-	<p class="mb-0">Loading this battery save replaces the in-browser save for this release.</p>
-</BaseModal>
+/>
 
 <EmulatorModal
 	bind:open={playOpen}

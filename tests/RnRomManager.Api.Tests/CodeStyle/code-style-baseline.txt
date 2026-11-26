@@ -1,13 +1,9 @@
 # CodeStyleTests baseline (docs/style-guide.md): existing violations, one "<rule> <path>" per line.
 # It may only shrink: delete the lines you fix; never add new ones.
 SV1 src/RnRomManager.Web/src/lib/components/bundles/SavedBundleQueues.svelte
-SV1 src/RnRomManager.Web/src/lib/components/games/GameImages.svelte
-SV1 src/RnRomManager.Web/src/lib/components/games/GameResults.svelte
-SV1 src/RnRomManager.Web/src/lib/components/games/GameSaves.svelte
 SV1 src/RnRomManager.Web/src/routes/bundle-creator/+page.svelte
 SV1 src/RnRomManager.Web/src/routes/collections/[id]/+page.svelte
 SV1 src/RnRomManager.Web/src/routes/deleted/+page.svelte
-SV1 src/RnRomManager.Web/src/routes/games/[id]/+page.svelte
 SV1 src/RnRomManager.Web/src/routes/ingestion/+page.svelte
 SV1 src/RnRomManager.Web/src/routes/reports/duplicates/+page.svelte
 SV1 src/RnRomManager.Web/src/routes/review/+page.svelte
