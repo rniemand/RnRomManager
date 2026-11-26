@@ -33,6 +33,7 @@ services:
       - ./data/backups:/app/backups
       - ./data/collections:/app/collections
       - ./data/bios:/app/bios
+      - ./data/imagecache:/app/imagecache
     user: "1000:1000"   # owner of ./data
     stop_grace_period: 35s   # lets a running job stop cleanly
     depends_on:
@@ -91,15 +92,16 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
 | `/app/collections` | collection cover images (`<collection id>.png` or `.jpg`) |
 | `/app/bios` | emulator BIOS files you copy in for browser play (`colecovision.rom` for ColecoVision, required; the optional 512 KiB `scph5501.bin` for PlayStation, which otherwise uses its built-in HLE BIOS; at least one of the 128 KiB `bios_CD_U.bin`, `bios_CD_E.bin` or `bios_CD_J.bin` for Sega CD, required; at least one of the 1 MiB `panafz10.bin`, `panafz1.bin`, `panafz1j.bin`, `goldstar.bin` or `sanyotry.bin` for 3DO, required; a TurboGrafx-CD System Card, `syscard3.pce` (or `syscard3u.pce`, `syscard2.pce`, `syscard2u.pce`, `syscard1.pce`; the first found is used), required, plus `gexpress.pce` for Games Express discs, optional; `pcfx.rom` for PC-FX, required; up to 1 MiB each); any file here can be downloaded by a signed-in user, so keep only BIOS files in it; **Admin → BIOS info** shows which are found and valid |
+| `/app/imagecache` | each game's cover as a WebP of at most 512 px (`<game id>/<cover SHA1>.webp`), shown by the library; rebuilt from the ZIPs on demand and by Integrity, so it needs no backup |
 
 An existing deployment that doesn't map `/app/collections` or `/app/bios` still starts (the folders are created), but their files then live in anonymous Docker volumes and are lost when the container is recreated: add the mappings when you upgrade (`mkdir -p data/bios`, then add `- ./data/bios:/app/bios`).
 
 The container runs as UID 1654 unless you set `user:`.
 
 - **Named volumes** work as they are: the image's folders are already owned by 1654.
-- **Bind mounts** (as above) must be writable by the container's user. Either set `user: "<uid>:<gid>"` to the owner of `./data` (find it with `id -u` / `id -g`), or `chown -R 1654:1654 ./data/{roms,ingest,logs,cache,backups,collections,bios}`.
+- **Bind mounts** (as above) must be writable by the container's user. Either set `user: "<uid>:<gid>"` to the owner of `./data` (find it with `id -u` / `id -g`), or `chown -R 1654:1654 ./data/{roms,ingest,logs,cache,backups,collections,bios,imagecache}`.
 
-At startup the app writes and deletes a `.rnrm-probe` file in each of the seven folders. If that fails, it stops with a `FATAL` line naming the path and the UID/GID it runs as.
+At startup the app writes and deletes a `.rnrm-probe` file in each of the eight folders. If that fails, it stops with a `FATAL` line naming the path and the UID/GID it runs as.
 
 ## Time zone
 
@@ -130,7 +132,7 @@ Besides the DAT downloads (libretro-database and the [titledb](https://github.co
 ## Health checks
 
 - `GET /health/live`: the process is up (used by the image's `HEALTHCHECK`).
-- `GET /health/ready`: the database answers within 2 seconds and the seven folders exist; 503 otherwise.
+- `GET /health/ready`: the database answers within 2 seconds and the eight folders exist; 503 otherwise.
 
 Both are anonymous and return no details.
 
@@ -143,6 +145,8 @@ Both are anonymous and return no details.
 - **`/app/backups`**, so the database backups survive the loss of the host. Copy it somewhere else.
 - **`/app/collections`**, the collection cover images. Collections themselves are in the database (and its backups), but their cover files are not: copy this folder with the backups. After a restore without it, collections show a placeholder until a cover is set again.
 - **`/app/bios`**, the emulator BIOS files you copied in. Database backups don't include them: keep your own copy.
+
+`/app/imagecache` needs no backup: the cached covers are made again from the ZIPs when viewed and by **Integrity → Run quick**.
 
 The library ZIPs, together with the external ROM files next to them in `/app/roms`, are the source of truth for games: if the database is lost but they are not, a new database is rebuilt from them by the next ingestion or **Integrity → Run quick** (accounts and history are not). `/app/ingest` holds anything not yet ingested plus `_removed/` (the ROMs listed on **Deleted ROMs**, until restored or deleted there); back it up too if you keep files there. `/app/cache` can be re-downloaded with **Refresh DATs**.
 
@@ -199,6 +203,7 @@ Sign-in keys created after the backup was taken are gone from the database but m
 ## Outbound connections
 
 - **DATs:** the daily automatic refresh (**Admin → DATs**, on by default at 04:00) and **Refresh DATs** download from `Sources:DatBaseUrl`, `Sources:TitleDbUrl` and `Sources:MameDatUrl` (GitHub by default).
+- **IGDB** (only when `Sources:IgdbClientId` and `Sources:IgdbClientSecret` are set): `id.twitch.tv` for the token, `api.igdb.com` for searches, ratings and covers, and `images.igdb.com` for the cover downloads of **Admin → Actions → Pull Cover Images**.
 - **Images by URL:** a game image, collection cover or publisher, genre or system logo added from a URL is downloaded by the server, from public addresses only (private, loopback and link-local addresses are refused, redirects included), with a 15-second limit.
 
 ## Upgrades
