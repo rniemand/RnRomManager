@@ -17,7 +17,7 @@
 	import ConfirmModal from './ConfirmModal.svelte';
 	import EmulatorModal from './EmulatorModal.svelte';
 	import FileSize from './FileSize.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import { auth } from '../stores/auth.svelte';
 	import RatingControl from './RatingControl.svelte';
 	import SystemBadge from './SystemBadge.svelte';

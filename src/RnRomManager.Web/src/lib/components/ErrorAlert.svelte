@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ApiError } from '../api/errors';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {
 		/** An {@link ApiError} shows its ProblemDetails `title`; anything else a generic message. */

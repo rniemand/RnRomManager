@@ -21,7 +21,7 @@
 	import EmptyState from './EmptyState.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import FileSize from './FileSize.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from './Loading.svelte';
 
 	/** B14–B15: the game's saves (S2: a Site user's own, every user's for an Admin): list, add, edit, replace, delete and download. */

@@ -11,7 +11,7 @@
 	import { reportTabs } from '../reports';
 	import { auth } from '../stores/auth.svelte';
 	import FileSize from './FileSize.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import RatingControl from './RatingControl.svelte';
 	import SystemBadge from './SystemBadge.svelte';
 

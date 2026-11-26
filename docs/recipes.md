@@ -40,7 +40,7 @@ Short playbooks for the changes this repo gets most often: where each change mus
 ## Report
 - Query: a method on `Core/Reports/IReportRepository.cs`, implemented in `Data/Repositories/ReportRepository.cs` (Dapper). Copy `ListMultipleReleasesAsync` for a sortable, paged list and `ListMissingImagesAsync` / `NextMissingImageAsync` for a list plus a "next" lookup.
 - Endpoint: `Endpoints/ReportEndpoints.cs` (group `/api/reports`; Admin-only reports add `AdminOnly`, like Activity).
-- Page: `routes/reports/<name>/+page.svelte`, with filters, sort and page held in URL state (copy `multiple-releases`). Add a tab in `routes/reports/+layout.svelte` (with its icon in `lib/components/icons.ts`) and wrap an Admin-only page in `AdminOnly`.
+- Page: `routes/reports/<name>/+page.svelte`, with filters, sort and page held in URL state (copy `multiple-releases`). Add a tab in `routes/reports/+layout.svelte` (with its icon in `lib/icons/icons.ts`) and wrap an Admin-only page in `AdminOnly`.
 - Tests: `tests/RnRomManager.Data.Tests/Database/<Name>QueryTests.cs`, `ReportEndpointsTests`, `routes/reports/reports-pages.test.ts`.
 
 ## Admin tab
@@ -53,7 +53,7 @@ Short playbooks for the changes this repo gets most often: where each change mus
 
 ## SPA conventions
 - Numbers: `formatCount` from `lib/format.ts` ("1,234"). Sizes: the `FileSize` component.
-- Icons: `<Icon name=...>`, with the names mapped to Bootstrap Icons classes in `lib/components/icons.ts`. Font Awesome is used for brands only.
+- Icons: `<Icon name=...>`, with the names mapped to Bootstrap Icons classes in `lib/icons/icons.ts`. Font Awesome is used for brands only.
 - Confirmations: `ConfirmModal`. Toasts: the `toasts` store (`toasts.jobRunning(err)` handles 409 `JobRunning`). Errors: `ErrorAlert`. Admin gating: `AdminOnly`.
 - Watching a job from a page: call `jobs.watch()` and `jobs.onEnded` on mount; disable action buttons while `jobs.current` is set.
 - Tests sit next to their source as `*.test.ts` (rune stores: `*.svelte.test.ts`). Run them with `npx vitest run <files>`, plus `npm run lint` and `npm run check`, all in `src/RnRomManager.Web`.

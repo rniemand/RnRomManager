@@ -2,7 +2,7 @@
 	import type { About } from '#lib/types/index.js';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import EmptyState from './EmptyState.svelte';
 	import Loading from './Loading.svelte';
 

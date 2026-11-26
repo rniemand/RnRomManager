@@ -17,7 +17,7 @@
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	/** B25: the user's global hotkeys; edits are pending until Save. */
 	interface Props {

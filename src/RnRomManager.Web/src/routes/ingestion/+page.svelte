@@ -20,7 +20,7 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
 	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
 	import IngestFileTable from '#lib/components/IngestFileTable.svelte';

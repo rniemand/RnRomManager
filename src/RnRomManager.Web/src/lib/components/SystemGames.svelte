@@ -7,7 +7,7 @@
 	import GameResults from './GameResults.svelte';
 	import { auth } from '../stores/auth.svelte';
 	import GroupLogo from './GroupLogo.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from './Loading.svelte';
 	import Pagination from './Pagination.svelte';
 	import SystemEmulatorsModal from './SystemEmulatorsModal.svelte';

@@ -13,7 +13,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
 	import GameResults from '#lib/components/GameResults.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import PageTitle from '#lib/components/PageTitle.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';

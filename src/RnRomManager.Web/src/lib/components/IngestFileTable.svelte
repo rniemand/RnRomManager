@@ -5,7 +5,7 @@
 	import { pageCount } from '../pageSize';
 	import { tooltip } from '../tooltip';
 	import FileSize from './FileSize.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import Pagination from './Pagination.svelte';
 
 	interface IngestFileRow {

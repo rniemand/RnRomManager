@@ -15,7 +15,7 @@
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * B23: create a collection (name, notes, optional cover uploaded right after the create, then go to it) or edit one

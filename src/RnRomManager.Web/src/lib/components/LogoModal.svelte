@@ -4,7 +4,7 @@
 	import type { LogoKind } from '#lib/enums/index.js';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * B19: replace or remove a publisher's, developer's, genre's or system's shared logo (Admins only; audited, shown for everyone),

@@ -21,7 +21,7 @@
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import GameResults from '#lib/components/GameResults.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import {
 		defaultDir,

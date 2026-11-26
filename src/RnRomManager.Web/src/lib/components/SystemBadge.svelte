@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { systemColour } from '../systemColours';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {
 		/** System id (`gb`, `gbc`, `gba`, …). */

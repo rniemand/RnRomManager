@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import NotAllowed from '#lib/components/NotAllowed.svelte';
 	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { reportTabs } from '#lib/reports.js';

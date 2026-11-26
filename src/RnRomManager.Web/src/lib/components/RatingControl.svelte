@@ -3,7 +3,7 @@
 	import type { GameDetail, RatingChange } from '#lib/types/index.js';
 	import { saveRating } from '../rating';
 	import { toasts } from '../stores/toasts.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {
 		gameId: string;

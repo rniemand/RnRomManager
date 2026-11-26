@@ -6,7 +6,7 @@
 	import type { PauseReason } from '#lib/enums/index.js';
 	import { formatCount } from '../format';
 	import { bundle } from '../stores/bundle.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {
 		/** The runner; tests pass one with a fake server. */

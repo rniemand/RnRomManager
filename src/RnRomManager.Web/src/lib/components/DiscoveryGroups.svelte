@@ -11,7 +11,7 @@
 	import ErrorAlert from './ErrorAlert.svelte';
 	import Loading from './Loading.svelte';
 	import Pagination from './Pagination.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import GroupLogo from './GroupLogo.svelte';
 	import LogoModal from './LogoModal.svelte';
 

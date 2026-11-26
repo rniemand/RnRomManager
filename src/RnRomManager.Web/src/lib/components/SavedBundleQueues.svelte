@@ -7,7 +7,7 @@
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import EmptyState from './EmptyState.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * B2/B4: the signed-in user's saved queues. Save snapshots the working cart (a clashing name asks before saving over

@@ -88,7 +88,7 @@ See the README's [supported systems](../README.md#supported-systems) table for s
    ```
    and add a project reference from `RnRomManager.Api`.
 4. Add the system to the test data builders in `tests/RnRomManager.TestData` if you want seeded ROMs and fixture DATs for it (`FixtureDatWriter` writes the main DAT plus its metadat files per libretro system, in the folder its `layouts` entry gives (`FixtureDatLayout.NoIntro` by default, `FixtureDatLayout.Redump` for a disc system), or a titledb compact file through its `titleDb` map). Every test fixture that loads DATs for all systems must include the new one, or ingestion's `DatsMissing` preflight fails.
-5. Optionally map its icon in `src/RnRomManager.Web/src/lib/components/icons.ts` (`'system-sg1000': 'bi bi-…'`); without it the UI uses the controller fallback.
+5. Optionally map its icon in `src/RnRomManager.Web/src/lib/icons/icons.ts` (`'system-sg1000': 'bi bi-…'`); without it the UI uses the controller fallback.
 6. Test the header reader with synthetic ROMs (never commit real ROMs), plus the registry lookups and the box-art PNG (valid, 512×512). See `tests/RnRomManager.Systems.GameBoy.Tests` for the pattern.
 7. Add the system to `src/RnRomManager.Web/src/lib/systemEmulators.json`, the Systems tab's emulator links (official project pages only; an empty array if none are known). `SystemEmulatorsCatalogTests` fails until it's there.
 8. If the system has a `BrowserCore`, every `RomExtensions` entry must be in that core's compiled-in extension list in `BrowserCoreExtensionsTests`, or be listed in its `Exceptions` with the reason it still works ([development](development.md#browser-emulators)).

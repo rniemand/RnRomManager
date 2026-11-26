@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * B1: a section page's `<h1>` (icon + text). Shown below `lg`, where the navbar is collapsed; from `lg` up it stays in

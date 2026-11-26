@@ -3,7 +3,7 @@
 	import ConfirmModal from './ConfirmModal.svelte';
 	import CopyButton from './CopyButton.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import JsonTree from './JsonTree.svelte';
 	import Loading from './Loading.svelte';
 

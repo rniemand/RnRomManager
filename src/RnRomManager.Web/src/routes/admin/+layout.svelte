@@ -5,7 +5,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	let { children }: { children: Snippet } = $props();
 

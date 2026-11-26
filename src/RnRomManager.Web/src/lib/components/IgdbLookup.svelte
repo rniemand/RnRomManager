@@ -11,7 +11,7 @@
 	} from '#lib/types/index.js';
 	import { applyMatch, copyFields, defaultCopyFields, toList } from '../gameEdit';
 	import ErrorAlert from './ErrorAlert.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {
 		game: GameDetail;

@@ -20,7 +20,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import GameTypeahead from '#lib/components/GameTypeahead.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import ReviewDeleteModal from '#lib/components/ReviewDeleteModal.svelte';

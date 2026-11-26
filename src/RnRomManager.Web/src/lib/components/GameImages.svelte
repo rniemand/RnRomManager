@@ -14,7 +14,7 @@
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import FileSize from './FileSize.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from './Loading.svelte';
 
 	interface Props {

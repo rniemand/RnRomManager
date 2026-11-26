@@ -8,7 +8,7 @@
 	import { jobs } from '../stores/jobs.svelte';
 	import type { About, Me } from '#lib/types/index.js';
 	import AboutModal from './AboutModal.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * B10–B12: the signed-in footer, fixed to the bottom: About (U2: the app logo), the version (a link to the releases) and the keyboard

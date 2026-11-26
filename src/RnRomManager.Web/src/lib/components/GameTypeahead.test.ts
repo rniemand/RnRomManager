@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
 import GameTypeahead from './GameTypeahead.svelte';
-import { iconClass } from './icons';
+import { iconClass } from '#lib/icons/icons.js';
 
 const item = (id: string, displayTitle: string, boxArtUrl: string | null = null) => ({
 	id,

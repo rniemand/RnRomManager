@@ -3,7 +3,7 @@
 	import { api } from '#lib/api/client.js';
 	import type { LogEntry } from '#lib/types/index.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
 	type Level = LogEntry['level'];

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { iconClass } from './icons';
+	import { iconClass } from '#lib/icons/icons.js';
 
 	interface Props {
 		/** Semantic name (`download`, `system-gb`, …), see `icons.ts`. */

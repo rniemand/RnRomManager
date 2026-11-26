@@ -2,7 +2,7 @@
 	import type { SystemInfo } from '#lib/types/index.js';
 	import { emulatorGroups, linkHost } from '../systemEmulators';
 	import ConfirmModal from './ConfirmModal.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	/** Systems tab B7/B8: links to the known emulators for a system, grouped by OS. Links only; nothing is hosted. */
 	interface Props {

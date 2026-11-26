@@ -27,7 +27,7 @@
 	import FileSize from '#lib/components/FileSize.svelte';
 	import GameCollectionsModal from '#lib/components/GameCollectionsModal.svelte';
 	import SystemEmulatorsModal from '#lib/components/SystemEmulatorsModal.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
 	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';

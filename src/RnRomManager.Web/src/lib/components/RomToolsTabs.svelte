@@ -14,7 +14,7 @@
 	import { page } from '$app/state';
 	import { formatCount } from '../format';
 	import { navCounts } from '../stores/navCounts.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 </script>
 
 <nav class="mb-3" aria-label="ROM Tools">

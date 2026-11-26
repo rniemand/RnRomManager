@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 </script>
 
 <div class="text-center py-5">

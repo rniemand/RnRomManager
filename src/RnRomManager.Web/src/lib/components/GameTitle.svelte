@@ -6,7 +6,7 @@
 	import { titleError } from '../gameEdit';
 	import { toasts } from '../stores/toasts.svelte';
 	import { tooltip } from '../tooltip';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {
 		game: GameDetail;

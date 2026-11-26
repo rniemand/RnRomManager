@@ -8,7 +8,7 @@
 	import { auth } from '../stores/auth.svelte';
 	import EmptyState from './EmptyState.svelte';
 	import GroupLogo from './GroupLogo.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * Systems tab B3: every supported system (0 games included) in a sortable table, each name a link selecting it, with

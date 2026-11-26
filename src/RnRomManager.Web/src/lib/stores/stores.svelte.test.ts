@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetClient } from '../api/client';
 import { ApiError } from '../api/errors';
 import type { CurrentJob } from '#lib/types/index.js';
-import { iconClass } from '../components/icons';
+import { iconClass } from '#lib/icons/icons.js';
 import { auth } from './auth.svelte';
 import { idlePollIntervalMs, jobs, pollIntervalMs } from './jobs.svelte';
 import { toasts, toastDurationMs } from './toasts.svelte';

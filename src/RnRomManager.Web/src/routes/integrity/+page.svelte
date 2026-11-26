@@ -9,7 +9,7 @@
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
 	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
 	import Loading from '#lib/components/Loading.svelte';

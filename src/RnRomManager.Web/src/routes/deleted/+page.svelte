@@ -15,7 +15,7 @@
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
 	import IngestFileTable from '#lib/components/IngestFileTable.svelte';
 	import Loading from '#lib/components/Loading.svelte';
