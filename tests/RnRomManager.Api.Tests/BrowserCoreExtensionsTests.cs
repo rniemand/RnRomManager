@@ -437,8 +437,7 @@ public class BrowserCoreExtensionsTests
 
     private static ISystemHandler Handler(string id, string core, params string[] extensions)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id);
         handler.BrowserCore.Returns(core);
         handler.RomExtensions.Returns(extensions);
         return handler;

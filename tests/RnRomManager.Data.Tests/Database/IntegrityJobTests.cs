@@ -47,9 +47,7 @@ public partial class IntegrityJobTests
         _jobs = new JobRepository(_factory);
         var handlers = new[] { "gb", "gbc" }.Select(id =>
         {
-            var handler = Substitute.For<ISystemHandler>();
-            handler.EmbedRomsInZip.Returns(true);
-            handler.Id.Returns(id);
+            var handler = TestHandlers.Fake(id, embedRomsInZip: true);
             return handler;
         }).Append(new ExternalTestHandler()).Append(new ExternalSetTestHandler()).Append(new LegacyExternalTestHandler(_romStorage = Substitute.For<IRomStorageSettings>())).ToArray();
         _systems = Substitute.For<ISystemRegistry>();

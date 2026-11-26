@@ -2,6 +2,7 @@ using NSubstitute;
 using RnRomManager.Api.Endpoints;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests;
 
@@ -14,8 +15,7 @@ public class GameQueryParsingTests
     {
         var systems = Substitute.For<ISystemRegistry>();
         systems.ById(Arg.Any<string>()).Returns((ISystemHandler?)null);
-        var gb = Substitute.For<ISystemHandler>();
-        gb.EmbedRomsInZip.Returns(true);
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         systems.ById("gb").Returns(gb);
         return systems;
     }
