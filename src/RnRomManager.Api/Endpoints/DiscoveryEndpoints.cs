@@ -74,7 +74,7 @@ public static class DiscoveryEndpoints
                 parsed, key!, page ?? 1, pageSize ?? Page<GameListItem>.DefaultSize, ctx.RequestAborted);
             return result is null
                 ? Problems.NotFound(ctx)
-                : Results.Ok(Paging.ToDto(await LibraryEndpoints.ForViewerAsync(result, ctx, games), game => LibraryEndpoints.ToListItemDto(game, systems)));
+                : Results.Ok(Paging.ToDto(await LibraryEndpoints.ForViewerAsync(result, ctx, games), game => LibraryDtos.ToListItemDto(game, systems)));
         });
 
         // P4: a metadata value's group key, so the game page can link straight to the group.

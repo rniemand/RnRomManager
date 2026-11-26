@@ -117,8 +117,6 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 - `GET /api/games`
 - `GET /api/games/facets`
 - `GET /api/games/{id:guid}`
-- `GET /api/games/{id:guid}/images/{imageId:long}`
-- `GET /api/games/{id:guid}/cover/{sha1}`
 - `GET /api/games/{id:guid}/download`
 - `GET /api/games/{id:guid}/zip-entries`
 - `GET /api/games/{id:guid}/zip-entries/download`
@@ -141,16 +139,20 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 - `PATCH /api/games/{id:guid}/roms/{romId:long}` Admin
 - `POST /api/games/{id:guid}/roms/{romId:long}/move` Admin
 - `POST /api/games/{id:guid}/media/retry` Admin
-- `POST /api/games/{id:guid}/images` Admin
-- `POST /api/games/{id:guid}/images/from-url` Admin
-- `GET /api/games/{id:guid}/image-suggestions` Admin
 - `GET /api/games/{id:guid}/igdb-matches` Admin
-- `DELETE /api/games/{id:guid}/images/{imageId:long}` Admin
-- `POST /api/games/{id:guid}/images/{imageId:long}/cover` Admin
 - `POST /api/jobs/media-retry` Admin
 - `POST /api/jobs/igdb-sync` Admin
 - `POST /api/jobs/pull-covers` Admin
 - `POST /api/games/{id:guid}/merge` Admin
+
+`src/RnRomManager.Api/Endpoints/LibraryImageEndpoints.cs`:
+- `GET /api/games/{id:guid}/images/{imageId:long}`
+- `GET /api/games/{id:guid}/cover/{sha1}`
+- `POST /api/games/{id:guid}/images` Admin
+- `POST /api/games/{id:guid}/images/from-url` Admin
+- `GET /api/games/{id:guid}/image-suggestions` Admin
+- `DELETE /api/games/{id:guid}/images/{imageId:long}` Admin
+- `POST /api/games/{id:guid}/images/{imageId:long}/cover` Admin
 
 `src/RnRomManager.Api/Endpoints/ReportEndpoints.cs`:
 - `GET /api/reports/missing-images`
@@ -314,7 +316,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `src/RnRomManager.Api/Auth/`: AuditActorExtensions, AuthSetup, Session
 - `src/RnRomManager.Api/Cli/`: CliDispatcher, HealthCheckCommand, ResetPasswordCommand
 - `src/RnRomManager.Api/Configuration/`: EffectiveSettings, LicenseInfo, OptionsRegistration
-- `src/RnRomManager.Api/Endpoints/`: AddGamesRequest, AdminEndpoints, AsyncOnlyWriteStream, AuditEndpoints, AuthEndpoints, BiosFile, BiosInfo, BiosInfoGroup, BiosLog, Budget, BundleDownloadEndpoints, BundleFileEndpoints, BundleQueueEndpoints, ChangePasswordRequest, CollectionEndpoints, CoreOutcome, CoverUrlRequest, CreateCollectionRequest, CreateUserRequest, DatEndpoints, Disc, DiscoveryEndpoints, DiscoveryLogoEndpoints, DiscResult, DismissDuplicateRequest, EmulatorEndpoints, EndpointUser, ErrorCodes, FallbackEndpoints, FileStatus, HealthEndpoints, ImageUrlRequest, IngestDeleteRequest, IngestEndpoints, IngestFileRef, IngestRequest, IngestRestoreRef, IngestRestoreRequest, IntegrityEndpoints, IssueRequest, JobEndpoints, JobStart, LibraryAttachment, LibraryDownload, LibraryEndpoints, LibraryFiles, LoginRequest, LogoUrlRequest, MameRomset, Member, MergeDuplicatesRequest, Need, OperatorCore, OperatorCoreFile, OperatorCoreLog, OperatorCoreManifest, OwningStream, Paging, PlayDisc, PlayDiscEntry, QueueRequest, ReportEndpoints, ResetPasswordRequest, ResolveItem, ResolveRequest, ReviewDeleteRequest, ReviewEndpoints, SaveEndpoints, SaveUploads, SortQuery, TicketStreamResult, TimelineEndpoints, UpdateUserRequest, UserEndpoints, ZipEntryInfo
+- `src/RnRomManager.Api/Endpoints/`: AddGamesRequest, AdminEndpoints, AsyncOnlyWriteStream, AuditEndpoints, AuthEndpoints, BiosFile, BiosInfo, BiosInfoGroup, BiosLog, Budget, BundleDownloadEndpoints, BundleFileEndpoints, BundleQueueEndpoints, ChangePasswordRequest, CollectionEndpoints, CoreOutcome, CoverUrlRequest, CreateCollectionRequest, CreateUserRequest, DatEndpoints, Disc, DiscoveryEndpoints, DiscoveryLogoEndpoints, DiscResult, DismissDuplicateRequest, EmulatorEndpoints, EndpointUser, ErrorCodes, FallbackEndpoints, FileStatus, HealthEndpoints, ImageUrlRequest, IngestDeleteRequest, IngestEndpoints, IngestFileRef, IngestRequest, IngestRestoreRef, IngestRestoreRequest, IntegrityEndpoints, IssueRequest, JobEndpoints, JobStart, LibraryAttachment, LibraryDownload, LibraryDtos, LibraryEndpoints, LibraryFiles, LibraryImageEndpoints, LibraryRequestParsing, LoginRequest, LogoUrlRequest, MameRomset, Member, MergeDuplicatesRequest, Need, OperatorCore, OperatorCoreFile, OperatorCoreLog, OperatorCoreManifest, OwningStream, Paging, PlayDisc, PlayDiscEntry, QueueRequest, ReportEndpoints, ResetPasswordRequest, ResolveItem, ResolveRequest, ReviewDeleteRequest, ReviewEndpoints, SaveEndpoints, SaveUploads, SortQuery, TicketStreamResult, TimelineEndpoints, UpdateUserRequest, UserEndpoints, ZipEntryInfo
 - `src/RnRomManager.Api/Http/`: BlockedAddressException, HttpClients, ImageUrlDownload, ImageUrlDownloader, ImageUrlPolicy, RequestLoggingHandler
 - `src/RnRomManager.Api/Logging/`: LogArchive, LogBuffer, LogEntry, LogStream, LogStreamOptions, MemoryLogTarget, NLogSetup, Subscription
 - `src/RnRomManager.Api/Security/`: SecurityHeaders

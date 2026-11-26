@@ -39,13 +39,6 @@ public static class LibraryEndpoints
     /// <summary>S8: the cores whose external releases play through <c>play-disc</c>; any other (DS) loads from <c>/download</c>.</summary>
     public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "mednafen_pce", "mednafen_pcfx" };
 
-    /// <summary>B10: <c>&lt;title&gt;-&lt;imageId&gt;.&lt;ext&gt;</c>; the suffix is added after sanitizing (which cuts to 180), so it is never lost.</summary>
-    public static string ImageDownloadName(string displayTitle, ImageRow image)
-    {
-        var title = FileNameSanitizer.Sanitize(displayTitle);
-        return $"{(title.Length == 0 ? "image" : title)}-{image.Id}{Path.GetExtension(image.FileName)}";
-    }
-
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {
         // Release editing B11: the Edit release form's region list.
@@ -71,7 +64,7 @@ public static class LibraryEndpoints
             int? pageSize, string? favourite, string? collection, string? notInCollection, HttpContext ctx, ISystemRegistry systems, IGameRepository repository,
             ICollectionRepository collections) =>
         {
-            var (query, errors) = ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems, favourite, collection, notInCollection);
+            var (query, errors) = LibraryRequestParsing.ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems, favourite, collection, notInCollection);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             // B15/P1: another user's collection answers 404 like a missing one, before any membership is queried.
@@ -79,14 +72,14 @@ public static class LibraryEndpoints
                 if (collectionId is { } id && await collections.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is null)
                     return Problems.NotFound(ctx);
             var result = await ForViewerAsync(await repository.ListAsync(query, ctx.RequestAborted), ctx, repository);
-            return Results.Ok(Paging.ToDto(result, game => ToListItemDto(game, systems)));
+            return Results.Ok(Paging.ToDto(result, game => LibraryDtos.ToListItemDto(game, systems)));
         });
 
         // F1: per-option counts for the Library filters; each facet ignores its own filter. Sort, paging and collections aren't read.
         games.MapGet("/facets", async (string? system, string? letter, string? region, string? q, string? favourite, HttpContext ctx,
             ISystemRegistry systems, IGameRepository repository) =>
         {
-            var (query, errors) = ParseQuery(system, letter, region, q, null, null, null, null, systems, favourite);
+            var (query, errors) = LibraryRequestParsing.ParseQuery(system, letter, region, q, null, null, null, null, systems, favourite);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var facets = await repository.ListFacetsAsync(query, ctx.RequestAborted);
@@ -101,57 +94,7 @@ public static class LibraryEndpoints
         games.MapGet("/{id:guid}", (Guid id, HttpContext ctx, IGameRepository repository, IRomRepository roms, IImageRepository images) =>
             DetailAsync(id, ctx, repository, roms, images));
 
-        // B10: ?download=true sends it as an attachment named after the game.
-        games.MapGet("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, bool? download, HttpContext ctx, IGameRepository repository,
-            IImageRepository images, LibraryFiles files) =>
-        {
-            if (await images.GetAsync(id, imageId, ctx.RequestAborted) is not { } image
-                || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
-                return Problems.NotFound(ctx);
-
-            ctx.Response.Headers.CacheControl = "private, max-age=86400";
-            // A 304 for a matching If-None-Match is answered by the stream result itself.
-            return files.OpenEntry(ctx, game, LibraryZip.ImageEntry(image.FileName), ImageFormats.MaxBytes, out var stream) is { } problem
-                ? problem
-                : Results.Stream(stream!, ImageFormats.ContentType(image.FileName), download == true ? ImageDownloadName(game.DisplayTitle, image) : null,
-                    entityTag: new EntityTagHeaderValue($"\"{image.Sha1}\""));
-        });
-
-        // C3: the cached WebP of the current cover; a stale sha1 is a 404, so only the database's value builds a path.
-        games.MapGet("/{id:guid}/cover/{sha1}", async (Guid id, string sha1, HttpContext ctx, IGameRepository repository,
-            IImageRepository images, LibraryFiles files, CoverCache cache, ILogger<CoverCache> logger) =>
-        {
-            var cover = (await images.ListByGameAsync(id, ctx.RequestAborted)).Where(i => i.IsCover).OrderBy(i => i.Id).FirstOrDefault();
-            if (cover is null || !string.Equals(cover.Sha1, sha1, StringComparison.Ordinal)
-                || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
-                return Problems.NotFound(ctx);
-
-            var etag = new EntityTagHeaderValue($"\"{cover.Sha1}\"");
-            if (cache.CachedPath(id, cover.Sha1) is { } path)
-            {
-                ctx.Response.Headers.CacheControl = CoverCacheControl;
-                return Results.File(path, "image/webp", entityTag: etag);
-            }
-
-            var entry = LibraryZip.ImageEntry(cover.FileName);
-            if (files.OpenEntry(ctx, game, entry, ImageFormats.MaxBytes, out var stream) is { } problem)
-                return problem;
-            CoverCacheResult result;
-            await using (stream)
-                result = await cache.GenerateAsync(id, cover.Sha1, stream!, ctx.RequestAborted);
-
-            if (result.Webp is { } webp)
-            {
-                ctx.Response.Headers.CacheControl = CoverCacheControl;
-                return Results.Bytes(webp, "image/webp", entityTag: etag);
-            }
-
-            logger.LogWarning("The cover of game {GameId} couldn't be converted to WebP; serving the original.", id);
-            if (files.OpenEntry(ctx, game, entry, ImageFormats.MaxBytes, out var original) is { } reopenProblem)
-                return reopenProblem;
-            ctx.Response.Headers.CacheControl = "private, max-age=86400";
-            return Results.Stream(original!, ImageFormats.ContentType(cover.FileName), entityTag: etag);
-        });
+        api.MapLibraryImageEndpoints();
 
         games.MapGet("/{id:guid}/download", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
         {
@@ -270,7 +213,7 @@ public static class LibraryEndpoints
 
         games.MapPut("/{id:guid}/roms/{romId:long}/note",async (Guid id, long romId, JsonElement body, HttpContext ctx, LibraryEditor editor) =>
         {
-            var (text, errors) = ParseNote(body);
+            var (text, errors) = LibraryRequestParsing.ParseNote(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             return ToResult(ctx, await editor.SaveNoteAsync(id, romId, text!, AuditActor.From(ctx.User).UserId, ctx.RequestAborted));
@@ -284,7 +227,7 @@ public static class LibraryEndpoints
         games.MapPatch("/{id:guid}", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
         {
-            var (patch, errors) = ParsePatch(body);
+            var (patch, errors) = LibraryRequestParsing.ParsePatch(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var result = await editor.PatchAsync(id, patch, AuditActor.From(ctx.User), ctx.RequestAborted);
@@ -295,7 +238,7 @@ public static class LibraryEndpoints
         games.MapPatch("/{id:guid}/rating", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
         {
-            var (patch, errors) = ParseRating(body);
+            var (patch, errors) = LibraryRequestParsing.ParseRating(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var result = await editor.PatchAsync(id, patch, null, ctx.RequestAborted); // rating/favourite: not audited
@@ -318,7 +261,7 @@ public static class LibraryEndpoints
         // Release editing B4.
         games.MapPatch("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, JsonElement body, HttpContext ctx, LibraryEditor editor) =>
         {
-            var (patch, errors) = ParseReleasePatch(body);
+            var (patch, errors) = LibraryRequestParsing.ParseReleasePatch(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var result = await editor.EditReleaseAsync(id, romId, patch, AuditActor.From(ctx.User), ctx.RequestAborted);
@@ -328,7 +271,7 @@ public static class LibraryEndpoints
         games.MapPost("/{id:guid}/roms/{romId:long}/move", async (Guid id, long romId, MoveReleaseRequest request, HttpContext ctx,
             LibraryEditor editor) =>
         {
-            var errors = Validate(request);
+            var errors = LibraryRequestParsing.Validate(request);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), AuditActor.From(ctx.User),
@@ -341,67 +284,6 @@ public static class LibraryEndpoints
         {
             var result = await editor.RetryMediaAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
-
-        // I5–I7: image management. The upload reads the form itself (no IFormFile binding), so the group's own
-        // X-XSRF-TOKEN filter is the antiforgery check, as for every other mutation.
-        games.MapPost("/{id:guid}/images", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
-            IRomRepository roms, IImageRepository images, JobRunner runner, IntegrityJobFactory integrity, ILoggerFactory loggers,
-            ISystemRegistry systems, JobLock jobLock, IIntegrityIssueRepository issues, TimeProvider time) =>
-        {
-            var (form, problem) = await ReadImageFormAsync(ctx);
-            if (problem is not null)
-                return problem;
-            var errors = new Dictionary<string, string[]>();
-            // Exact names only: Enum.TryParse would also accept "0" or "boxart".
-            var type = form!["type"].ToString() switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => (ImageType?)null };
-            if (type is null)
-                errors["type"] = ["Choose BoxArt or Snap."];
-            var bytes = await ReadImageFileAsync(form, errors, ctx.RequestAborted);
-            if (errors.Count > 0)
-                return Problems.Validation(ctx, errors);
-            var result = await editor.AddImageAsync(id, type!.Value, bytes!, AuditActor.From(ctx.User), ctx.RequestAborted);
-            await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers, systems, jobLock, issues, time);
-            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
-
-        // U1–U5: the server downloads the image (public addresses only), then stores it exactly like an upload.
-        games.MapPost("/{id:guid}/images/from-url", async (Guid id, ImageUrlRequest request, HttpContext ctx, ImageUrlDownloader downloader,
-            LibraryEditor editor, IGameRepository repository, IRomRepository roms, IImageRepository images, JobRunner runner,
-            IntegrityJobFactory integrity, ILoggerFactory loggers, ISystemRegistry systems, JobLock jobLock, IIntegrityIssueRepository issues,
-            TimeProvider time) =>
-        {
-            var errors = Validate(request, out var url, out var type);
-            if (errors.Count > 0)
-                return Problems.Validation(ctx, errors);
-            if (await repository.GetAsync(id, ctx.RequestAborted) is null)
-                return Problems.NotFound(ctx);
-            var download = await downloader.DownloadAsync(url!, ctx.RequestAborted);
-            if (download.Bytes is not { } bytes)
-                return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
-            if (DownloadedImageError(bytes) is { } bytesError)
-                return Problems.Validation(ctx, "url", bytesError);
-            var result = await editor.AddImageAsync(id, type, bytes, AuditActor.From(ctx.User), ctx.RequestAborted, request.Url);
-            await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers, systems, jobLock, issues, time);
-            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
-
-        // IGDB suggestions S8: read-only candidates for the Suggest Images dialog; adding one is the from-url route above.
-        games.MapGet("/{id:guid}/image-suggestions", async (Guid id, string? type, HttpContext ctx, IGameRepository repository,
-            IImageSuggestions suggestions) =>
-        {
-            ImageType? parsed = type switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => null };
-            if (parsed is null)
-                return Problems.Validation(ctx, "type", "Choose BoxArt or Snap.");
-            if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
-                return Problems.NotFound(ctx);
-            if (!suggestions.Configured)
-                return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
-                    "Image suggestions need Sources:IgdbClientId and Sources:IgdbClientSecret.");
-            var result = await suggestions.SuggestAsync(game.DisplayTitle, game.SystemId, parsed.Value, ctx.RequestAborted);
-            return result.Suggestions is { } list
-                ? Results.Ok(new { suggestions = list })
-                : Problems.Create(ctx, StatusCodes.Status502BadGateway, IgdbFailed, result.FailedTitle!);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // L1/L2: read-only, so no job lock and no audit row.
@@ -424,20 +306,6 @@ public static class LibraryEndpoints
             return result.Matches is { } matches
                 ? Results.Ok(new { matches })
                 : Problems.Create(ctx, StatusCodes.Status502BadGateway, IgdbFailed, result.FailedTitle!);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
-
-        games.MapDelete("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
-            IGameRepository repository, IRomRepository roms, IImageRepository images) =>
-        {
-            var result = await editor.DeleteImageAsync(id, imageId, AuditActor.From(ctx.User), ctx.RequestAborted);
-            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
-
-        games.MapPost("/{id:guid}/images/{imageId:long}/cover", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
-            IGameRepository repository, IRomRepository roms, IImageRepository images) =>
-        {
-            var result = await editor.SetCoverAsync(id, imageId, AuditActor.From(ctx.User), ctx.RequestAborted);
-            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         api.MapPost("/jobs/media-retry", async (HttpContext ctx, JobRunner runner, MediaRetryJob job) =>
@@ -482,110 +350,7 @@ public static class LibraryEndpoints
     /// <summary>L1: the longest <c>q</c> (and the cut of the default display title).</summary>
     private const int MaxLookupQuery = 100;
 
-    /// <summary>The upload's whole request: the 8 MiB image plus room for the multipart framing and the <c>type</c> field.</summary>
-    public const long UploadRequestLimit = ImageFormats.MaxBytes + 64 * 1024;
-
-    /// <summary>
-    /// B14: once the first real box art replaced the placeholder cover (and the editor released the job lock), a deep
-    /// check of that game clears its <c>DefaultBoxArt</c> issue. G1: an external game's check would re-hash every external
-    /// file, so its issue is resolved directly under the job lock instead. Skipped, never queued, when another job holds
-    /// the lock; the response is the game detail whatever happens here.
-    /// </summary>
-    private static async Task StartGameCheckAsync(
-        LibraryEditResult result,
-        Guid id,
-        HttpContext ctx,
-        IGameRepository repository,
-        JobRunner runner,
-        IntegrityJobFactory integrity,
-        ILoggerFactory loggers,
-        ISystemRegistry systems,
-        JobLock jobLock,
-        IIntegrityIssueRepository issues,
-        TimeProvider time)
-    {
-        if (result.Code is not null || !result.ReplacedDefaultCover)
-            return;
-        var logger = loggers.CreateLogger("RnRomManager.Api.Endpoints.GameCheck");
-        try
-        {
-            if (await repository.GetAsync(id, CancellationToken.None) is not { } row)
-                return;
-            if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
-            {
-                using var held = jobLock.TryAcquire("Saving changes");
-                if (held is null)
-                    logger.LogInformation("Resolving DefaultBoxArt of {ZipPath} skipped: another job is running", row.ZipPath);
-                else
-                    await issues.ResolveOpenAsync(row.ZipPath, IntegrityIssueType.DefaultBoxArt, time.GetUtcNow().UtcDateTime, CancellationToken.None);
-                return;
-            }
-            var started = await runner.StartAsync(integrity(JobMode.Game, row.ZipPath), JobTrigger.Manual, EndpointUser.Id(ctx.User),
-                CancellationToken.None);
-            if (started is null)
-                logger.LogInformation("Game check of {ZipPath} skipped: another job is running", row.ZipPath);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Game check of game {GameId} could not start", id);
-        }
-    }
-
-    private static IResult TooLarge(HttpContext ctx) =>
-        Problems.Create(ctx, StatusCodes.Status413PayloadTooLarge, "PayloadTooLarge", "The upload is larger than 8 MiB.");
-
-    /// <summary>
-    /// The multipart form of an image upload (I5, B8), or the problem to answer: 413 when it's too large, 400 <c>file</c>
-    /// when it isn't a form. Endpoints using it also carry <c>RequestSizeLimit(UploadRequestLimit)</c>.
-    /// </summary>
-    internal static async Task<(IFormCollection? Form, IResult? Problem)> ReadImageFormAsync(HttpContext ctx)
-    {
-        // Kestrel enforces the size-limit metadata; this also covers hosts that don't (TestServer) and
-        // chunked bodies, which only fail while the form is read.
-        if (ctx.Request.ContentLength > UploadRequestLimit)
-            return (null, TooLarge(ctx));
-        if (!ctx.Request.HasFormContentType)
-            return (null, Problems.Validation(ctx, "file", "Send the image as multipart/form-data."));
-        try
-        {
-            return (await ctx.Request.ReadFormAsync(ctx.RequestAborted), null);
-        }
-        catch (Exception ex) when (ex is InvalidDataException or BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge })
-        {
-            return (null, TooLarge(ctx));
-        }
-    }
-
-    /// <summary>The form's <c>file</c> (≤ 8 MiB; format and dimensions are checked later), or null with an error added.</summary>
-    internal static async Task<byte[]?> ReadImageFileAsync(IFormCollection form, Dictionary<string, string[]> errors, CancellationToken cancellationToken)
-    {
-        var file = form.Files.GetFile("file");
-        if (file is null || file.Length == 0)
-            errors["file"] = ["Choose an image file."];
-        else if (file.Length > ImageFormats.MaxBytes)
-            errors["file"] = ["The image must be at most 8 MiB."];
-        if (errors.ContainsKey("file"))
-            return null;
-
-        using var buffer = new MemoryStream((int)file!.Length);
-        await file.CopyToAsync(buffer, cancellationToken);
-        return ImageFormats.ConvertWebp(buffer.ToArray());
-    }
-
-    /// <summary>U2/B9: at most 1024 characters (<c>images.source_url</c>), absolute http(s), no user info; else null.</summary>
-    public static Uri? ParseImageUrl(string? text) =>
-        text is { Length: > 0 and <= 1024 } && Uri.TryCreate(text, UriKind.Absolute, out var parsed)
-            && parsed.Scheme is "http" or "https" && parsed.UserInfo.Length == 0
-                ? parsed
-                : null;
-
-    /// <summary>U3/B9: the <c>url</c> error for downloaded bytes, or null when they're a storable PNG/JPEG.</summary>
-    public static string? DownloadedImageError(byte[] bytes) =>
-        bytes.Length > ImageFormats.MaxBytes ? "The image must be at most 8 MiB."
-        : bytes.Length == 0 || ImageFormats.Detect(bytes) is null || ImageFormats.Read(bytes) is null ? "The URL didn't return a PNG or JPEG image."
-        : null;
-
-    private static async Task<IResult> DetailAsync(
+    internal static async Task<IResult> DetailAsync(
         Guid id,
         HttpContext ctx,
         IGameRepository repository,
@@ -609,7 +374,7 @@ public static class LibraryEndpoints
         var discSets = DiscSets.Find(game.SystemId, romRows, fileRows).ToDictionary(s => s.Discs[0].Id);
         var igdbConfigured = SourcesOptions.IgdbConfigured(ctx.RequestServices.GetRequiredService<IOptions<SourcesOptions>>().Value);
         var actions = await repository.GetActionsAsync(id, ctx.RequestAborted);
-        return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes, discSets,
+        return Results.Ok(LibraryDtos.ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes, discSets,
             igdbConfigured, actions));
     }
 
@@ -637,347 +402,6 @@ public static class LibraryEndpoints
                 }, extensions),
             _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!, extensions),
         };
-
-    private const string TitleRule = "Must contain 1–255 characters and produce a nonempty filename.";
-
-    /// <summary>§6.1 game title: 1–255 chars after trim, must not sanitize to empty.</summary>
-    private static bool IsValidTitle(string? trimmed) =>
-        trimmed is { Length: >= 1 and <= 255 } && FileNameSanitizer.Sanitize(trimmed).Length > 0;
-
-    /// <summary>
-    /// U2: <c>url</c> required, at most 1024 characters (<c>images.source_url</c>), absolute http(s) without user info;
-    /// <c>type</c> exactly <c>BoxArt</c> or <c>Snap</c>, as for the upload. Nothing is downloaded when this fails.
-    /// </summary>
-    public static Dictionary<string, string[]> Validate(ImageUrlRequest request, out Uri? url, out ImageType type)
-    {
-        var errors = new Dictionary<string, string[]>();
-        url = ParseImageUrl(request.Url);
-        if (url is null)
-            errors["url"] = ["Enter an http or https image URL."];
-        ImageType? parsedType = request.Type switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => null };
-        if (parsedType is null)
-            errors["type"] = ["Choose BoxArt or Snap."];
-        type = parsedType ?? default;
-        return errors;
-    }
-
-    /// <summary><c>move</c> body (§23): <c>{targetGameId}</c> or <c>{newGameTitle}</c>, not both.</summary>
-    public static Dictionary<string, string[]> Validate(MoveReleaseRequest request)
-    {
-        var errors = new Dictionary<string, string[]>();
-        var hasTarget = request.TargetGameId is { } target && target != Guid.Empty;
-        if (hasTarget == request.NewGameTitle is not null)
-            errors["targetGameId"] = ["Give either targetGameId or newGameTitle."];
-        else if (request.NewGameTitle is not null && !IsValidTitle(request.NewGameTitle.Trim()))
-            errors["newGameTitle"] = [TitleRule];
-        return errors;
-    }
-
-    /// <summary>
-    /// B5: <c>{text: string}</c>, line endings normalised to <c>\n</c>; whitespace-only becomes <c>""</c> (delete);
-    /// more than <see cref="LibraryZip.MaxNoteBytes"/> UTF-8 bytes after normalisation is an error.
-    /// </summary>
-    public static (string? Text, Dictionary<string, string[]> Errors) ParseNote(JsonElement body)
-    {
-        var errors = new Dictionary<string, string[]>();
-        if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("text", out var value) || value.ValueKind != JsonValueKind.String)
-        {
-            errors["text"] = ["A text string is required."];
-            return (null, errors);
-        }
-        var text = value.GetString()!.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-        if (string.IsNullOrWhiteSpace(text))
-            return ("", errors);
-        if (System.Text.Encoding.UTF8.GetByteCount(text) > LibraryZip.MaxNoteBytes)
-            errors["text"] = [$"The note must be at most {LibraryZip.MaxNoteBytes:N0} bytes (UTF-8)."];
-        return (text, errors);
-    }
-
-    /// <summary>
-    /// <c>PATCH /api/games/{id}</c> body (§23): an absent property is left unchanged; <c>releaseYear</c> and
-    /// <c>description</c> may be null to clear them. Lists are trimmed and made distinct before the limits are checked.
-    /// </summary>
-    public static (GamePatch Patch, Dictionary<string, string[]> Errors) ParsePatch(JsonElement body)
-    {
-        var errors = new Dictionary<string, string[]>();
-        var patch = new GamePatch();
-        if (body.ValueKind != JsonValueKind.Object)
-        {
-            errors[""] = ["A JSON object is required."];
-            return (patch, errors);
-        }
-
-        if (body.TryGetProperty("title", out var title))
-        {
-            var value = title.ValueKind == JsonValueKind.String ? title.GetString()!.Trim() : null;
-            if (!IsValidTitle(value))
-                errors["title"] = [TitleRule];
-            patch = patch with { Title = value };
-        }
-
-        if (body.TryGetProperty("releaseYear", out var year))
-        {
-            if (year.ValueKind == JsonValueKind.Null)
-                patch = patch with { SetReleaseYear = true };
-            else if (year.ValueKind == JsonValueKind.Number && year.TryGetInt32(out var value) && value is >= 1970 and <= 2100)
-                patch = patch with { SetReleaseYear = true, ReleaseYear = value };
-            else
-                errors["releaseYear"] = ["Must be null or a year 1970–2100."];
-        }
-
-        patch = patch with
-        {
-            Developers = ParseList(body, "developers", errors),
-            Publishers = ParseList(body, "publishers", errors),
-            Genres = ParseList(body, "genres", errors),
-        };
-
-        if (body.TryGetProperty("description", out var description))
-        {
-            if (description.ValueKind == JsonValueKind.Null)
-                patch = patch with { SetDescription = true };
-            else if (description.ValueKind == JsonValueKind.String && description.GetString()!.Length <= 4000)
-                patch = patch with { SetDescription = true, Description = description.GetString() };
-            else
-                errors["description"] = ["Must be null or at most 4000 characters."];
-        }
-
-        if (body.TryGetProperty("igdbId", out var igdbId))
-        {
-            if (igdbId.ValueKind == JsonValueKind.Null)
-                patch = patch with { SetIgdbId = true };
-            else if (igdbId.ValueKind == JsonValueKind.Number && igdbId.TryGetInt32(out var value) && value >= 0)
-                patch = patch with { SetIgdbId = true, IgdbId = value };
-            else
-                errors["igdbId"] = ["Must be null, 0 or a positive whole number."];
-        }
-        return (patch, errors);
-    }
-
-    private static readonly HashSet<string> ReleasePatchFields =
-        ["kind", "regions", "languages", "revision", "disc", "hack", "translated", "version"];
-
-    /// <summary>
-    /// Release editing B4: <c>PATCH /api/games/{id}/roms/{romId}</c> body. Every property is optional (absent = unchanged);
-    /// <c>revision</c>, <c>disc</c> and <c>version</c> may be null to clear them. The checks that need the game run in
-    /// <see cref="LibraryEditor.EditReleaseAsync"/>.
-    /// </summary>
-    public static (ReleaseEdit Patch, Dictionary<string, string[]> Errors) ParseReleasePatch(JsonElement body)
-    {
-        var errors = new Dictionary<string, string[]>();
-        var patch = new ReleaseEdit();
-        if (body.ValueKind != JsonValueKind.Object)
-        {
-            errors[""] = ["A JSON object is required."];
-            return (patch, errors);
-        }
-        foreach (var property in body.EnumerateObject().Where(p => !ReleasePatchFields.Contains(p.Name)))
-            errors[property.Name] = ["Unknown field."];
-
-        if (body.TryGetProperty("kind", out var kind))
-        {
-            var value = kind.ValueKind == JsonValueKind.String ? kind.GetString() : null;
-            if (value is ReleaseEdit.KindRelease or ReleaseEdit.KindUpdate or ReleaseEdit.KindDlc)
-                patch = patch with { Kind = value };
-            else
-                errors["kind"] = ["Must be release, update or dlc."];
-        }
-        if (body.TryGetProperty("regions", out var regions))
-        {
-            var items = Strings(regions)?.Distinct(StringComparer.Ordinal).ToList();
-            if (items is null || items.Count > 10 || items.Any(i => i.Length == 0))
-                errors["regions"] = ["Must be known No-Intro regions."];
-            else
-                patch = patch with { Regions = items };
-        }
-        if (body.TryGetProperty("languages", out var languages))
-        {
-            var items = Strings(languages)?.Select(l => l.Trim()).Distinct(StringComparer.Ordinal).ToList();
-            if (items is null || items.Count > 20 || items.Any(l => l.Length is < 1 or > 16 || !l.All(c => char.IsAsciiLetter(c) || c == '-')))
-                errors["languages"] = ["Must be 1–16 letters or '-' each."];
-            else
-                patch = patch with { Languages = items };
-        }
-        if (body.TryGetProperty("revision", out var revision))
-        {
-            var value = revision.ValueKind == JsonValueKind.String ? revision.GetString()!.Trim() : null;
-            if (revision.ValueKind == JsonValueKind.Null || value?.Length == 0)
-                patch = patch with { SetRevision = true };
-            else if (value is { Length: <= 32 } && value.IndexOfAny(['(', ')']) < 0)
-                patch = patch with { SetRevision = true, Revision = value };
-            else
-                errors["revision"] = ["Must be at most 32 characters without parentheses."];
-        }
-        if (body.TryGetProperty("disc", out var disc))
-        {
-            if (disc.ValueKind == JsonValueKind.Null)
-                patch = patch with { SetDisc = true };
-            else if (disc.ValueKind == JsonValueKind.Number && disc.TryGetInt32(out var value) && value is >= 1 and <= 99)
-                patch = patch with { SetDisc = true, Disc = value };
-            else
-                errors["disc"] = ["Must be 1–99."];
-        }
-        patch = patch with { Hack = Bool(body, "hack", errors), Translated = Bool(body, "translated", errors) };
-        if (body.TryGetProperty("version", out var version))
-        {
-            if (version.ValueKind == JsonValueKind.Null)
-                patch = patch with { SetVersion = true };
-            else if (version.ValueKind == JsonValueKind.String && ReleaseVersion.Valid().IsMatch(version.GetString()!))
-                patch = patch with { SetVersion = true, Version = version.GetString() };
-            else
-                errors["version"] = ["Must be like 1.0.1."];
-        }
-        return (patch, errors);
-
-        static List<string>? Strings(JsonElement list) =>
-            list.ValueKind == JsonValueKind.Array && list.EnumerateArray().All(i => i.ValueKind == JsonValueKind.String)
-                ? [.. list.EnumerateArray().Select(i => i.GetString()!)]
-                : null;
-
-        static bool? Bool(JsonElement body, string field, Dictionary<string, string[]> errors)
-        {
-            if (!body.TryGetProperty(field, out var value))
-                return null;
-            if (value.ValueKind is JsonValueKind.True or JsonValueKind.False)
-                return value.GetBoolean();
-            errors[field] = ["Must be true or false."];
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// <c>PATCH /api/games/{id}/rating</c> body: <c>{rating?: 1–5 | null, favourite?: bool}</c>, at least one present;
-    /// an absent property is unchanged, <c>rating: null</c> clears it.
-    /// </summary>
-    public static (GamePatch Patch, Dictionary<string, string[]> Errors) ParseRating(JsonElement body)
-    {
-        var errors = new Dictionary<string, string[]>();
-        var patch = new GamePatch();
-        if (body.ValueKind != JsonValueKind.Object)
-        {
-            errors[""] = ["A JSON object is required."];
-            return (patch, errors);
-        }
-
-        var hasRating = body.TryGetProperty("rating", out var rating);
-        var hasFavourite = body.TryGetProperty("favourite", out var favourite);
-        if (!hasRating && !hasFavourite)
-            errors[""] = ["Give rating, favourite or both."];
-
-        if (hasRating)
-        {
-            if (rating.ValueKind == JsonValueKind.Null)
-                patch = patch with { SetRating = true };
-            else if (rating.ValueKind == JsonValueKind.Number && rating.TryGetInt32(out var value) && value is >= 1 and <= 5)
-                patch = patch with { SetRating = true, Rating = value };
-            else
-                errors["rating"] = ["Must be null or a whole number 1–5."];
-        }
-
-        if (hasFavourite)
-        {
-            if (favourite.ValueKind is JsonValueKind.True or JsonValueKind.False)
-                patch = patch with { Favourite = favourite.GetBoolean() };
-            else
-                errors["favourite"] = ["Must be true or false."];
-        }
-        return (patch, errors);
-    }
-
-    private static List<string>? ParseList(JsonElement body, string field, Dictionary<string, string[]> errors)
-    {
-        if (!body.TryGetProperty(field, out var list))
-            return null;
-        if (list.ValueKind != JsonValueKind.Array || list.EnumerateArray().Any(i => i.ValueKind != JsonValueKind.String))
-        {
-            errors[field] = ["Must be an array of strings."];
-            return null;
-        }
-        var items = list.EnumerateArray().Select(i => i.GetString()!.Trim()).Distinct(StringComparer.Ordinal).ToList();
-        if (items.Count > 20 || items.Any(i => i.Length is < 1 or > 255))
-            errors[field] = ["At most 20 items of 1–255 characters each."];
-        return items;
-    }
-
-    public static (GameQuery Query, Dictionary<string, string[]> Errors) ParseQuery(string? system, string? letter, string? region,
-        string? q, string? sort, string? dir, int? page, int? pageSize, ISystemRegistry systems, string? favourite = null,
-        string? collection = null, string? notInCollection = null)
-    {
-        var errors = Paging.Validate(page, pageSize);
-        if (system is not null && systems.ById(system) is null)
-            errors["system"] = ["Choose a registered system."];
-
-        if (letter is not null)
-        {
-            letter = letter.ToUpperInvariant();
-            if (letter is not ("#" or [>= 'A' and <= 'Z']))
-                errors["letter"] = ["Must be # or a letter A–Z."];
-        }
-
-        region = string.IsNullOrWhiteSpace(region) ? null : region.Trim();
-        q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
-        if (q?.Length > 255)
-            errors["q"] = ["Must be at most 255 characters."];
-        else if (new GameQuery { Search = q }.Words.Count > GameQuery.MaxWords)
-            errors["q"] = [$"At most {GameQuery.MaxWords} words."];
-
-        GameSort gameSort = GameSort.Title;
-        switch (sort)
-        {
-            case null or "title": break;
-            case "year": gameSort = GameSort.Year; break;
-            case "added": gameSort = GameSort.Added; break;
-            case "rating": gameSort = GameSort.Rating; break;
-            case "relevance": gameSort = GameSort.Relevance; break;
-            default: errors["sort"] = ["Must be title, year, added, rating or relevance."]; break;
-        }
-        if (dir is not (null or "asc" or "desc"))
-            errors["dir"] = ["Must be asc or desc."];
-
-        bool? onlyFavourite = null;
-        switch (favourite)
-        {
-            case null: break;
-            case "true": onlyFavourite = true; break;
-            case "false": onlyFavourite = false; break;
-            default: errors["favourite"] = ["Must be true or false."]; break;
-        }
-        var collectionId = ParseCollection(collection, "collection", errors);
-        var notInCollectionId = ParseCollection(notInCollection, "notInCollection", errors);
-        var query = new GameQuery
-        {
-            System = system,
-            Letter = letter,
-            Region = region,
-            Search = q,
-            Favourite = onlyFavourite,
-            CollectionId = collectionId,
-            NotInCollectionId = notInCollectionId,
-            Sort = gameSort,
-            // §23: asc for title/year, desc for added (to the library, or to the collection: B15) and rating; relevance ignores it.
-            Descending = gameSort != GameSort.Relevance && (dir is null ? gameSort is GameSort.Added or GameSort.Rating : dir == "desc"),
-            Page = page ?? 1,
-            PageSize = pageSize ?? Page<GameListItem>.DefaultSize,
-        };
-        return (query, errors);
-    }
-
-    private static Guid? ParseCollection(string? value, string field, Dictionary<string, string[]> errors)
-    {
-        if (value is null)
-            return null;
-        if (Guid.TryParse(value, out var id))
-            return id;
-        errors[field] = ["Must be a collection id."];
-        return null;
-    }
-
-    private const string CoverCacheControl = "private, max-age=31536000, immutable";
-
-    internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
-
-    /// <summary>C4: the cached WebP of the game's cover.</summary>
-    internal static string CoverUrl(Guid gameId, string coverSha1) => $"/api/games/{gameId}/cover/{coverSha1}";
 
     /// <summary>One <c>/api/games</c> row (spec §23), also used by discovery group pages.</summary>
     /// <summary>S7: a Site user's name (their saves are counted apart); null for an Admin, who sees every save.</summary>
@@ -1021,145 +445,4 @@ public static class LibraryEndpoints
     /// </summary>
     public static bool AzaharRomLoads(string fileName, bool encrypted) =>
         !encrypted && Path.GetExtension(fileName).ToLowerInvariant() is ".3ds" or ".cci";
-
-    internal static object ToListItemDto(GameListItem game, ISystemRegistry systems)
-    {
-        // C2: quick play needs a browser core and a primary release stored in the zip; Play B1 / PSP B1:
-        // PlayStation and PSP play their external primary disc through play-disc (a Saturn .nrg too, N5).
-        var core = systems.ById(game.SystemId)?.BrowserCore;
-        var playable = core is not null && game.PrimaryRomId is not null
-            && (!game.PrimaryIsExternal || ExternalBrowserCores.Contains(core))
-            // TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, and (PC-FX X6) Beetle PC-FX can't open one, so only a cue set's .bin plays.
-            && !(core is "mednafen_pce" or "mednafen_pcfx" && game.PrimaryIsExternal && !game.PrimaryHasFiles
-                 && game.PrimaryRomFileName?.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) == true)
-            // Amiga: PUAE's WebAssembly build has no capsimg, so an .ipf never plays.
-            && !(core == "puae" && game.PrimaryRomFileName?.EndsWith(".ipf", StringComparison.OrdinalIgnoreCase) == true)
-            && !(core == "virtualjaguar" && game.PrimaryRomFileName is { } name && game.PrimarySizeBytes is { } size
-                 && !JaguarRomLoads(name, size))
-            && !(core == "azahar" && game.PrimaryRomFileName is { } file && !AzaharRomLoads(file, game.PrimaryEncrypted));
-        return new
-        {
-            id = game.Id,
-            system = game.SystemId,
-            systemName = systems.ById(game.SystemId)?.DisplayName ?? game.SystemId,
-            systemShortName = systems.ById(game.SystemId)?.ShortName ?? game.SystemId,
-            displayTitle = game.DisplayTitle,
-            releaseYear = game.ReleaseYear,
-            regions = game.Regions,
-            romCount = game.RomCount,
-            primarySizeBytes = game.PrimarySizeBytes,
-            boxArtUrl = game.BoxArtSha1 is { } sha1 ? CoverUrl(game.Id, sha1) : null,
-            rating = game.Rating,
-            favourite = game.Favourite,
-            matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,
-            updateCount = game.UpdateCount,
-            dlcCount = game.DlcCount,
-            saveCount = game.SaveCount,
-            ownSaveCount = game.OwnSaveCount,
-            playRomId = playable ? game.PrimaryRomId : null,
-            playRomFileName = playable ? game.PrimaryRomFileName : null,
-            // Sega CD B6: quick play adds disc=1 for an external primary, since a shared core can't tell on its own.
-            playDisc = playable && game.PrimaryIsExternal && PlayDiscCores.Contains(core!),
-            browserCore = core,
-            igdbId = game.IgdbId,
-        };
-    }
-
-    private static object ToDetail(
-        GameRow game,
-        string systemName,
-        string? browserCore,
-        bool fileSets,
-        IReadOnlyList<RomRow> roms,
-        ILookup<long, RomFileRow> files,
-        IReadOnlyList<ImageRow> images,
-        IReadOnlySet<string> notes,
-        IReadOnlyDictionary<long, DiscSet> discSets,
-        bool igdbConfigured,
-        GameActionsRow? actions) => new
-    {
-        id = game.Id,
-        system = game.SystemId,
-        systemName,
-        browserCore,
-        fileSets,
-        title = game.Title,
-        displayTitle = game.DisplayTitle,
-        releaseYear = game.ReleaseYear,
-        developers = game.Developers,
-        publishers = game.Publishers,
-        genres = game.Genres,
-        description = game.Description,
-        hasDefaultBoxArt = game.HasDefaultBoxArt,
-        rating = game.Rating,
-        favourite = game.Favourite,
-        saveCount = game.SaveCount,
-        igdbId = game.IgdbId,
-        igdbConfigured,
-        // R4: null unless a ratings refresh stored a score.
-        igdbRating = actions?.IgdbRating is { } score
-            ? new
-            {
-                score,
-                votes = actions.IgdbRatingCount ?? 0,
-                syncedAt = actions.LastIgdbSyncAt is { } synced ? DateTime.SpecifyKind(synced, DateTimeKind.Utc) : (DateTime?)null,
-            }
-            : null,
-        metadata = new { createdAt = game.CreatedAt, updatedAt = game.UpdatedAt },
-        roms = roms.OrderByDescending(r => r.IsPrimary).ThenBy(r => r.FileName, StringComparer.Ordinal).Select(r => new
-        {
-            id = r.Id,
-            fileName = r.FileName,
-            externalFileName = r.ExternalFileName,
-            originalFileName = r.OriginalFileName,
-            baseTitle = r.BaseTitle,
-            regions = r.Regions,
-            languages = r.Languages,
-            revision = r.Revision,
-            version = r.Version,
-            flags = r.Flags,
-            isPrimary = r.IsPrimary,
-            identificationMethod = r.IdMethod,
-            datName = r.DatName,
-            datVersion = r.DatVersion,
-            datGameName = r.DatGameName,
-            header = r.Header is null ? null : JsonNode.Parse(r.Header),
-            sizeBytes = r.SizeBytes,
-            crc32 = r.Crc32,
-            md5 = r.Md5,
-            sha1 = r.Sha1,
-            dateAdded = r.DateAdded,
-            dateModified = r.DateModified,
-            downloadUrl = $"/api/games/{game.Id}/roms/{r.Id}/download",
-            // B20: a set's other files in order (null without), and the release's size with them.
-            files = files.Contains(r.Id)
-                ? files[r.Id].OrderBy(f => f.Ordinal).Select(f => new
-                {
-                    id = f.Id,
-                    fileName = f.FileName,
-                    sizeBytes = f.SizeBytes,
-                    crc32 = f.Crc32,
-                    md5 = f.Md5,
-                    sha1 = f.Sha1,
-                    downloadUrl = $"/api/games/{game.Id}/roms/{r.Id}/files/{f.Id}/download",
-                }).ToList()
-                : null,
-            totalSizeBytes = r.SizeBytes + files[r.Id].Sum(f => f.SizeBytes),
-            hasNote = notes.Contains(LibraryZip.NoteEntry(r.FileName)),
-            discSet = discSets.GetValueOrDefault(r.Id) is { } set ? new { name = set.Name, romIds = set.Discs.Select(d => d.Id).ToList() } : null,
-        }),
-        images = images.Select(i => new
-        {
-            id = i.Id,
-            type = i.Type,
-            fileName = i.FileName,
-            source = i.Source,
-            isDefault = i.IsDefault,
-            isCover = i.IsCover,
-            sizeBytes = i.SizeBytes,
-            width = i.Width,
-            height = i.Height,
-            url = ImageUrl(game.Id, i.Id),
-        }),
-    };
 }

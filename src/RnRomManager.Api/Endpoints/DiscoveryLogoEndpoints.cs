@@ -92,7 +92,7 @@ public static partial class DiscoveryLogoEndpoints
                 return invalid;
             if (await NameAsync(parsed, key!, discovery, systems, ctx.RequestAborted) is not { } name)
                 return Problems.NotFound(ctx);
-            if (LibraryEndpoints.ParseImageUrl(request?.Url) is not { } url)
+            if (LibraryImageEndpoints.ParseImageUrl(request?.Url) is not { } url)
                 return Problems.Validation(ctx, "url", "Enter an http or https image URL.");
             var download = await downloader.DownloadAsync(url, ctx.RequestAborted);
             if (download.Bytes is not { } bytes)

@@ -8,7 +8,7 @@ namespace RnRomManager.Api.Tests;
 public class GamePatchParsingTests
 {
     private static (GamePatch Patch, Dictionary<string, string[]> Errors) Parse(string json) =>
-        LibraryEndpoints.ParsePatch(JsonDocument.Parse(json).RootElement);
+        LibraryRequestParsing.ParsePatch(JsonDocument.Parse(json).RootElement);
 
     [Test]
     public void EmptyObject_ChangesNothing()

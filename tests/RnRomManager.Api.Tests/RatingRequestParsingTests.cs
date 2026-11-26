@@ -8,7 +8,7 @@ namespace RnRomManager.Api.Tests;
 public class RatingRequestParsingTests
 {
     private static (GamePatch Patch, Dictionary<string, string[]> Errors) Parse(string json) =>
-        LibraryEndpoints.ParseRating(JsonDocument.Parse(json).RootElement);
+        LibraryRequestParsing.ParseRating(JsonDocument.Parse(json).RootElement);
 
     [TestCase("""{"rating":4}""", true, 4, null)]
     [TestCase("""{"rating":null}""", true, null, null)]

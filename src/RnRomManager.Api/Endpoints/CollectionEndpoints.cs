@@ -65,28 +65,28 @@ public static class CollectionEndpoints
         // B8: same form handling and limits as the game image upload.
         collections.MapPost("/{id:guid}/cover", async (Guid id, HttpContext ctx, CollectionService service) =>
         {
-            var (form, problem) = await LibraryEndpoints.ReadImageFormAsync(ctx);
+            var (form, problem) = await LibraryImageEndpoints.ReadImageFormAsync(ctx);
             if (problem is not null)
                 return problem;
             var errors = new Dictionary<string, string[]>();
-            var bytes = await LibraryEndpoints.ReadImageFileAsync(form!, errors, ctx.RequestAborted);
+            var bytes = await LibraryImageEndpoints.ReadImageFileAsync(form!, errors, ctx.RequestAborted);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             return await DetailResultAsync(ctx, await service.SetCoverAsync(id, EndpointUser.RequiredId(ctx), bytes!, ctx.RequestAborted), service, id);
-        }).WithMetadata(new RequestSizeLimitAttribute(LibraryEndpoints.UploadRequestLimit));
+        }).WithMetadata(new RequestSizeLimitAttribute(LibraryImageEndpoints.UploadRequestLimit));
 
         // B9: open to plain users on purpose; the downloader only reaches public addresses.
         collections.MapPost("/{id:guid}/cover/from-url", async (Guid id, CoverUrlRequest? request, HttpContext ctx,
             ImageUrlDownloader downloader, CollectionService service) =>
         {
-            if (LibraryEndpoints.ParseImageUrl(request?.Url) is not { } url)
+            if (LibraryImageEndpoints.ParseImageUrl(request?.Url) is not { } url)
                 return Problems.Validation(ctx, "url", "Enter an http or https image URL.");
             if (await service.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is null)
                 return Problems.NotFound(ctx);
             var download = await downloader.DownloadAsync(url, ctx.RequestAborted);
             if (download.Bytes is not { } bytes)
                 return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
-            if (LibraryEndpoints.DownloadedImageError(bytes) is { } bytesError)
+            if (LibraryImageEndpoints.DownloadedImageError(bytes) is { } bytesError)
                 return Problems.Validation(ctx, "url", bytesError);
             return await DetailResultAsync(ctx, await service.SetCoverAsync(id, EndpointUser.RequiredId(ctx), bytes, ctx.RequestAborted), service, id);
         });

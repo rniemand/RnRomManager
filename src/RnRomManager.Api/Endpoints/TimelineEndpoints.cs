@@ -58,7 +58,7 @@ public static class TimelineEndpoints
                 PageSize = pageSize ?? DefaultPageSize,
             };
             var result = await LibraryEndpoints.ForViewerAsync(await games.ListAsync(query, ctx.RequestAborted), ctx, games);
-            return Results.Ok(Paging.ToDto(result, game => LibraryEndpoints.ToListItemDto(game, systems)));
+            return Results.Ok(Paging.ToDto(result, game => LibraryDtos.ToListItemDto(game, systems)));
         });
 
         // T7: any signed-in user; found pages and not-found results are cached here, failures aren't.
