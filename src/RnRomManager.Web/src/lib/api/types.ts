@@ -296,6 +296,8 @@ export interface GameDetail {
 	igdbId: number | null;
 	/** P3: whether the IGDB keys are set (Lookup Info and the banner need them). */
 	igdbConfigured: boolean;
+	/** R4: the IGDB rating from the last refresh; null until one stored a score. */
+	igdbRating?: { score: number; votes: number; syncedAt: string } | null;
 	metadata: { createdAt: string; updatedAt: string };
 	roms: RomDetail[];
 	images: ImageInfo[];

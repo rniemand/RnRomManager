@@ -47,7 +47,7 @@
 	} from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
-	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
+	import { formatCount, formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { renderMarkdown } from '#lib/markdown.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -575,6 +575,19 @@
 					readonly={!auth.isAdmin}
 					onsaved={setGame}
 				/>
+				{#if game.igdbRating}
+					{@const votes = game.igdbRating.votes}
+					<!-- G1: the IGDB rating (rounded half away from zero), shown to every user; focusable for its tooltip. -->
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+					<span
+						class="badge text-bg-light border"
+						tabindex="0"
+						use:tooltip={`IGDB rating (users and critics), refreshed ${formatDateTime(game.igdbRating.syncedAt)}`}
+						>IGDB {Math.sign(game.igdbRating.score) *
+							Math.round(Math.abs(game.igdbRating.score))}/100 · {formatCount(votes)}
+						{votes === 1 ? 'vote' : 'votes'}</span
+					>
+				{/if}
 			</div>
 			{#if memberOf.length}
 				<ul class="list-inline mb-2" aria-label="In collections">
