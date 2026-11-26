@@ -1,7 +1,7 @@
-using System.Buffers.Binary;
 using System.Text;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Systems.Commodore.Tests;
 
@@ -54,9 +54,6 @@ public class Plus4HandlerTests
     [Test]
     public void DefaultBoxArt_IsA512x512Png()
     {
-        var png = Handler.DefaultBoxArtPng.Span;
-
-        Assert.That(png[..8].ToArray(), Is.EqualTo(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }), "PNG signature");
-        Assert.That((BinaryPrimitives.ReadInt32BigEndian(png[16..]), BinaryPrimitives.ReadInt32BigEndian(png[20..])), Is.EqualTo((512, 512)));
+        HandlerAsserts.AssertBoxArtPng(Handler, 512);
     }
 }

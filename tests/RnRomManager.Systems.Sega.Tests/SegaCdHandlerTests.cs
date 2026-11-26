@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -43,7 +42,7 @@ public class SegaCdHandlerTests
         new Random(size).NextBytes(bytes);
         "SEGADISCSYSTEM  "u8.CopyTo(bytes);
 
-        Assert.That(Handler.ReadHeader(bytes), Is.Null);
+        HandlerAsserts.AssertNoHeader(Handler, bytes);
     }
 
     [Test]
@@ -51,7 +50,7 @@ public class SegaCdHandlerTests
     {
         var disc = new SyntheticDiscBuilder { Seed = 11 }.Build();
 
-        Assert.That(Handler.NormalizeForHashing(disc).ToArray(), Is.EqualTo(disc));
+        HandlerAsserts.AssertNormalizeIsIdentity(Handler, disc);
     }
 
     [Test]
@@ -59,8 +58,7 @@ public class SegaCdHandlerTests
     {
         var png = Handler.DefaultBoxArtPng.Span;
 
-        Assert.That(png[..8].ToArray(), Is.EqualTo(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }), "PNG signature");
-        Assert.That((BinaryPrimitives.ReadInt32BigEndian(png[16..]), BinaryPrimitives.ReadInt32BigEndian(png[20..])), Is.EqualTo((512, 512)));
+        HandlerAsserts.AssertBoxArtPng(Handler, 512);
         foreach (var other in new ISystemHandler[] { new GameGearHandler(), new MasterSystemHandler(), new MegaDriveHandler(), new Sega32xHandler(), new SaturnHandler() })
             Assert.That(png.ToArray(), Is.Not.EqualTo(other.DefaultBoxArtPng.ToArray()), other.Id);
     }

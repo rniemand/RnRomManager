@@ -1,6 +1,6 @@
-using System.Buffers.Binary;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Systems.Sony.Tests;
 
@@ -29,15 +29,14 @@ public class PlayStationHandlerTests
     }
 
     [Test]
-    public void ReadHeader_IsNull() => Assert.That(Handler.ReadHeader(new byte[4096]), Is.Null);
+    public void ReadHeader_IsNull() => HandlerAsserts.AssertNoHeader(Handler, new byte[4096]);
 
     [Test]
     public void DefaultBoxArt_IsA512x512Png_DifferentFromThePspOne()
     {
         var png = Handler.DefaultBoxArtPng.Span;
 
-        Assert.That(png[..8].ToArray(), Is.EqualTo(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }), "PNG signature");
-        Assert.That((BinaryPrimitives.ReadInt32BigEndian(png[16..]), BinaryPrimitives.ReadInt32BigEndian(png[20..])), Is.EqualTo((512, 512)));
+        HandlerAsserts.AssertBoxArtPng(Handler, 512);
         foreach (var other in new ISystemHandler[] { new PlayStationPortableHandler() })
             Assert.That(png.ToArray(), Is.Not.EqualTo(other.DefaultBoxArtPng.ToArray()), other.Id);
     }

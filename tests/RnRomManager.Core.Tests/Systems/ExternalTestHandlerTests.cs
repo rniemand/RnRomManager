@@ -22,7 +22,7 @@ public class ExternalTestHandlerTests
         Assert.That(handler.RomExtensions, Is.EqualTo(new[] { ".nsp", ".xci" }));
         Assert.That((handler.MinRomSizeBytes, handler.MaxRomSizeBytes), Is.EqualTo((1L, 64L * 1024 * 1024)));
         Assert.That(handler.EmbedRomsInZip, Is.False);
-        Assert.That(handler.ReadHeader(new byte[16]), Is.Null);
+        HandlerAsserts.AssertNoHeader(handler, new byte[16]);
     }
 
     [Test]

@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 
@@ -55,11 +54,7 @@ public class GameBoyHandlerTests
     [TestCaseSource(nameof(AllHandlers))]
     public void DefaultBoxArt_IsA512x512Png(ISystemHandler handler)
     {
-        var png = handler.DefaultBoxArtPng.Span;
-
-        Assert.That(png[..8].ToArray(), Is.EqualTo(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }), "PNG signature");
-        Assert.That(System.Text.Encoding.ASCII.GetString(png[12..16]), Is.EqualTo("IHDR"));
-        Assert.That((BinaryPrimitives.ReadInt32BigEndian(png[16..]), BinaryPrimitives.ReadInt32BigEndian(png[20..])), Is.EqualTo((512, 512)));
+        HandlerAsserts.AssertBoxArtPng(handler, 512);
     }
 
     [Test]
@@ -74,7 +69,7 @@ public class GameBoyHandlerTests
         var dualMode = new SyntheticRomBuilder { CgbFlag = 0x80 }.Build();
 
         Assert.That(handler.ReadHeader(dualMode)!.ClassifiedSystemId, Is.EqualTo("gbc"));
-        Assert.That(handler.ReadHeader(new byte[0x14F]), Is.Null);
+        HandlerAsserts.AssertNoHeader(handler, new byte[0x14F]);
     }
 
     [Test]
@@ -83,7 +78,7 @@ public class GameBoyHandlerTests
         ISystemHandler gba = new GameBoyAdvanceHandler();
 
         Assert.That(gba.ReadHeader(new SyntheticGbaRomBuilder { Title = "STARCOURIER" }.Build())!.ClassifiedSystemId, Is.EqualTo("gba"));
-        Assert.That(gba.ReadHeader(new byte[0xBF]), Is.Null);
+        HandlerAsserts.AssertNoHeader(gba, new byte[0xBF]);
     }
 
     [TestCaseSource(nameof(AllHandlers))]

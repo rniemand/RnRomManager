@@ -1,6 +1,6 @@
-using System.Buffers.Binary;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Systems.Atari.Tests;
 
@@ -29,14 +29,12 @@ public class Atari7800HandlerTests
         "ATARI7800"u8.CopyTo(rom.AsSpan(1));
 
         Assert.That(Handler.ReadHeader(rom)?.ClassifiedSystemId, Is.EqualTo("a7800"));
-        Assert.That(Handler.NormalizeForHashing(rom).ToArray(), Is.EqualTo(rom));
+        HandlerAsserts.AssertNormalizeIsIdentity(Handler, rom);
     }
 
     [Test]
     public void BoxArt_IsA512By512Png()
     {
-        var png = Handler.DefaultBoxArtPng.Span;
-        Assert.That(png[..8].ToArray(), Is.EqualTo(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }));
-        Assert.That((BinaryPrimitives.ReadInt32BigEndian(png[16..]), BinaryPrimitives.ReadInt32BigEndian(png[20..])), Is.EqualTo((512, 512)));
+        HandlerAsserts.AssertBoxArtPng(Handler, 512);
     }
 }

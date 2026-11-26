@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/RnRomManager.Systems.Sony/RnRomManager.Systems.Sony.csproj" />
+    <ProjectReference Include="../RnRomManager.TestData/RnRomManager.TestData.csproj" />
   </ItemGroup>
 
 </Project>
