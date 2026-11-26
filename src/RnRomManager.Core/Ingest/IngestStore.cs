@@ -51,7 +51,7 @@ internal sealed class IngestStore(
         if (bytes is null)
         {
             var root = file.ArchiveEntry is null ? paths.Value.Ingest : paths.Value.Cache;
-            var (outcome, hashed, details) = await pipeline.HashCheckedAsync(file, root, file.FullPath, snapshot!, system.MaxRomSizeBytes, recheckPath: true,
+            var (outcome, hashed, details) = await pipeline.ExternalIngest.HashCheckedAsync(file, root, file.FullPath, snapshot!, system.MaxRomSizeBytes, recheckPath: true,
                 cancellationToken, progress).ConfigureAwait(false);
             if (outcome == HashOutcome.Failed)
                 return IngestItemResult.Error(IngestErrors.IoError, details, system.Id, rom.Metadata.Sha1);
@@ -67,7 +67,7 @@ internal sealed class IngestStore(
         var owners = targetGameId is { } target ? new[] { target } :
             await roms.ListGameIdsByBaseTitleAsync(system.Id, rom.BaseTitle, cancellationToken).ConfigureAwait(false);
         if (owners.Count > 1)
-            return IngestItemResult.Error("AmbiguousGroup", "Several games own pipeline base title; use Attach.");
+            return IngestItemResult.Error("AmbiguousGroup", "Several games own this base title; use Attach.");
         var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: rom.Metadata.Sha1);
         var stored = owners.Count == 0
             ? await NewGameAsync(file, system, rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), actor, reviewAction, cancellationToken, afterMirror, source).ConfigureAwait(false)
@@ -205,11 +205,11 @@ internal sealed class IngestStore(
             }
             else
             {
-                // E3 logical name against the game's releases; E2 file name against the folder, every claim on it and pipeline ZIP's own pointers.
+                // E3 logical name against the game's releases; E2 file name against the folder, every claim on it and this ZIP's own pointers.
                 // B10: a FileSets name is never suffixed; a clash with the game's own releases is NameTaken.
                 var logicalNames = new ExternalNameReservations(current.Roms.Select(r => r.FileName));
                 if (system.FileSets && logicalNames.IsTaken(rom.FileName))
-                    return IngestItemResult.Error(IngestErrors.NameTaken, $"'{rom.FileName}' is already a release of pipeline game", system.Id, result.Sha1);
+                    return IngestItemResult.Error(IngestErrors.NameTaken, $"'{rom.FileName}' is already a release of this game", system.Id, result.Sha1);
                 if (!system.FileSets)
                     rom = rom with { FileName = ExternalRomName.AllocateLogicalName(rom.FileName, logicalNames) };
                 var library = paths.Value.Roms;
@@ -301,7 +301,7 @@ internal sealed class IngestStore(
 
     /// <summary>
     /// Step 3: the SHA1 is already in the library. Its entry has an open <c>HashMismatch</c>/<c>EntryMissing</c>/
-    /// <c>EntrySizeMismatch</c> issue → rewrite it from pipeline file and resolve the issue (<c>Repaired</c>, D30);
+    /// <c>EntrySizeMismatch</c> issue → rewrite it from this file and resolve the issue (<c>Repaired</c>, D30);
     /// otherwise <c>Duplicate</c> → <c>_duplicates/</c>.
     /// </summary>
     /// <param name="bytes">The incoming embedded ROM; null for an external input.</param>
@@ -330,7 +330,7 @@ internal sealed class IngestStore(
             }
             else if (known.ExternalFileName is { } pointer)
             {
-                // The table's collation matches accent-distinct names too: only pipeline exact file of pipeline game counts.
+                // The table's collation matches accent-distinct names too: only this exact file of this game counts.
                 open = [.. (await issues.ListOpenExternalAsync(game.ZipPath, pointer, IntegrityIssueType.SelfRepairable, cancellationToken).ConfigureAwait(false))
                     .Where(i => string.Equals(i.ZipPath, game.ZipPath, StringComparison.OrdinalIgnoreCase)
                         && string.Equals(i.EntryName, pointer, StringComparison.OrdinalIgnoreCase)

@@ -132,9 +132,9 @@ internal sealed class IngestPackager(
             MirrorEntry entry;
             if (published is not null)
             {
-                // W1: stamped from the ZIP pipeline write published, and only while the path still names it.
+                // W1: stamped from the ZIP this write published, and only while the path still names it.
                 if (ExternalRomPath.ClassifyFile(library, target).Snapshot != published)
-                    throw new IOException($"{zipPath} is no longer the ZIP pipeline write published");
+                    throw new IOException($"{zipPath} is no longer the ZIP this write published");
                 entry = new MirrorEntry(game, zipPath, published.Length, published.LastWriteTimeUtc);
             }
             else
