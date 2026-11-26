@@ -205,6 +205,71 @@ public partial class LibraryMirrorTests
         Assert.That(await _roms.ListByGameAsync(game.GameId, CancellationToken.None), Is.Empty);
     }
 
+    // --- game_actions (A4) ---
+
+    private async Task<(DateTime? Pulled, double? Rating)?> ActionsAsync(Guid gameId)
+    {
+        await using var connection = _factory.Create();
+        return await Dapper.SqlMapper.QuerySingleOrDefaultAsync<(DateTime?, double?)?>(connection,
+            "SELECT cover_image_pulled_at, igdb_rating FROM game_actions WHERE game_id = @gameId", new { gameId });
+    }
+
+    private async Task SeedRatingAsync(Guid gameId)
+    {
+        await using var connection = _factory.Create();
+        await Dapper.SqlMapper.ExecuteAsync(connection,
+            "INSERT INTO game_actions (game_id, igdb_rating) VALUES (@gameId, 81.5) ON DUPLICATE KEY UPDATE igdb_rating = 81.5", new { gameId });
+    }
+
+    private static InfoJsonGame Pulled(InfoJsonGame game, string? time) =>
+        game with { Actions = new InfoJsonActions { CoverImagePulled = time } };
+
+    [Test]
+    public async Task Replace_UpsertsCoverPulled_AndLeavesNoRowWithoutOne()
+    {
+        var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
+        await _mirror.ReplaceAsync(Entry(game), CancellationToken.None);
+        Assert.That(await ActionsAsync(game.GameId), Is.Null, "no value, no row");
+
+        await _mirror.ReplaceAsync(Entry(Pulled(game, "2026-11-26T10:15:30.0000000+00:00")), CancellationToken.None);
+        Assert.That((await ActionsAsync(game.GameId))!.Value.Pulled, Is.EqualTo(new DateTime(2026, 11, 26, 10, 15, 30)));
+
+        await _mirror.ReplaceAsync(Entry(Pulled(game, "2026-11-26T12:15:30+02:00")), CancellationToken.None);
+        Assert.That((await ActionsAsync(game.GameId))!.Value.Pulled, Is.EqualTo(new DateTime(2026, 11, 26, 10, 15, 30)), "stored as UTC");
+
+        await _mirror.ReplaceAsync(Entry(game), CancellationToken.None);
+        Assert.That(await ActionsAsync(game.GameId), Is.EqualTo(((DateTime?)null, (double?)null)), "cleared, row kept");
+    }
+
+    [Test]
+    public async Task Replace_KeepsTheIgdbColumns()
+    {
+        var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
+        await _mirror.ReplaceAsync(Entry(game), CancellationToken.None);
+        await SeedRatingAsync(game.GameId);
+
+        await _mirror.ReplaceAsync(Entry(Pulled(game, "2026-11-26T10:15:30.0000000+00:00")), CancellationToken.None);
+        await _mirror.ReplaceAsync(Entry(game), CancellationToken.None);
+
+        Assert.That(await ActionsAsync(game.GameId), Is.EqualTo(((DateTime?)null, (double?)81.5)));
+    }
+
+    [Test]
+    public async Task Delete_RemovesTheActionsRow_ButAReinsertedIdKeepsIt()
+    {
+        var gone = Game("Tetris", Rom("a.gb", RomBytes(1)));
+        var kept = Game("Other", Rom("b.gb", RomBytes(2)));
+        await _mirror.ReplaceAsync(Entry(gone), CancellationToken.None);
+        await _mirror.ReplaceAsync(Entry(kept, "gb/O/Other.zip"), CancellationToken.None);
+        await SeedRatingAsync(gone.GameId);
+        await SeedRatingAsync(kept.GameId);
+
+        await _mirror.ApplyAsync([Entry(kept, "gb/O/Other.zip")], [gone.GameId, kept.GameId], CancellationToken.None);
+
+        Assert.That(await ActionsAsync(gone.GameId), Is.Null);
+        Assert.That((await ActionsAsync(kept.GameId))!.Value.Rating, Is.EqualTo(81.5));
+    }
+
     // --- sync ---
 
     [Test]

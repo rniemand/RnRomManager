@@ -863,6 +863,54 @@ public class InfoJsonTests
     }
 
     [Test]
+    public void Actions_RoundTripByteForByte_AfterImages()
+    {
+        var bytes = InfoJsonSerializer.Serialize(Game() with
+        {
+            Actions = new InfoJsonActions { CoverImagePulled = InfoJsonActions.Format(new DateTimeOffset(2026, 11, 26, 10, 15, 30, 123, TimeSpan.FromHours(2))) },
+        });
+        var text = Encoding.UTF8.GetString(bytes);
+
+        var result = _reader.Read(bytes);
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Game!.Actions!.CoverImagePulled, Is.EqualTo("2026-11-26T08:15:30.0000000+00:00"));
+        Assert.That(InfoJsonSerializer.Serialize(result.Game), Is.EqualTo(bytes));
+        Assert.That(text.IndexOf("\n  \"actions\"", StringComparison.Ordinal), Is.GreaterThan(text.IndexOf("\n  \"images\"", StringComparison.Ordinal))
+            .And.LessThan(text.IndexOf("\n  \"metadata\"", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public void Actions_NullOrEmpty_AreLeftOut()
+    {
+        Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(Game())), Does.Not.Contain("actions"));
+        Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(Game() with { Actions = new InfoJsonActions() })),
+            Does.Not.Contain("actions"));
+    }
+
+    [Test]
+    public void Actions_NullOrUnknownKeys_AreValid()
+    {
+        Assert.That(ReadEdited(d => d["actions"] = null).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        var result = ReadEdited(d => d["actions"] = new JsonObject { ["future"] = 1, ["coverImagePulled"] = null });
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(result.Game!)), Does.Not.Contain("actions"));
+    }
+
+    [TestCase("yesterday")]
+    [TestCase("")]
+    public void Actions_BadTime_IsInvalid(string value) =>
+        Assert.That(RuleOf(ReadEdited(d => d["actions"] = new JsonObject { ["coverImagePulled"] = value })),
+            Is.EqualTo("actions.coverImagePulled must be an ISO-8601 time"));
+
+    [Test]
+    public void Actions_NotAnObject_IsInvalid()
+    {
+        Assert.That(RuleOf(ReadEdited(d => d["actions"] = "x")), Is.EqualTo("actions must be an object"));
+        Assert.That(RuleOf(ReadEdited(d => d["actions"] = new JsonArray())), Is.EqualTo("actions must be an object"));
+    }
+
+    [Test]
     public void SerialMethod_RoundTrips()
     {
         var rom = Rom("Tetris (World) (Rev 1).gb") with

@@ -39,6 +39,11 @@ public sealed record InfoJsonGame
 
     public required IReadOnlyList<InfoJsonRom> Roms { get; init; }
     public required IReadOnlyList<InfoJsonImage> Images { get; init; }
+
+    /// <summary>A1: what the Admin actions did to the game; optional, left out when null (no schema bump).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public InfoJsonActions? Actions { get; init; }
+
     public required InfoJsonGameMetadata Metadata { get; init; }
 
     /// <summary>B13: the game's external file names: each main <c>externalFileName</c>, then each <c>files</c> entry's.</summary>

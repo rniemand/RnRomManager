@@ -12,7 +12,7 @@ public class SchemaMigrationTests
 {
     private static readonly string[] Tables =
     [
-        "app_settings", "audit_events", "bundle_queues", "collection_games", "collections", "data_protection_keys", "duplicate_dismissals", "game_user_save_counts", "games", "images", "ingest_review_items", "integrity_issues",
+        "app_settings", "audit_events", "bundle_queues", "collection_games", "collections", "data_protection_keys", "duplicate_dismissals", "game_actions", "game_user_save_counts", "games", "images", "ingest_review_items", "integrity_issues",
         "discovery_logos", "job_items", "jobs", "rom_files", "roms", "user_roles", "users",
     ];
 
@@ -44,6 +44,7 @@ public class SchemaMigrationTests
             "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
             "0019_release_versions", "0020_rom_files", "0021_publisher_logos", "0022_bundle_queues", "0023_game_save_count",
             "0024_fold_rom_manager", "0025_game_user_save_counts", "0026_discovery_logos", "0027_game_igdb_id", "0028_duplicate_dismissal_match",
+            "0029_game_actions",
         }));
     }
 
@@ -52,7 +53,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 28L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 29L }));
     }
 
     [Test]
@@ -85,6 +86,7 @@ public class SchemaMigrationTests
     [TestCase("collections", "id char(36), user_id int(11), name varchar(100), notes text NULL, cover_format varchar(8) NULL, cover_updated_at datetime(6) NULL, created_at datetime(6), updated_at datetime(6)")]
     [TestCase("collection_games", "collection_id char(36), game_id char(36), added_at datetime(6)")]
     [TestCase("game_user_save_counts", "game_id char(36), username varchar(64), save_count int(11)")]
+    [TestCase("game_actions", "game_id char(36), cover_image_pulled_at datetime(6) NULL, last_igdb_sync_at datetime(6) NULL, igdb_rating double NULL, igdb_rating_count int(11) NULL")]
     [TestCase("bundle_queues", "id char(36), user_id int(11), name varchar(100), revision int(11), item_count int(11), entries mediumtext, created_at datetime(6), updated_at datetime(6)")]
     public async Task Columns_MatchSpec(string table, string expected)
     {
@@ -116,6 +118,7 @@ public class SchemaMigrationTests
             "collections ux_collections_user_name U user_id,name",
             "data_protection_keys PRIMARY U id",
             "duplicate_dismissals PRIMARY U match_kind,system_id,base_title,games_key",
+            "game_actions PRIMARY U game_id",
             "game_user_save_counts PRIMARY U game_id,username",
             "games ix_games_created_at - created_at",
             "games ix_games_system_bucket_title - system_id,bucket,title",

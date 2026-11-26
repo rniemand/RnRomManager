@@ -725,6 +725,23 @@ public sealed class LibraryMirror : ILibraryMirror
                     }), transaction, cancellationToken: cancellationToken));
         }
 
+        // A4: game_actions has no FK, so the cover-pulled time is upserted here and the IGDB columns are never touched.
+        foreach (var entry in replace)
+        {
+            var pulled = InfoJsonActions.Parse(entry.Info.Actions?.CoverImagePulled)?.UtcDateTime;
+            await connection.ExecuteAsync(new CommandDefinition(pulled is null
+                    ? "UPDATE game_actions SET cover_image_pulled_at = NULL WHERE game_id = @Id"
+                    : """
+                      INSERT INTO game_actions (game_id, cover_image_pulled_at) VALUES (@Id, @Pulled)
+                      ON DUPLICATE KEY UPDATE cover_image_pulled_at = VALUES(cover_image_pulled_at)
+                      """,
+                new { Id = entry.Info.GameId, Pulled = pulled }, transaction, cancellationToken: cancellationToken));
+        }
+        var gone = delete.Except(rows.Select(r => r.Game.Id)).ToList();
+        if (gone.Count > 0)
+            await connection.ExecuteAsync(new CommandDefinition("DELETE FROM game_actions WHERE game_id IN @gone",
+                new { gone }, transaction, cancellationToken: cancellationToken));
+
         await transaction.CommitAsync(cancellationToken);
     }
 
