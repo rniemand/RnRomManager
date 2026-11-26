@@ -3,25 +3,6 @@ using RnRomManager.Core.Storage;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>A verified backup of a source ZIP (spec W3): where it is, the file it is, and its SHA256.</summary>
-public sealed record ZipBackup(string Path, ExternalFileSnapshot Snapshot, string Sha256);
-
-/// <summary>Test seams of <see cref="ExternalZipBackup.CreateAsync"/>: points where a test swaps a file mid-backup.</summary>
-public sealed class ExternalZipBackupHooks
-{
-    /// <summary>Runs once the copy is flushed, before it is reopened to be verified.</summary>
-    public Action<string>? AfterCopy { get; init; }
-
-    /// <summary>Runs with the staging path once the copy is verified, right before the checks that precede promotion.</summary>
-    public Action<string>? BeforePromotion { get; init; }
-
-    /// <summary>Runs with the backup path right after the rename that published it, before it is checked there.</summary>
-    public Action<string>? AfterPromotion { get; init; }
-
-    /// <summary>Replaces the no-replace rename that publishes the backup and its record (e.g. to report <c>Unsupported</c>).</summary>
-    public Func<string, string, NoReplaceRenameResult>? Rename { get; init; }
-}
-
 /// <summary>
 /// W3: before a move touches a multi-release external game, its source ZIP is copied to an owned, verified backup
 /// beside it, so the original metadata and notes survive whatever happens to either ZIP. The copy is streamed from a
@@ -36,8 +17,12 @@ public static class ExternalZipBackup
     /// <param name="zipPath">The source ZIP's full path.</param>
     /// <param name="source">The source ZIP as the move opened it; the backup must be a copy of exactly that file.</param>
     /// <exception cref="IOException">The backup couldn't be made (<c>IoError</c>); the source is untouched, and any occupant is left as it is.</exception>
-    public static async Task<ZipBackup> CreateAsync(string libraryRoot, string zipPath, ExternalFileSnapshot source,
-        ExternalZipBackupHooks? hooks = null, CancellationToken cancellationToken = default)
+    public static async Task<ZipBackup> CreateAsync(
+        string libraryRoot,
+        string zipPath,
+        ExternalFileSnapshot source,
+        ExternalZipBackupHooks? hooks = null,
+        CancellationToken cancellationToken = default)
     {
         var folder = ExternalRomPath.ClassifyDirectory(libraryRoot, Path.GetDirectoryName(Path.GetFullPath(zipPath))!);
         if (folder.Status != ExternalPathStatus.Found)
@@ -111,7 +96,12 @@ public static class ExternalZipBackup
     }
 
     /// <summary>Reopens the staging file through a checked handle: it must be the file this backup created, with the copy's length and SHA256.</summary>
-    private static async Task<ExternalFileSnapshot> VerifyAsync(string libraryRoot, string partial, FileIdentity owned, long length, string sha256,
+    private static async Task<ExternalFileSnapshot> VerifyAsync(
+        string libraryRoot,
+        string partial,
+        FileIdentity owned,
+        long length,
+        string sha256,
         CancellationToken cancellationToken)
     {
         var reopened = ExternalRomPath.OpenRead(libraryRoot, partial, FileShare.ReadWrite | FileShare.Delete);

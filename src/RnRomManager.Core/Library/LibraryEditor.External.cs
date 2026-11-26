@@ -161,7 +161,11 @@ public sealed partial class LibraryEditor
     /// deleted after the DB update), and the DB is updated, each step only while the earlier publications still stand.
     /// Every failure before the source rebuild puts the file back; a failed rebuild first undoes the target.
     /// </summary>
-    private async Task<LibraryEditResult> MoveReleaseExternalAsync(GameRow row, RomRow romRow, GameRow? targetRow, string? newGameTitle,
+    private async Task<LibraryEditResult> MoveReleaseExternalAsync(
+        GameRow row,
+        RomRow romRow,
+        GameRow? targetRow,
+        string? newGameTitle,
         AuditActor actor)
     {
         var ct = CancellationToken.None; // edits write without the request's token (existing rule)
@@ -596,8 +600,12 @@ public sealed partial class LibraryEditor
     /// longer the one opened, moves the files back to their pointers; after a DB failure they stay in <c>_removed/</c>.
     /// A file that is already missing has nothing to move.
     /// </summary>
-    private async Task<LibraryEditResult> RemoveExternalAsync(LibraryZip existing, GameRow row, IReadOnlyList<InfoJsonRom> removed,
-        InfoJsonGame? rebuilt, AuditActor actor)
+    private async Task<LibraryEditResult> RemoveExternalAsync(
+        LibraryZip existing,
+        GameRow row,
+        IReadOnlyList<InfoJsonRom> removed,
+        InfoJsonGame? rebuilt,
+        AuditActor actor)
     {
         var ct = CancellationToken.None; // edits write without the request's token (existing rule)
         var (library, ingest) = (paths.Value.Roms, paths.Value.Ingest);

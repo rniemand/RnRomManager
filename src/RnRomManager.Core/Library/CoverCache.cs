@@ -5,9 +5,6 @@ using SkiaSharp;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>C2: the WebP bytes of a generated cover (null when decoding or encoding failed), and whether they were cached.</summary>
-public sealed record CoverCacheResult(byte[]? Webp, bool Stored);
-
 /// <summary>
 /// Image cache C2: each game's cover, resized to at most <see cref="MaxSide"/> px and encoded WebP, cached at
 /// <c>&lt;Paths:ImageCache&gt;/&lt;gameId&gt;/&lt;coverSha1&gt;.webp</c>. A new cover has a new SHA1, so a cached file never goes
@@ -34,7 +31,11 @@ public sealed class CoverCache(IOptions<PathsOptions> paths, ILogger<CoverCache>
     /// Reads <paramref name="cover"/> (at most <see cref="ImageFormats.MaxBytes"/> from the caller), resizes and encodes it,
     /// and caches the result through a temp file moved over the target. Waits for a free slot, cancelled by <paramref name="ct"/>.
     /// </summary>
-    public async Task<CoverCacheResult> GenerateAsync(Guid gameId, string coverSha1, Stream cover, CancellationToken ct)
+    public async Task<CoverCacheResult> GenerateAsync(
+        Guid gameId,
+        string coverSha1,
+        Stream cover,
+        CancellationToken ct)
     {
         await _slots.WaitAsync(ct).ConfigureAwait(false);
         try

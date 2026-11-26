@@ -14,25 +14,6 @@ using static RnRomManager.Core.Library.LibraryEditResult;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>Test seams of <see cref="LibraryEditor"/>'s external edits.</summary>
-public sealed class ExternalEditHooks
-{
-    /// <summary>Passed to every move of an edit, including the moves that undo it.</summary>
-    public ExternalMoveHooks? Move { get; init; }
-
-    /// <summary>Passed to every checked ZIP write of an edit, including a target's undo.</summary>
-    public LibraryZipWriterHooks? Writer { get; init; }
-
-    /// <summary>Passed to a move's source backup and its recovery record.</summary>
-    public ExternalZipBackupHooks? Backup { get; init; }
-
-    /// <summary>Runs after a move published its target, right before it checks that target and rebuilds the source.</summary>
-    public Action? BeforeSourceRebuild { get; init; }
-
-    /// <summary>Runs after a move wrote its ZIPs, right before it checks them and updates the DB.</summary>
-    public Action? BeforeMirror { get; init; }
-}
-
 /// <summary>
 /// Admin library edits (spec §11, §23, D28, D35): metadata PATCH, delete release/game, move release, merge, retry media
 /// (§10.2). Each takes the global job lock
@@ -40,10 +21,24 @@ public sealed class ExternalEditHooks
 /// the ZIP's own <c>info.json</c> (§6.1). Removed ROM bytes go to <c>ingest/&lt;system&gt;/_removed/</c>, never deleted.
 /// External-storage paths (W2–W5) are in <c>LibraryEditor.External.cs</c>.
 /// </summary>
-public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
-    InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, GameMediaRetry mediaRetry,
-    IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, ICollectionRepository collections, TimeProvider time,
-    ILogger<LibraryEditor> logger, IRomStorageSettings? zipSettings = null)
+public sealed partial class LibraryEditor(
+    JobLock jobLock,
+    IGameRepository games,
+    IRomRepository roms,
+    IImageRepository images,
+    ILibraryMirror mirror,
+    InfoJsonReader reader,
+    DatCache dats,
+    ISystemRegistry systems,
+    MediaService media,
+    GameMediaRetry mediaRetry,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    AuditPaths auditPaths,
+    ICollectionRepository collections,
+    TimeProvider time,
+    ILogger<LibraryEditor> logger,
+    IRomStorageSettings? zipSettings = null)
 {
     /// <summary>Z4: a writer at the game's system ZIP compression level.</summary>
     private LibraryZipWriter Writer(string systemId) => new(reader, zipSettings?.Compression(systemId) ?? ZipCompression.Med);
@@ -51,7 +46,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     private static bool FilesChanged(LibraryEditResult result) => result.Code is null or DbWriteFailed;
 
     /// <param name="actor">The editing user; null (the rating/favourite endpoint) records nothing.</param>
-    public async Task<LibraryEditResult> PatchAsync(Guid gameId, GamePatch patch, AuditActor? actor, CancellationToken ct)
+    public async Task<LibraryEditResult> PatchAsync(
+        Guid gameId,
+        GamePatch patch,
+        AuditActor? actor,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
@@ -146,14 +145,28 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// <paramref name="text"/> is empty (no error when there was none). Any signed-in user; not audited; the game's fields,
     /// including <c>updatedAt</c>, stay as they are.
     /// </summary>
-    public Task<LibraryEditResult> SaveNoteAsync(Guid gameId, long romId, string text, int? userId, CancellationToken ct) =>
+    public Task<LibraryEditResult> SaveNoteAsync(
+        Guid gameId,
+        long romId,
+        string text,
+        int? userId,
+        CancellationToken ct) =>
         WriteNoteAsync(gameId, romId, text.Length == 0 ? null : System.Text.Encoding.UTF8.GetBytes(text), missingIsNotFound: false, userId, ct);
 
     /// <summary>B6: deletes the release's note; <c>NotFound</c> when there is none.</summary>
-    public Task<LibraryEditResult> DeleteNoteAsync(Guid gameId, long romId, int? userId, CancellationToken ct) =>
+    public Task<LibraryEditResult> DeleteNoteAsync(
+        Guid gameId,
+        long romId,
+        int? userId,
+        CancellationToken ct) =>
         WriteNoteAsync(gameId, romId, null, missingIsNotFound: true, userId, ct);
 
-    private async Task<LibraryEditResult> WriteNoteAsync(Guid gameId, long romId, byte[]? bytes, bool missingIsNotFound, int? userId,
+    private async Task<LibraryEditResult> WriteNoteAsync(
+        Guid gameId,
+        long romId,
+        byte[]? bytes,
+        bool missingIsNotFound,
+        int? userId,
         CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
@@ -184,7 +197,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         return result;
     }
 
-    public async Task<LibraryEditResult> DeleteReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> DeleteReleaseAsync(
+        Guid gameId,
+        long romId,
+        AuditActor actor,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
@@ -228,7 +245,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// Makes the release the game's primary (an Admin override of the ranker) and records it as
     /// <see cref="InfoJsonGame.ChosenPrimarySha1"/>, so it stays primary as releases come and go; a no-op when it already is.
     /// </summary>
-    public async Task<LibraryEditResult> SetPrimaryReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> SetPrimaryReleaseAsync(
+        Guid gameId,
+        long romId,
+        AuditActor actor,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
@@ -267,7 +288,12 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// B5–B10: changes a release's tags and renames it to match (B7), except on a <c>FileSets</c> system. The checks that
     /// need the game (disc on a non-disc system, unknown regions, a version on a non-update) come back as <c>ValidationFailed</c>.
     /// </summary>
-    public async Task<LibraryEditResult> EditReleaseAsync(Guid gameId, long romId, ReleaseEdit patch, AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> EditReleaseAsync(
+        Guid gameId,
+        long romId,
+        ReleaseEdit patch,
+        AuditActor actor,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
@@ -429,7 +455,12 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// A box art replaces the placeholder (and takes its cover status); the first image of an empty game is its cover (I3).
     /// U5: an image downloaded from a URL passes <paramref name="sourceUrl"/>; it is stored on the image and in the audit details.
     /// </summary>
-    public async Task<LibraryEditResult> AddImageAsync(Guid gameId, ImageType type, byte[] bytes, AuditActor actor, CancellationToken ct,
+    public async Task<LibraryEditResult> AddImageAsync(
+        Guid gameId,
+        ImageType type,
+        byte[] bytes,
+        AuditActor actor,
+        CancellationToken ct,
         string? sourceUrl = null)
     {
         if (type is not (ImageType.BoxArt or ImageType.Snap))
@@ -500,7 +531,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// I6: removes an image; the placeholder can't be (<c>DefaultImage</c>). A removed cover passes to the first remaining
     /// <c>BoxArt</c> by file name, else the first remaining image, else the system's placeholder is added back as cover (I3).
     /// </summary>
-    public async Task<LibraryEditResult> DeleteImageAsync(Guid gameId, long imageId, AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> DeleteImageAsync(
+        Guid gameId,
+        long imageId,
+        AuditActor actor,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
@@ -539,7 +574,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     }
 
     /// <summary>I7: makes one image the cover (any type, the placeholder too).</summary>
-    public async Task<LibraryEditResult> SetCoverAsync(Guid gameId, long imageId, AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> SetCoverAsync(
+        Guid gameId,
+        long imageId,
+        AuditActor actor,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
@@ -607,7 +646,12 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// which runs §7.2 steps 7–8 for it). The release keeps its <c>baseTitle</c> (D23). Order: target ZIP (now holding the
     /// ROM), source ZIP rebuilt, one DB transaction, then an emptied source ZIP is deleted.
     /// </summary>
-    public async Task<LibraryEditResult> MoveReleaseAsync(Guid gameId, long romId, Guid? targetGameId, string? newGameTitle, AuditActor actor,
+    public async Task<LibraryEditResult> MoveReleaseAsync(
+        Guid gameId,
+        long romId,
+        Guid? targetGameId,
+        string? newGameTitle,
+        AuditActor actor,
         CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
@@ -722,8 +766,14 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// The new game a moved release starts: §7.2 step 7 (all metadata from the release's DAT entry) and step 8 (its
     /// media, whose bytes are added to <paramref name="entries"/>).
     /// </summary>
-    private async Task<InfoJsonGame> NewGameForAsync(string systemId, InfoJsonRom rom, string title, IReadOnlyList<InfoJsonRom> roms,
-        Dictionary<string, Func<Stream>> entries, DateTimeOffset now, CancellationToken ct)
+    private async Task<InfoJsonGame> NewGameForAsync(
+        string systemId,
+        InfoJsonRom rom,
+        string title,
+        IReadOnlyList<InfoJsonRom> roms,
+        Dictionary<string, Func<Stream>> entries,
+        DateTimeOffset now,
+        CancellationToken ct)
     {
         var metadata = MetadataFor(systemId, rom);
         var found = await media.FindAsync(systems.ById(systemId)!, [rom.Identification.DatGameName], new CircuitBreaker(), ct).ConfigureAwait(false);
@@ -756,7 +806,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// the cover if the placeholder was). More than <see cref="GameImages.MaxImages"/> images → <c>TooManyImages</c>.
     /// Target ZIP + DB commit, then the source ZIP is deleted.
     /// </summary>
-    public async Task<LibraryEditResult> MergeAsync(Guid gameId, Guid targetGameId, AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> MergeAsync(
+        Guid gameId,
+        Guid targetGameId,
+        AuditActor actor,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
@@ -826,7 +880,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     }
 
     /// <summary>I4a: the target keeps its title, metadata and cover; empty fields are filled from the source.</summary>
-    private InfoJsonGame MergedInto(InfoJsonGame into, InfoJsonGame from, List<InfoJsonRom> roms, IReadOnlyList<InfoJsonImage> images) => Relinked(into, into with
+    private InfoJsonGame MergedInto(
+        InfoJsonGame into,
+        InfoJsonGame from,
+        List<InfoJsonRom> roms,
+        IReadOnlyList<InfoJsonImage> images) => Relinked(into, into with
     {
         ReleaseYear = into.ReleaseYear ?? from.ReleaseYear,
         Developers = into.Developers.Count > 0 ? into.Developers : from.Developers,
@@ -862,7 +920,12 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// B9: a release arriving under <paramref name="toName"/> brings its note from <paramref name="from"/>; without one it must
     /// not adopt an orphan note of that name already in the target.
     /// </summary>
-    private static void CarryNote(LibraryZip from, string fromName, string toName, Dictionary<string, Func<Stream>> entries, HashSet<string> removed)
+    private static void CarryNote(
+        LibraryZip from,
+        string fromName,
+        string toName,
+        Dictionary<string, Func<Stream>> entries,
+        HashSet<string> removed)
     {
         var (note, target) = (LibraryZip.NoteEntry(fromName), LibraryZip.NoteEntry(toName));
         if (from.HasEntry(note))
@@ -919,7 +982,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         FileNameRules.FirstFree(fileName, taken.ToHashSet(StringComparer.OrdinalIgnoreCase).Contains);
 
     /// <summary>Deletes the game's ZIP (its ROMs copied to <c>_removed/</c> first) and records <c>GameDeleted</c>.</summary>
-    private async Task<LibraryEditResult> RemoveGameAsync(LibraryZip existing, GameRow row, InfoJsonGame current, AuditActor actor)
+    private async Task<LibraryEditResult> RemoveGameAsync(
+        LibraryZip existing,
+        GameRow row,
+        InfoJsonGame current,
+        AuditActor actor)
     {
         if (IsExternal(row))
             return await RemoveExternalAsync(existing, row, current.Roms, null, actor).ConfigureAwait(false);
@@ -991,7 +1058,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     }
 
     /// <returns>null when every listed entry was copied (an absent entry has nothing to keep and is skipped).</returns>
-    private LibraryEditResult? CopyToRemoved(LibraryZip zip, string systemId, IReadOnlyList<InfoJsonRom> removed, List<string> copies)
+    private LibraryEditResult? CopyToRemoved(
+        LibraryZip zip,
+        string systemId,
+        IReadOnlyList<InfoJsonRom> removed,
+        List<string> copies)
     {
         var folder = Path.Combine(paths.Value.Ingest, systemId, StorageFolders.RemovedFolder);
         foreach (var rom in removed)
@@ -1094,15 +1165,25 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     private static bool IsEntryReadFailure(Exception ex) => ex is LimitExceededException or InvalidDataException or IOException;
 
     /// <summary>Atomic ZIP write (§6.1) then the DB mirror. Not cancellable once started, so a ZIP is never left half-applied.</summary>
-    private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game,
-        Dictionary<string, Func<Stream>>? newEntries = null, IReadOnlySet<string>? removedEntries = null, SavesChange? saves = null) =>
+    private async Task<LibraryEditResult> WriteAsync(
+        LibraryZip existing,
+        string zipPath,
+        InfoJsonGame game,
+        Dictionary<string, Func<Stream>>? newEntries = null,
+        IReadOnlySet<string>? removedEntries = null,
+        SavesChange? saves = null) =>
         await WriteZipAsync(existing, zipPath, game, newEntries ?? [], removedEntries, saves).ConfigureAwait(false)
         ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(zipPath, game), CancellationToken.None), zipPath).ConfigureAwait(false);
 
     /// <param name="existing">The game's current ZIP (disposed by the writer), or null for a new game.</param>
     /// <returns>null when written and verified.</returns>
-    private async Task<LibraryEditResult?> WriteZipAsync(LibraryZip? existing, string zipPath, InfoJsonGame game,
-        Dictionary<string, Func<Stream>> newEntries, IReadOnlySet<string>? removedEntries = null, SavesChange? saves = null)
+    private async Task<LibraryEditResult?> WriteZipAsync(
+        LibraryZip? existing,
+        string zipPath,
+        InfoJsonGame game,
+        Dictionary<string, Func<Stream>> newEntries,
+        IReadOnlySet<string>? removedEntries = null,
+        SavesChange? saves = null)
     {
         try
         {

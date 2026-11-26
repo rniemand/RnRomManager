@@ -2,9 +2,6 @@ using System.Globalization;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>A DLC or update's name (<c>Field</c> <c>dlc</c> or <c>update</c>), matched by <see cref="SearchMatch.Find"/>.</summary>
-public sealed record AddOnName(string Field, string Name);
-
 /// <summary>
 /// Why a list item matched a search when its title didn't (S3, DLC B10): <c>developer</c>, <c>publisher</c>, <c>genre</c>,
 /// <c>dlc</c> or <c>update</c>.
@@ -19,8 +16,13 @@ public sealed record SearchMatch(string Field, string Value)
     /// null without words or when any word is in a title; else the first developer, publisher, genre, then add-on value
     /// that contains a word.
     /// </returns>
-    public static SearchMatch? Find(IReadOnlyList<string> words, string title, string displayTitle,
-        IReadOnlyList<string> developers, IReadOnlyList<string> publishers, IReadOnlyList<string> genres,
+    public static SearchMatch? Find(
+        IReadOnlyList<string> words,
+        string title,
+        string displayTitle,
+        IReadOnlyList<string> developers,
+        IReadOnlyList<string> publishers,
+        IReadOnlyList<string> genres,
         IReadOnlyList<AddOnName> addOns)
     {
         if (words.Count == 0 || words.Any(w => Contains(title, w) || Contains(displayTitle, w)))

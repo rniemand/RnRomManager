@@ -141,7 +141,7 @@ public class LibraryZipTests
         var (game, rom) = await WriteNewGameAsync();
 
         using var zip = LibraryZip.Open(_target, _reader);
-        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok));
         Assert.That(InfoJsonSerializer.Serialize(zip.InfoJson.Game!), Is.EqualTo(InfoJsonSerializer.Serialize(game)));
         Assert.That(zip.EntryNames, Is.EquivalentTo(new[] { "info.json", "roms/Tetris (World).gb", "images/boxart-01.png" }));
         Assert.That(ReadEntry(zip, "roms/Tetris (World).gb"), Is.EqualTo(rom));
@@ -335,7 +335,7 @@ public class LibraryZipTests
         WriteRawZip(newer, ("info.json", Encoding.UTF8.GetBytes(json.ToJsonString())));
 
         using var existing = LibraryZip.Open(newer, _reader);
-        Assert.That(existing.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.NewerSchema));
+        Assert.That(existing.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResultOutcome.NewerSchema));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _writer.WriteAsync(newer, existing, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>())));
     }
@@ -354,7 +354,7 @@ public class LibraryZipTests
         using var zip = LibraryZip.Open(old, Reader(upgrader));
 
         upgrader.Received(1).Upgrade(Arg.Any<JsonObject>());
-        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok));
         Assert.That(zip.InfoJson.FileVersion, Is.EqualTo(0));
     }
 
@@ -373,7 +373,7 @@ public class LibraryZipTests
         WriteRawZip(_target, ("info.json", new byte[InfoJsonReader.MaxBytes + 10]));
 
         using var zip = LibraryZip.Open(_target, _reader);
-        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Invalid));
+        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Invalid));
         Assert.That(zip.InfoJson.Rule, Does.Contain("larger than"));
     }
 

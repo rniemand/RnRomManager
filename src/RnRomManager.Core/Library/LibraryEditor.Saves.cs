@@ -4,16 +4,19 @@ using static RnRomManager.Core.Library.LibraryEditResult;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>B8–B11: a save's bytes, already streamed to a temp file by the endpoint (size and SHA-1 counted on the way).</summary>
-/// <param name="Extension">B1, from the upload's file name.</param>
-public sealed record SaveUpload(string Path, string Extension, long SizeBytes, string Sha1);
-
 /// <summary>B8–B13: the save operations. Each takes the job lock, starts from the ZIP's <c>saves.json</c> and rewrites the ZIP.</summary>
 public sealed partial class LibraryEditor
 {
     /// <summary>B8: adds a save for the release <paramref name="romId"/>.</summary>
-    public async Task<LibraryEditResult> AddSaveAsync(Guid gameId, long romId, string kind, string name, string? description, SaveUpload file,
-        AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> AddSaveAsync(
+        Guid gameId,
+        long romId,
+        string kind,
+        string name,
+        string? description,
+        SaveUpload file,
+        AuditActor actor,
+        CancellationToken ct)
     {
         if (!GameSaves.IsKind(kind))
             return Invalid("kind", "Choose State or Battery.");
@@ -49,8 +52,14 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>B9: changes a save's name and/or description; a change to neither writes nothing.</summary>
-    public async Task<LibraryEditResult> UpdateSaveAsync(Guid gameId, string saveId, string? name, string? description, AuditActor actor,
-        SaveViewer viewer, CancellationToken ct)
+    public async Task<LibraryEditResult> UpdateSaveAsync(
+        Guid gameId,
+        string saveId,
+        string? name,
+        string? description,
+        AuditActor actor,
+        SaveViewer viewer,
+        CancellationToken ct)
     {
         var trimmed = (string?)null;
         if (name is not null && GameSaves.NameProblem(name, out trimmed) is { } nameProblem)
@@ -74,7 +83,12 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>B10: replaces a save's bytes; the entry is renamed when the extension changes.</summary>
-    public async Task<LibraryEditResult> ReplaceSaveFileAsync(Guid gameId, string saveId, SaveUpload file, AuditActor actor, SaveViewer viewer,
+    public async Task<LibraryEditResult> ReplaceSaveFileAsync(
+        Guid gameId,
+        string saveId,
+        SaveUpload file,
+        AuditActor actor,
+        SaveViewer viewer,
         CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
@@ -93,7 +107,12 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>B11: removes a save, and <c>saves.json</c> with the last one.</summary>
-    public async Task<LibraryEditResult> DeleteSaveAsync(Guid gameId, string saveId, AuditActor actor, SaveViewer viewer, CancellationToken ct)
+    public async Task<LibraryEditResult> DeleteSaveAsync(
+        Guid gameId,
+        string saveId,
+        AuditActor actor,
+        SaveViewer viewer,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
@@ -114,7 +133,12 @@ public sealed partial class LibraryEditor
     /// unknown id (S3). The operation checks them all again under the lock.
     /// </summary>
     /// <returns>null when the operation may go ahead.</returns>
-    public async Task<LibraryEditResult?> PrecheckSaveAsync(Guid gameId, long? romId, string? saveId, SaveViewer viewer, CancellationToken ct)
+    public async Task<LibraryEditResult?> PrecheckSaveAsync(
+        Guid gameId,
+        long? romId,
+        string? saveId,
+        SaveViewer viewer,
+        CancellationToken ct)
     {
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
@@ -226,8 +250,16 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>Writes the new <c>saves.json</c> (none when <paramref name="saves"/> is empty), mirrors the ZIP and audits (B13).</summary>
-    private async Task<LibraryEditResult> WriteSavesAsync(LibraryZip zip, GameRow row, InfoJsonGame game, IReadOnlyList<GameSave> saves, GameSave save,
-        string action, AuditActor actor, Dictionary<string, Func<Stream>> added, HashSet<string> removed)
+    private async Task<LibraryEditResult> WriteSavesAsync(
+        LibraryZip zip,
+        GameRow row,
+        InfoJsonGame game,
+        IReadOnlyList<GameSave> saves,
+        GameSave save,
+        string action,
+        AuditActor actor,
+        Dictionary<string, Func<Stream>> added,
+        HashSet<string> removed)
     {
         // B18: every save write leaves a version 2 index.
         saves = GameSaves.Upgrade(saves, s => () => zip.OpenEntry(s.Entry, s.SizeBytes), added, removed);

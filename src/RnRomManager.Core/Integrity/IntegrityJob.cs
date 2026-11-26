@@ -23,9 +23,21 @@ namespace RnRomManager.Core.Integrity;
 /// open issues it didn't see, but only where it performed that check (D48); a cancelled run resolves nothing. Retention
 /// (180 days) runs at the end of a completed run.
 /// </summary>
-public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomRepository roms, DbSync dbSync, IIntegrityIssueRepository issues,
-    IJobRepository jobs, InfoJsonReader reader, ISystemRegistry systems, IOptions<PathsOptions> paths, TimeProvider time,
-    ILogger<IntegrityJob> logger, IImageRepository images, CoverCache cache, ILibraryMirror mirror) : IJob
+public sealed class IntegrityJob(
+    JobMode mode,
+    IGameRepository games,
+    IRomRepository roms,
+    DbSync dbSync,
+    IIntegrityIssueRepository issues,
+    IJobRepository jobs,
+    InfoJsonReader reader,
+    ISystemRegistry systems,
+    IOptions<PathsOptions> paths,
+    TimeProvider time,
+    ILogger<IntegrityJob> logger,
+    IImageRepository images,
+    CoverCache cache,
+    ILibraryMirror mirror) : IJob
 {
     /// <summary>C5: a <c>.tmp</c> file younger than this may belong to a generation in flight.</summary>
     public static readonly TimeSpan TmpGrace = TimeSpan.FromHours(1);
@@ -40,12 +52,6 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
 
     /// <summary>Re-checked on every run, whatever was opened.</summary>
     private static readonly HashSet<string> GlobalTypes = [OrphanFile, DuplicateGameId, DuplicateSha1];
-
-    private enum Checked
-    {
-        LocationOnly,
-        Opened,
-    }
 
     /// <summary>Test seams of the external file checks.</summary>
     public IntegrityHooks? Hooks { get; init; }
@@ -376,7 +382,11 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         return (zips, orphans);
     }
 
-    private async Task CheckZipAsync(string zipPath, GameRow? row, Action<IntegrityFinding> add, CancellationToken ct)
+    private async Task CheckZipAsync(
+        string zipPath,
+        GameRow? row,
+        Action<IntegrityFinding> add,
+        CancellationToken ct)
     {
         var system = SystemOf(zipPath);
         LibraryZip zip;
@@ -397,8 +407,8 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             var problem = zip.InfoJson switch
             {
                 null => new IntegrityFinding(InfoJsonMissing, zipPath, SystemId: system, GameId: row?.Id),
-                { Kind: InfoJsonReadResult.Outcome.Ok } => null,
-                { Kind: InfoJsonReadResult.Outcome.NewerSchema } r =>
+                { Kind: InfoJsonReadResultOutcome.Ok } => null,
+                { Kind: InfoJsonReadResultOutcome.NewerSchema } r =>
                     new IntegrityFinding(InfoJsonNewerSchema, zipPath, SystemId: system, GameId: row?.Id, Details: $"schemaVersion {r.FileVersion}"),
                 var r => new IntegrityFinding(InfoJsonInvalid, zipPath, SystemId: system, GameId: row?.Id, Details: r.Rule),
             };
@@ -462,8 +472,13 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
     /// logged. Deep also hashes the file through a checked handle that must be the file that was statted, before and
     /// after hashing; a file replaced or changed meanwhile is logged and its size and hash results are dropped.
     /// </summary>
-    private async Task CheckExternalAsync(string zipPath, IEnumerable<ExternalRomRow> rows, ExternalChecks checks,
-        Action<IntegrityFinding> add, JobProgress progress, CancellationToken ct)
+    private async Task CheckExternalAsync(
+        string zipPath,
+        IEnumerable<ExternalRomRow> rows,
+        ExternalChecks checks,
+        Action<IntegrityFinding> add,
+        JobProgress progress,
+        CancellationToken ct)
     {
         var root = paths.Value.Roms;
         var folder = Path.GetDirectoryName(Path.Combine(root, zipPath))!;
@@ -583,7 +598,12 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
     /// An external game's name is the budgeted one its builder gives the title (E2), suffixed or not; a
     /// <c>LegacyEmbeddedRoms</c> system accepts either name in either setting (S7a, B5).
     /// </summary>
-    private void CheckLocation(string zipPath, string systemId, string title, Guid gameId, Action<IntegrityFinding> add)
+    private void CheckLocation(
+        string zipPath,
+        string systemId,
+        string title,
+        Guid gameId,
+        Action<IntegrityFinding> add)
     {
         var parts = zipPath.Split('/');
         var name = parts[^1];
@@ -653,7 +673,11 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
     }
 
     /// <summary>D48: did this run perform the check that would have found <paramref name="issue"/> again?</summary>
-    private bool WasChecked(IntegrityIssue issue, HashSet<string> onDisk, IReadOnlyDictionary<string, Checked> checkedZips, ExternalChecks checks)
+    private bool WasChecked(
+        IntegrityIssue issue,
+        HashSet<string> onDisk,
+        IReadOnlyDictionary<string, Checked> checkedZips,
+        ExternalChecks checks)
     {
         if (issue.ZipPath is { } path && checks.IsUnchecked(path) && issue.Type is not (DuplicateGameId or DuplicateSha1))
             return false; // G4: nothing at or below this path could be checked
@@ -710,7 +734,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         try
         {
             using var zip = OpenChecked(zipPath);
-            return zip.InfoJson is { Kind: InfoJsonReadResult.Outcome.Ok, Game: { } game }
+            return zip.InfoJson is { Kind: InfoJsonReadResultOutcome.Ok, Game: { } game }
                 ? game.ExternalFileNames().ToHashSet(StringComparer.OrdinalIgnoreCase)
                 : null;
         }
@@ -720,40 +744,12 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         }
     }
 
-    /// <summary>The external file rows, claims and per-pointer outcomes of one run (G1, G2a, G4).</summary>
-    private sealed class ExternalChecks(ILookup<string, ExternalRomRow> byZip, IReadOnlyDictionary<string, List<Guid>> claimants,
-        HashSet<string> skippedBySync, IReadOnlyList<string> notChecked)
-    {
-        /// <summary>At or below a path DB sync could not open or enter (G4).</summary>
-        public bool IsUnchecked(string path) => notChecked.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase)
-            || (path.Length > p.Length && path[p.Length] == '/' && path.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
-
-        private readonly Dictionary<(string, string), bool> _outcomes = [];
-        private readonly Dictionary<string, HashSet<string>?> _zipPointers = new(StringComparer.OrdinalIgnoreCase);
-
-        public ILookup<string, ExternalRomRow> ByZip => byZip;
-        public IReadOnlyDictionary<string, List<Guid>> Claimants => claimants;
-        public HashSet<string> SkippedBySync => skippedBySync;
-
-        private static (string, string) Key(string zipPath, string pointer) => (zipPath.ToUpperInvariant(), pointer.ToUpperInvariant());
-
-        /// <summary>Records that the pointer's stat (and, with <paramref name="hashed"/>, its hash) was checked.</summary>
-        public void Mark(string zipPath, string pointer, bool hashed) =>
-            _outcomes[Key(zipPath, pointer)] = hashed || _outcomes.GetValueOrDefault(Key(zipPath, pointer));
-
-        /// <returns>Null when not checked; else whether it was hashed too.</returns>
-        public bool? Outcome(string zipPath, string pointer) =>
-            _outcomes.TryGetValue(Key(zipPath, pointer), out var hashed) ? hashed : null;
-
-        public HashSet<string>? ZipPointers(string zipPath, Func<string, HashSet<string>?> read)
-        {
-            if (!_zipPointers.TryGetValue(zipPath, out var pointers))
-                _zipPointers[zipPath] = pointers = read(zipPath);
-            return pointers;
-        }
-    }
-
-    private static IntegrityIssue ToIssue(IntegrityFinding f, string status, Guid jobId, DateTime now, DateTime? resolvedAt) => new()
+    private static IntegrityIssue ToIssue(
+        IntegrityFinding f,
+        string status,
+        Guid jobId,
+        DateTime now,
+        DateTime? resolvedAt) => new()
     {
         Type = f.Type,
         Severity = SeverityOf(f.Type),
@@ -797,17 +793,4 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         }
         return Convert.ToHexStringLower(sha1.GetHashAndReset());
     }
-}
-
-/// <summary>Test seams of <see cref="IntegrityJob"/>'s external file checks.</summary>
-public sealed class IntegrityHooks
-{
-    /// <summary>Runs with the file's path after its stat, right before a Deep check opens it.</summary>
-    public Action<string>? BeforeExternalHash { get; init; }
-
-    /// <summary>Runs with the file's path after it was hashed and its handle closed, before the path is checked again.</summary>
-    public Action<string>? AfterExternalHash { get; init; }
-
-    /// <summary>Wraps the stream a Deep check hashes an external ROM from, e.g. to pause mid-read.</summary>
-    public Func<Stream, Stream>? WrapHashStream { get; init; }
 }

@@ -13,9 +13,19 @@ namespace RnRomManager.Core.Library;
 /// <see cref="ZipRepackJob"/> does its rewrite: one item per game, a checked write and the mirror per moved game, cancel
 /// between games. Sets <see cref="MigratedSetting"/> when it ends without being cancelled.
 /// </summary>
-public sealed class SaveFoldersJob(IGameRepository games, ILibraryMirror mirror, InfoJsonReader reader, ISystemRegistry systems,
-    IJobItemRepository items, IOptions<PathsOptions> paths, IAuditLog audit, IFreeSpace freeSpace, TimeProvider time,
-    IRomStorageSettings settings, ISettingsRepository appSettings, ILogger<SaveFoldersJob> logger) : IJob
+public sealed class SaveFoldersJob(
+    IGameRepository games,
+    ILibraryMirror mirror,
+    InfoJsonReader reader,
+    ISystemRegistry systems,
+    IJobItemRepository items,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    IFreeSpace freeSpace,
+    TimeProvider time,
+    IRomStorageSettings settings,
+    ISettingsRepository appSettings,
+    ILogger<SaveFoldersJob> logger) : IJob
 {
     public const string Moved = "Moved";
     public const string Skipped = "Skipped";

@@ -5,72 +5,6 @@ using RnRomManager.Core.Users;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>
-/// B2: one record of <c>saves/saves.json</c>. Its bytes are the entry <c>saves/&lt;owner&gt;/&lt;id&gt;&lt;extension&gt;</c>
-/// (release editing B16, version 2), or <c>saves/&lt;id&gt;&lt;extension&gt;</c> for a record of a version 1 index.
-/// </summary>
-public sealed record GameSave
-{
-    public required string Id { get; init; }
-    public required string Name { get; init; }
-    public required string Description { get; init; }
-
-    /// <summary><see cref="GameSaves.KindState"/> or <see cref="GameSaves.KindBattery"/>.</summary>
-    public required string Kind { get; init; }
-
-    /// <summary>The release's <c>fileName</c> in <c>info.json</c> (B4: matched ignoring case; none matching is an orphan).</summary>
-    public required string Release { get; init; }
-
-    /// <summary>B1: empty, or <c>.</c> plus 1–8 of <c>[a-z0-9]</c>.</summary>
-    public required string Extension { get; init; }
-
-    public required long SizeBytes { get; init; }
-    public required string Sha1 { get; init; }
-    public required string? UploadedBy { get; init; }
-    public required DateTimeOffset UploadedAt { get; init; }
-    public required string? UpdatedBy { get; init; }
-    public required DateTimeOffset UpdatedAt { get; init; }
-
-    /// <summary>B17: read from a version 1 <c>saves.json</c>, whose entries sit directly in <c>saves/</c>.</summary>
-    [JsonIgnore]
-    public bool Legacy { get; init; }
-
-    /// <summary>The ZIP entry holding the bytes (B16: in the owner's folder, <c>uploadedBy</c> lowercased).</summary>
-    [JsonIgnore]
-    public string Entry => LibraryZip.SaveEntry(Legacy ? Id + Extension : $"{UploadedBy?.ToLowerInvariant()}/{Id}{Extension}");
-}
-
-/// <summary>B2: the whole <c>saves/saves.json</c>.</summary>
-public sealed record GameSavesIndex
-{
-    public required int Version { get; init; }
-    public required IReadOnlyList<GameSave> Saves { get; init; }
-}
-
-/// <summary>What a ZIP's <c>saves/</c> folder holds (B3).</summary>
-public enum SavesState
-{
-    /// <summary>No <c>saves/</c> entry at all.</summary>
-    Absent,
-
-    /// <summary>A valid <c>saves.json</c> (B2).</summary>
-    Valid,
-
-    /// <summary><c>saves.json</c> missing while other <c>saves/</c> entries exist, unreadable, over 1 MiB or invalid.</summary>
-    Unreadable,
-}
-
-/// <param name="Index">Set for <see cref="SavesState.Valid"/>.</param>
-/// <param name="Problem">Why it is <see cref="SavesState.Unreadable"/>.</param>
-public sealed record SavesReadResult(SavesState State, GameSavesIndex? Index = null, string? Problem = null);
-
-/// <summary>User Management S3: who is asking about saves. An Admin sees and acts on every save; a Site user only on their own.</summary>
-/// <param name="Username">The session's username; null never owns a save.</param>
-public sealed record SaveViewer(string? Username, bool IsAdmin)
-{
-    public bool CanSee(GameSave save) => IsAdmin || GameSaves.IsOwner(save, Username);
-}
-
 /// <summary>B1, B2, B8: the <c>saves.json</c> rules, limits, reader and writer.</summary>
 public static class GameSaves
 {
@@ -236,8 +170,11 @@ public static class GameSaves
     /// name is re-keyed, else <paramref name="openLegacy"/> reads it; the old name is added to <paramref name="removed"/>.
     /// </summary>
     /// <param name="openLegacy">The bytes of a legacy record, from the ZIP that holds it.</param>
-    public static IReadOnlyList<GameSave> Upgrade(IReadOnlyList<GameSave> saves, Func<GameSave, Func<Stream>> openLegacy,
-        Dictionary<string, Func<Stream>> added, HashSet<string> removed)
+    public static IReadOnlyList<GameSave> Upgrade(
+        IReadOnlyList<GameSave> saves,
+        Func<GameSave, Func<Stream>> openLegacy,
+        Dictionary<string, Func<Stream>> added,
+        HashSet<string> removed)
     {
         var result = new List<GameSave>(saves.Count);
         foreach (var save in saves)

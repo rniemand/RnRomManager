@@ -106,7 +106,7 @@ public class LibraryImageEditTests
     private IReadOnlyList<InfoJsonImage> Stored()
     {
         using var zip = LibraryZip.Open(Abs, _reader);
-        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), zip.InfoJson.Rule);
+        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), zip.InfoJson.Rule);
         foreach (var image in zip.InfoJson.Game!.Images)
         {
             using var stream = zip.OpenEntry(LibraryZip.ImageEntry(image.FileName), ImageFormats.MaxBytes);

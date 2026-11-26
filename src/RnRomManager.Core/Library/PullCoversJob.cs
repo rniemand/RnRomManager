@@ -17,9 +17,19 @@ namespace RnRomManager.Core.Library;
 /// holds, so it writes each ZIP itself as <see cref="GameMediaRetry"/> does (never through <see cref="LibraryEditor"/>).
 /// One job item per game; cancellable between games; an IGDB read failure or an open breaker fails the job.
 /// </summary>
-public sealed class PullCoversJob(IGameRepository games, IIgdbGames igdb, ILibraryMirror mirror, InfoJsonReader reader,
-    ISystemRegistry systems, IJobItemRepository items, IIntegrityIssueRepository issues, IOptions<PathsOptions> paths,
-    IAuditLog audit, TimeProvider time, ILogger<PullCoversJob> logger, IRomStorageSettings? zipSettings = null) : IJob
+public sealed class PullCoversJob(
+    IGameRepository games,
+    IIgdbGames igdb,
+    ILibraryMirror mirror,
+    InfoJsonReader reader,
+    ISystemRegistry systems,
+    IJobItemRepository items,
+    IIntegrityIssueRepository issues,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    TimeProvider time,
+    ILogger<PullCoversJob> logger,
+    IRomStorageSettings? zipSettings = null) : IJob
 {
     public const string Pulled = "Pulled";
     public const string NoCover = "NoCover";
@@ -32,8 +42,6 @@ public sealed class PullCoversJob(IGameRepository games, IIgdbGames igdb, ILibra
 
     public JobType Type => JobType.PullCovers;
     public JobMode? Mode => null;
-
-    private sealed record Outcome(string Name, string? Code = null, string? Details = null);
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {
@@ -54,7 +62,7 @@ public sealed class PullCoversJob(IGameRepository games, IIgdbGames igdb, ILibra
                 if (cancellationToken.IsCancellationRequested)
                     break;
                 context.Progress.SetCurrentItem(row.ZipPath);
-                Outcome outcome;
+                PullCoversJobOutcome outcome;
                 try
                 {
                     outcome = await PullAsync(row, found, breaker, context.Actor, cancellationToken).ConfigureAwait(false);
@@ -91,8 +99,12 @@ public sealed class PullCoversJob(IGameRepository games, IIgdbGames igdb, ILibra
         return new { pulled = counts[Pulled], noCover = counts[NoCover], imageLimit = counts[ImageLimit], skipped = counts[Skipped], error = counts[Error] };
     }
 
-    private async Task<Outcome> PullAsync(GameRow row, IReadOnlyDictionary<int, IgdbGameRating> found, CircuitBreaker breaker,
-        AuditActor actor, CancellationToken ct)
+    private async Task<PullCoversJobOutcome> PullAsync(
+        GameRow row,
+        IReadOnlyDictionary<int, IgdbGameRating> found,
+        CircuitBreaker breaker,
+        AuditActor actor,
+        CancellationToken ct)
     {
         var library = paths.Value.Roms;
         var target = LibraryTarget.OpenForWrite(library, row.ZipPath, reader, systems, row.Id, row.SystemId);
@@ -109,7 +121,7 @@ public sealed class PullCoversJob(IGameRepository games, IIgdbGames igdb, ILibra
             // The database lost it: the ZIP is the truth.
             var file = new FileInfo(path);
             return await MirrorAsync(new MirrorEntry(current, row.ZipPath, file.Length, file.LastWriteTimeUtc)).ConfigureAwait(false)
-                ?? new Outcome(Skipped, Details: "The cover was already pulled.");
+                ?? new PullCoversJobOutcome(Skipped, Details: "The cover was already pulled.");
         }
         if (current.IgdbId is not > 0 || current.IgdbId != row.IgdbId)
             return new(Skipped, Details: "The ZIP's IGDB link differs from the database's.");
@@ -210,7 +222,7 @@ public sealed class PullCoversJob(IGameRepository games, IIgdbGames igdb, ILibra
     }
 
     /// <returns>null when mirrored, else the <c>DbWriteFailed</c> outcome.</returns>
-    private async Task<Outcome?> MirrorAsync(MirrorEntry entry)
+    private async Task<PullCoversJobOutcome?> MirrorAsync(MirrorEntry entry)
     {
         try
         {

@@ -3,9 +3,6 @@ using System.Text.RegularExpressions;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>Multi-disc M1: a game's discs that play together, in disc order, and (M2) the name of their playlist.</summary>
-public sealed record DiscSet(string Name, IReadOnlyList<RomRow> Discs);
-
 /// <summary>
 /// Multi-disc M1–M2 (Saturn/Sega CD S1; Amiga F1–F2 and Plus/4 B11: floppy disk sets): finds a game's disc sets from its releases at
 /// request time; nothing is stored.
