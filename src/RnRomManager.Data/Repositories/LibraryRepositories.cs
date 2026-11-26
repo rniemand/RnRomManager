@@ -393,6 +393,17 @@ public sealed class GameRepository : IGameRepository
             """, cancellationToken: cancellationToken))).AsList();
     }
 
+    public async Task<IReadOnlyList<GameRow>> ListPullCoverCandidatesAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<GameRow>(new CommandDefinition($"""
+            {Select} g
+            WHERE g.igdb_id > 0
+              AND NOT EXISTS (SELECT 1 FROM game_actions a WHERE a.game_id = g.id AND a.cover_image_pulled_at IS NOT NULL)
+            ORDER BY g.title, g.id
+            """, cancellationToken: cancellationToken))).AsList();
+    }
+
     public async Task<IReadOnlyList<GameRow>> ListStorageMovesAsync(IReadOnlyCollection<string> embedSystemIds,
         IReadOnlyCollection<string> externalSystemIds, CancellationToken cancellationToken)
     {

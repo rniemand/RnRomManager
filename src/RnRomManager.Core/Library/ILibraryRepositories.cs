@@ -48,6 +48,9 @@ public interface IGameRepository
     /// <summary>Games with the default box art, no <c>BoxArt</c> image or no <c>Snap</c>, ordered by title then id (§10.2).</summary>
     Task<IReadOnlyList<GameRow>> ListMediaRetryCandidatesAsync(CancellationToken cancellationToken);
 
+    /// <summary>P2: IGDB-linked games (<c>igdb_id &gt; 0</c>) without <c>cover_image_pulled_at</c>, by title then id.</summary>
+    Task<IReadOnlyList<GameRow>> ListPullCoverCandidatesAsync(CancellationToken cancellationToken);
+
     /// <summary>
     /// S4, ROM Zip Config B7: games whose ROM layout differs from their system's storage, by ZIP path: games of
     /// <paramref name="embedSystemIds"/> with any ROM beside the ZIP (<c>external_file_name</c> set), and of

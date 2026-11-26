@@ -55,6 +55,20 @@ public static class IngestSeeder
         new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat, TurboGrafxCdDat, PcfxDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump)
             .Append(new(PetDat, FixtureDatLayout.Tosec)).Append(new(AmigaDat, FixtureDatLayout.Tosec)).ToDictionary();
 
+    /// <summary>Every DAT the fixture cache's preflight needs, empty, except <paramref name="dat"/>, which lists <paramref name="games"/>.</summary>
+    public static Dictionary<string, IReadOnlyList<FixtureGame>> EmptyDats(string dat, IReadOnlyList<FixtureGame> games)
+    {
+        var dats = new[]
+        {
+            GbaDat, N64Dat, NesDat, SnesDat, Atari2600Dat, LynxDat, JaguarDat, VirtualBoyDat, Atari5200Dat, Atari7800Dat, ColecoVisionDat,
+            GameGearDat, MasterSystemDat, MegaDriveDat, Sega32xDat, TurboGrafx16Dat, PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat,
+            SegaCdDat, ThreeDoDat, C64Dat, PetDat, Vic20Dat, Plus4Dat, SatellaviewDat, SufamiTurboDat, FdsDat, AmigaDat, ThreeDsDat,
+            TurboGrafxCdDat, PcfxDat, NeoGeoPocketDat, NeoGeoPocketColorDat, WonderSwanDat, WonderSwanColorDat, NintendoDsDat,
+        }.ToDictionary(n => n, IReadOnlyList<FixtureGame> (_) => []);
+        dats[dat] = games;
+        return dats;
+    }
+
     /// <summary>An empty titledb compact file for Switch: enough for the DAT preflight of a fixture cache.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> EmptySwitch =>
         new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = [] };

@@ -410,6 +410,16 @@ public static class LibraryEndpoints
             return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
+        // Admin actions P1.
+        api.MapPost("/jobs/pull-covers", async (HttpContext ctx, JobRunner runner, PullCoversJob job, IIgdbGames igdb) =>
+        {
+            if (!igdb.Configured)
+                return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
+                    "Pulling covers needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
+            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
+            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
         games.MapPost("/{id:guid}/merge", async (Guid id, MergeRequest request, HttpContext ctx, LibraryEditor editor) =>
         {
             if (request.TargetGameId is not { } target || target == Guid.Empty)

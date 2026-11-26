@@ -392,6 +392,27 @@ public class GameQueryTests
     }
 
     [Test]
+    public async Task PullCoverCandidates_LinkedAndNotPulled_ByTitleThenId()
+    {
+        await Add("Unlinked");
+        await Add("Not On Igdb", igdbId: 0);
+        var pulled = await Add("Pulled", igdbId: 3);
+        var rated = await Add("Rated", igdbId: 4);
+        var zeta = await Add("Zeta", igdbId: 5);
+        var twinA = await Add("Twin", igdbId: 6, system: "gb");
+        var twinB = await Add("Twin", igdbId: 7, system: "gbc");
+        await using (var connection = _factory.Create())
+        {
+            await Dapper.SqlMapper.ExecuteAsync(connection, "INSERT INTO game_actions (game_id, cover_image_pulled_at) VALUES (@pulled, UTC_TIMESTAMP())", new { pulled });
+            await Dapper.SqlMapper.ExecuteAsync(connection, "INSERT INTO game_actions (game_id, igdb_rating) VALUES (@rated, 70)", new { rated });
+        }
+
+        var candidates = await _games.ListPullCoverCandidatesAsync(default);
+
+        Assert.That(candidates.Select(c => c.Id), Is.EqualTo(new[] { rated }.Concat(new[] { twinA, twinB }.Order()).Append(zeta)));
+    }
+
+    [Test]
     public async Task Search_MatchesDevelopersPublishersAndGenres_IgnoringCase()
     {
         await Add("Alpha", developers: ["Bullet-Proof Software"]);

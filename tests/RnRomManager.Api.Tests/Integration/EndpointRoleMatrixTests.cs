@@ -129,6 +129,7 @@ public partial class EndpointRoleMatrixTests
         ["POST /api/jobs/storage-migration"] = Role.Admin,
         ["POST /api/jobs/dat-refresh"] = Role.Admin,
         ["POST /api/jobs/media-retry"] = Role.Admin,
+        ["POST /api/jobs/pull-covers"] = Role.Admin,
         ["GET /api/jobs/current"] = Role.Admin,
         ["GET /api/jobs"] = Role.Admin,
         ["GET /api/jobs/{id:guid}"] = Role.Admin,

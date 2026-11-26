@@ -16,6 +16,12 @@ public enum JobType
 
     /// <summary>Release editing B19: moves version 1 saves into per-user folders, once.</summary>
     SaveFolders,
+
+    /// <summary>Admin actions P1: makes each IGDB-linked game's IGDB cover its cover.</summary>
+    PullCovers,
+
+    /// <summary>Admin actions R1: stores each IGDB-linked game's IGDB rating.</summary>
+    IgdbSync,
 }
 
 public enum JobMode
