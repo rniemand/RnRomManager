@@ -1,9 +1,10 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import type { LogEntry } from '#lib/types/index.js';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
 	type Level = LogEntry['level'];
@@ -111,20 +112,19 @@
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 	<!-- The API sends the ZIP as an attachment, so a plain link downloads it. -->
-	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- API endpoint, not an app route -->
-	<a class="btn btn-outline-primary" href="/api/admin/logs" download>
-		<Icon name="download" /> Download logs
-	</a>
-	<button type="button" class="btn btn-outline-secondary" onclick={togglePause}>
-		{paused ? 'Resume' : 'Pause'}
-	</button>
+	<Button variant="primary" outline href="/api/admin/logs" download icon="download"
+		>Download logs</Button
+	>
+	<Button variant="secondary" outline onclick={togglePause}>{paused ? 'Resume' : 'Pause'}</Button>
 	<div class="d-flex align-items-center gap-2">
 		<label class="small text-body-secondary text-nowrap" for="log-level">Minimum level</label>
-		<select id="log-level" class="form-select form-select-sm w-auto" bind:value={minLevel}>
-			{#each levels as level (level)}
-				<option value={level}>{level}</option>
-			{/each}
-		</select>
+		<Select
+			id="log-level"
+			size="sm"
+			class="w-auto"
+			bind:value={minLevel}
+			options={levels.map((level) => ({ value: level, label: level }))}
+		/>
 	</div>
 	{#if status === 'reconnecting'}
 		<span class="badge text-bg-warning" role="status">Reconnecting…</span>

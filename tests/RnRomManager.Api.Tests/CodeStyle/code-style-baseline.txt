@@ -32,13 +32,6 @@ SV4 src/RnRomManager.Web/src/lib/components/modals/ReleaseNoteModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/systems/SystemGames.svelte
 SV4 src/RnRomManager.Web/src/lib/components/systems/SystemList.svelte
 SV4 src/RnRomManager.Web/src/routes/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/admin/actions/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/admin/audit/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/admin/backups/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/admin/dats/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/admin/logs/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/admin/rom-storage/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/admin/users/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/bundle-creator/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/change-password/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/collections/+page.svelte

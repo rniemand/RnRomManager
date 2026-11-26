@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import ResetPasswordModal from '#lib/components/modals/ResetPasswordModal.svelte';
 	import CreateUserModal from '#lib/components/modals/CreateUserModal.svelte';
 	import { onMount } from 'svelte';
@@ -8,7 +10,6 @@
 	import type { Role } from '#lib/enums/index.js';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -21,6 +22,7 @@
 	/** U1: the two account types, mapped to the API's `roles`. The create form starts on Site user. */
 	type AccountType = 'admin' | 'site-user';
 	const typeLabels: Record<AccountType, string> = { admin: 'Admin', 'site-user': 'Site user' };
+	const typeOptions = Object.entries(typeLabels).map(([value, label]) => ({ value, label }));
 	const typeOf = (user: UserInfo): AccountType =>
 		user.roles.includes('admin') ? 'admin' : 'site-user';
 	const rolesOf = (type: AccountType): Role[] => (type === 'admin' ? ['admin'] : []);
@@ -81,9 +83,7 @@
 	<Loading />
 {:else}
 	<div class="d-flex justify-content-end mb-3">
-		<button type="button" class="btn btn-primary" onclick={openCreate}>
-			<Icon name="add-user" /> Create user
-		</button>
+		<Button variant="primary" icon="add-user" onclick={openCreate}>Create user</Button>
 	</div>
 	<div class="card">
 		<div class="table-responsive">
@@ -107,18 +107,16 @@
 								<td>{user.username}</td>
 								<td>
 									<span use:tooltip={self ? selfHint : ''}>
-										<select
-											class="form-select form-select-sm w-auto"
+										<Select
+											size="sm"
+											class="w-auto"
 											aria-label="Account type of {user.username}"
 											value={typeOf(user)}
 											disabled={self}
 											onchange={(e) =>
 												update(user, { roles: rolesOf(e.currentTarget.value as AccountType) })}
-										>
-											{#each Object.entries(typeLabels) as [value, label] (value)}
-												<option {value}>{label}</option>
-											{/each}
-										</select>
+											options={typeOptions}
+										/>
 									</span>
 								</td>
 								<td>
@@ -133,24 +131,24 @@
 								>
 								<td class="text-nowrap text-end">
 									<span class="d-inline-block" use:tooltip={self ? selfHint : ''}>
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-secondary"
+										<Button
+											variant="secondary"
+											outline
+											size="sm"
+											icon={user.isDisabled ? 'enable' : 'disable'}
 											aria-label="{user.isDisabled ? 'Enable' : 'Disable'} {user.username}"
 											disabled={self}
 											onclick={() => update(user, { isDisabled: !user.isDisabled })}
-										>
-											<Icon name={user.isDisabled ? 'enable' : 'disable'} />
-										</button>
+										/>
 									</span>
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary"
+									<Button
+										variant="secondary"
+										outline
+										size="sm"
+										icon="password"
 										aria-label="Reset password of {user.username}"
 										onclick={() => openReset(user)}
-									>
-										<Icon name="password" />
-									</button>
+									/>
 								</td>
 							</tr>
 						{/each}

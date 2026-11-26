@@ -1,4 +1,10 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import FormField from '#lib/components/forms/FormField.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { debounced } from '#lib/debounce.js';
 	import { replaceUrl } from '#lib/urlState.js';
@@ -132,16 +138,17 @@
 		role="search"
 		onsubmit={(e) => e.preventDefault()}
 	>
-		<label for="audit-search" class="visually-hidden">Search</label>
-		<input
-			id="audit-search"
-			type="search"
-			class="form-control form-control-sm flex-grow-1 audit-search"
-			placeholder="Search details and paths"
-			maxlength="200"
-			value={params.get('q') ?? ''}
-			oninput={(e) => textInput('q', e.currentTarget.value)}
-		/>
+		<FormField label="Search" for="audit-search" hiddenLabel>
+			<SearchInput
+				id="audit-search"
+				size="sm"
+				class="flex-grow-1 audit-search"
+				placeholder="Search details and paths"
+				maxlength={200}
+				value={params.get('q') ?? ''}
+				oninput={(e) => textInput('q', e.currentTarget.value)}
+			/>
+		</FormField>
 		<FilterDropdown
 			label="Action"
 			options={actions.map((a) => ({ value: a, label: a }))}
@@ -164,69 +171,70 @@
 			onselect={(system) => update({ system: system ?? '' })}
 		/>
 		<div class="dropdown">
-			<button
-				type="button"
+			<Button
 				class="btn btn-sm dropdown-toggle {userLabel ? 'btn-secondary' : 'btn-outline-secondary'}"
 				data-bs-toggle="dropdown"
 				data-bs-auto-close="outside"
 				aria-expanded="false"
 			>
 				User{#if userLabel}: {userLabel}{/if}
-			</button>
+			</Button>
 			<div class="dropdown-menu p-2 filter-panel">
-				<label for="audit-user" class="form-label small mb-1">User</label>
-				<input
-					id="audit-user"
-					class="form-control form-control-sm"
-					value={scheduled ? '' : (params.get('user') ?? '')}
-					disabled={scheduled}
-					oninput={(e) => textInput('user', e.currentTarget.value)}
+				<FormField label="User" for="audit-user" labelClass="small mb-1">
+					<TextInput
+						id="audit-user"
+						size="sm"
+						value={scheduled ? '' : (params.get('user') ?? '')}
+						disabled={scheduled}
+						oninput={(e) => textInput('user', e.currentTarget.value)}
+					/>
+				</FormField>
+				<Checkbox
+					id="audit-scheduled"
+					label="Scheduled only"
+					wrapperClass="mt-2 mb-0"
+					checked={scheduled}
+					onchange={(e) => setScheduled(e.currentTarget.checked)}
 				/>
-				<div class="form-check mt-2 mb-0">
-					<input
-						id="audit-scheduled"
-						type="checkbox"
-						class="form-check-input"
-						checked={scheduled}
-						onchange={(e) => setScheduled(e.currentTarget.checked)}
-					/><label for="audit-scheduled" class="form-check-label">Scheduled only</label>
-				</div>
 			</div>
 		</div>
 		<div class="dropdown">
-			<button
-				type="button"
+			<Button
 				class="btn btn-sm dropdown-toggle {dateLabel ? 'btn-secondary' : 'btn-outline-secondary'}"
 				data-bs-toggle="dropdown"
 				data-bs-auto-close="outside"
 				aria-expanded="false"
 			>
 				Date{#if dateLabel}: {dateLabel}{/if}
-			</button>
+			</Button>
 			<div class="dropdown-menu p-2 filter-panel">
-				<label for="audit-from" class="form-label small mb-1">From</label>
-				<input
-					id="audit-from"
-					type="date"
-					class="form-control form-control-sm mb-2"
-					value={params.get('from') ?? ''}
-					onchange={(e) => update({ from: e.currentTarget.value })}
-				/>
-				<label for="audit-to" class="form-label small mb-1">To</label>
-				<input
-					id="audit-to"
-					type="date"
-					class="form-control form-control-sm"
-					value={params.get('to') ?? ''}
-					onchange={(e) => update({ to: e.currentTarget.value })}
-				/>
+				<FormField label="From" for="audit-from" labelClass="small mb-1">
+					<TextInput
+						id="audit-from"
+						type="date"
+						size="sm"
+						class="mb-2"
+						value={params.get('from') ?? ''}
+						onchange={(e) => update({ from: e.currentTarget.value })}
+					/>
+				</FormField>
+				<FormField label="To" for="audit-to" labelClass="small mb-1">
+					<TextInput
+						id="audit-to"
+						type="date"
+						size="sm"
+						value={params.get('to') ?? ''}
+						onchange={(e) => update({ to: e.currentTarget.value })}
+					/>
+				</FormField>
 			</div>
 		</div>
-		<button
-			type="button"
-			class="btn btn-sm btn-outline-secondary"
+		<Button
+			variant="secondary"
+			outline
+			size="sm"
 			disabled={!keys.some((key) => params.has(key))}
-			onclick={clear}>Clear</button
+			onclick={clear}>Clear</Button
 		>
 	</form>
 	{#if optionsError}<ErrorAlert error={optionsError} onretry={() => reload++} />{/if}
@@ -261,36 +269,30 @@
 			{/each}
 		</div>
 		<!-- B30: five wrapping columns, no sideways scroll at ≥ 992 px (the wrapper stays for rule T1). -->
-		<div class="card d-none d-md-block">
-			<div class="table-responsive">
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<thead class="table-dark">
-						<tr>
-							<th scope="col">Time</th>
-							<th scope="col">Action</th>
-							<th scope="col">User</th>
-							<th scope="col">Game</th>
-							<th scope="col">Change</th>
-						</tr>
-					</thead>
-					<tbody
-						>{#each result.items as item (item.id)}<tr>
-								<td class="text-nowrap">{formatDateTime(item.occurredAt)}</td>
-								<td
-									><div>{item.action}</div>
-									{#if item.system}<SystemBadge
-											system={item.system}
-											name={systems.find((s) => s.id === item.system)?.displayName}
-										/>{/if}</td
-								>
-								<td>{@render who(item)}</td>
-								<td class="text-break">{@render gameCell(item)}</td>
-								<td class="text-break small">{@render changeText(item)}</td>
-							</tr>{/each}</tbody
+		<DataTable items={result.items} key={(item) => item.id} class="d-none d-md-block">
+			{#snippet head()}
+				<tr>
+					<th scope="col">Time</th>
+					<th scope="col">Action</th>
+					<th scope="col">User</th>
+					<th scope="col">Game</th>
+					<th scope="col">Change</th>
+				</tr>
+			{/snippet}
+			{#snippet row(item)}<tr>
+					<td class="text-nowrap">{formatDateTime(item.occurredAt)}</td>
+					<td
+						><div>{item.action}</div>
+						{#if item.system}<SystemBadge
+								system={item.system}
+								name={systems.find((s) => s.id === item.system)?.displayName}
+							/>{/if}</td
 					>
-				</table>
-			</div>
-		</div>
+					<td>{@render who(item)}</td>
+					<td class="text-break">{@render gameCell(item)}</td>
+					<td class="text-break small">{@render changeText(item)}</td>
+				</tr>{/snippet}
+		</DataTable>
 	{/if}
 	{@render pager('Pages, bottom')}
 </AdminOnly>
@@ -323,7 +325,8 @@
 {/snippet}
 
 <style>
-	.audit-search {
+	/* On the SearchInput's input, which this page doesn't render itself. */
+	form :global(.audit-search) {
 		min-width: 12rem;
 		max-width: 24rem;
 	}
@@ -332,7 +335,7 @@
 	}
 	/* Release editing B35: below md the search takes the toolbar's first row. */
 	@media (max-width: 767.98px) {
-		.audit-search {
+		form :global(.audit-search) {
 			flex-basis: 100%;
 			max-width: none;
 		}

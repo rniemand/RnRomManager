@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import PullCoverImagesModal from '#lib/components/modals/PullCoverImagesModal.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -89,11 +90,8 @@
 						{plural(counts.coversPending, 'game to process', 'games to process')}
 					</p>
 					<div class="mt-auto">
-						<button
-							type="button"
-							class="btn btn-primary"
-							{disabled}
-							onclick={() => (confirmOpen = true)}>Pull Cover Images</button
+						<Button variant="primary" {disabled} onclick={() => (confirmOpen = true)}
+							>Pull Cover Images</Button
 						>
 					</div>
 				</div>
@@ -110,12 +108,11 @@
 							: 'never refreshed'}
 					</p>
 					<div class="mt-auto">
-						<button
-							type="button"
-							class="btn btn-primary"
+						<Button
+							variant="primary"
 							{disabled}
 							onclick={() => void start('IgdbSync', '/api/jobs/igdb-sync')}
-							>Refresh IGDB Ratings</button
+							>Refresh IGDB Ratings</Button
 						>
 					</div>
 				</div>
