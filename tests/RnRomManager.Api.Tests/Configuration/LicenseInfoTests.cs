@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Xml.Linq;
 using RnRomManager.Api.Configuration;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Configuration;
 
@@ -9,18 +10,11 @@ public class LicenseInfoTests
 {
     private static readonly string[] Extra = ["RnRomManager", "libretro-database"];
 
-    private static string RepoRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            if (File.Exists(Path.Combine(dir.FullName, "RnRomManager.slnx")))
-                return dir.FullName;
-        throw new InvalidOperationException("Repository root not found.");
-    }
 
     /// <summary>Every NuGet package (central versions), every npm dependency/devDependency and the <c>emulatorjs-next.json</c> pins.</summary>
     private static IEnumerable<string> Dependencies()
     {
-        var root = RepoRoot();
+        var root = RepoPaths.Root();
         foreach (var package in XDocument.Load(Path.Combine(root, "Directory.Packages.props")).Descendants("PackageVersion"))
             yield return package.Attribute("Include")!.Value;
         using var npm = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src", "RnRomManager.Web", "package.json")));

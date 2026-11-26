@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests;
 
@@ -23,7 +24,7 @@ public class SupportedSystemsTableTests
         ];
         var expected = string.Join('\n', rows);
 
-        var readme = File.ReadAllText(Path.Combine(RepoRoot(), "README.md")).ReplaceLineEndings("\n");
+        var readme = File.ReadAllText(Path.Combine(RepoPaths.Root(), "README.md")).ReplaceLineEndings("\n");
         var section = readme.IndexOf("## Supported systems\n", StringComparison.Ordinal);
         var next = readme.IndexOf("## Quick start\n", StringComparison.Ordinal);
         Assert.That(section, Is.GreaterThanOrEqualTo(0), $"Expected table:\n{expected}");
@@ -41,11 +42,4 @@ public class SupportedSystemsTableTests
         return $"| {handler.DisplayName} | `{handler.Id}` | {storage} | {formats} | {dat} | {core} |";
     }
 
-    private static string RepoRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            if (File.Exists(Path.Combine(dir.FullName, "RnRomManager.slnx")))
-                return dir.FullName;
-        throw new InvalidOperationException("Repository root not found.");
-    }
 }
