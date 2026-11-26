@@ -27,16 +27,13 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         var where = $"WHERE {MissingImage}" + (systemId is null ? "" : " AND g.system_id = @systemId");
         var args = new { systemId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM games g {where}", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<MissingImageItem>(new CommandDefinition($"""
+        return await connection.QueryPageAsync<MissingImageItem>($"SELECT COUNT(*) FROM games g {where}", $"""
             SELECT g.id AS Id, g.display_title AS DisplayTitle, g.system_id AS SystemId,
                    CASE WHEN {NoCover} THEN '{MissingImageReasons.NoCover}' ELSE '{MissingImageReasons.Placeholder}' END AS Reason
             FROM games g {where}
             ORDER BY {MissingImageOrder}
             LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
-        return new Page<MissingImageItem>(rows.AsList(), page, pageSize, total);
+            """, args, page, pageSize, cancellationToken);
     }
 
     public async Task<Page<ImageResolutionItem>> ListImageResolutionsAsync(
@@ -60,16 +57,13 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         // R3: images.type is a VARCHAR, so the enum goes in by name (Dapper would send its number).
         var args = new { systemId, type = type?.ToString(), maxWidth, maxHeight, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM images i JOIN games g ON g.id = i.game_id {where}", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<ImageResolutionItem>(new CommandDefinition($"""
+        return await connection.QueryPageAsync<ImageResolutionItem>($"SELECT COUNT(*) FROM images i JOIN games g ON g.id = i.game_id {where}", $"""
             SELECT i.id AS ImageId, g.id AS GameId, g.display_title AS DisplayTitle, g.system_id AS SystemId, i.type AS Type,
                    i.width AS Width, i.height AS Height, i.size_bytes AS SizeBytes
             FROM images i JOIN games g ON g.id = i.game_id {where}
             ORDER BY CAST(i.width AS SIGNED) * i.height, g.system_id, g.display_title, i.id
             LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
-        return new Page<ImageResolutionItem>(rows.AsList(), page, pageSize, total);
+            """, args, page, pageSize, cancellationToken);
     }
 
     public async Task<MissingImageSuccessor> NextMissingImageAsync(Guid? afterGameId, CancellationToken cancellationToken)
@@ -123,27 +117,31 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             MissingMetadataField.Publisher => MissingPublisher,
             _ => throw new ArgumentOutOfRangeException(nameof(missing)),
         } + (systemId is null ? "" : " AND g.system_id = @systemId") + (q is null ? "" : " AND g.display_title LIKE @q");
-        var dir = descending ? "DESC" : "";
-        var order = sort switch
+        var order = MissingMetadataSortOrder(sort, descending);
+        var args = new { systemId, q = q is null ? null : SqlLike.Contains(q), pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        await using var connection = connections.Create();
+        var rows = await connection.QueryPageAsync<MissingMetadataRow>($"SELECT COUNT(*) FROM games g {where}", $"""
+            SELECT g.id AS Id, g.display_title AS DisplayTitle, g.system_id AS SystemId, g.release_year AS ReleaseYear,
+                   g.developers AS Developers, g.publishers AS Publishers
+            FROM games g {where}
+            ORDER BY {order}
+            LIMIT @pageSize OFFSET @offset
+            """, args, page, pageSize, cancellationToken);
+        var items = rows.Items.Select(r => new MissingMetadataItem(r.Id, r.DisplayTitle, r.SystemId, r.ReleaseYear, r.Developers, r.Publishers)).ToList();
+        return new Page<MissingMetadataItem>(items, page, pageSize, rows.Total);
+    }
+
+    /// <summary>The order of the two missing-* reports; the key and direction come only from the enum and bool.</summary>
+    private static string MissingMetadataSortOrder(MissingMetadataSort sort, bool descending)
+    {
+        var dir = SqlOrder.Dir(descending);
+        return sort switch
         {
             MissingMetadataSort.Name => $"g.display_title {dir}, g.id",
             MissingMetadataSort.System => $"g.system_id {dir}, g.display_title, g.id",
             MissingMetadataSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.display_title, g.id",
             _ => throw new ArgumentOutOfRangeException(nameof(sort)),
         };
-        var args = new { systemId, q = q is null ? null : SqlLike.Contains(q), pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
-        await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM games g {where}", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<MissingMetadataRow>(new CommandDefinition($"""
-            SELECT g.id AS Id, g.display_title AS DisplayTitle, g.system_id AS SystemId, g.release_year AS ReleaseYear,
-                   g.developers AS Developers, g.publishers AS Publishers
-            FROM games g {where}
-            ORDER BY {order}
-            LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
-        var items = rows.Select(r => new MissingMetadataItem(r.Id, r.DisplayTitle, r.SystemId, r.ReleaseYear, r.Developers, r.Publishers)).ToList();
-        return new Page<MissingMetadataItem>(items, page, pageSize, total);
     }
 
     public async Task<Page<MissingIgdbItem>> ListMissingIgdbIdsAsync(
@@ -163,27 +161,18 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             MissingIgdbStatus.NotOnIgdb => "g.igdb_id = 0",
             _ => throw new ArgumentOutOfRangeException(nameof(status)),
         } + (systemId is null ? "" : " AND g.system_id = @systemId") + (q is null ? "" : " AND g.display_title LIKE @q");
-        var dir = descending ? "DESC" : "";
-        var order = sort switch
-        {
-            MissingMetadataSort.Name => $"g.display_title {dir}, g.id",
-            MissingMetadataSort.System => $"g.system_id {dir}, g.display_title, g.id",
-            MissingMetadataSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.display_title, g.id",
-            _ => throw new ArgumentOutOfRangeException(nameof(sort)),
-        };
+        var order = MissingMetadataSortOrder(sort, descending);
         var args = new { systemId, q = q is null ? null : SqlLike.Contains(q), pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM games g {where}", args, cancellationToken: cancellationToken));
         // MissingMetadataRow: release_year is a SMALLINT, which Dapper only maps onto a settable int? (not a record parameter).
-        var rows = await connection.QueryAsync<MissingMetadataRow>(new CommandDefinition($"""
+        var rows = await connection.QueryPageAsync<MissingMetadataRow>($"SELECT COUNT(*) FROM games g {where}", $"""
             SELECT g.id AS Id, g.display_title AS DisplayTitle, g.system_id AS SystemId, g.release_year AS ReleaseYear
             FROM games g {where}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
-        var items = rows.Select(r => new MissingIgdbItem(r.Id, r.DisplayTitle, r.SystemId, r.ReleaseYear)).ToList();
-        return new Page<MissingIgdbItem>(items, page, pageSize, total);
+            """, args, page, pageSize, cancellationToken);
+        var items = rows.Items.Select(r => new MissingIgdbItem(r.Id, r.DisplayTitle, r.SystemId, r.ReleaseYear)).ToList();
+        return new Page<MissingIgdbItem>(items, page, pageSize, rows.Total);
     }
 
     public Task<MissingImageSuccessor> NextMissingMetadataAsync(Guid? afterGameId, CancellationToken cancellationToken) =>
@@ -257,7 +246,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         CancellationToken cancellationToken)
     {
         // B17: the key and direction come only from the enum and bool, never from input text.
-        var dir = descending ? "DESC" : "";
+        var dir = SqlOrder.Dir(descending);
         var order = sort switch
         {
             MultipleReleaseSort.Name => $"m.display_title {dir}, m.system_id, m.id",
@@ -270,17 +259,15 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         var args = new { min, systemId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
         const string where = "m.ReleaseCount >= @min AND (@systemId IS NULL OR m.system_id = @systemId)";
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM ({GameReleases}) m WHERE {where}", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<MultipleReleaseRow>(new CommandDefinition($"""
+        var rows = await connection.QueryPageAsync<MultipleReleaseRow>($"SELECT COUNT(*) FROM ({GameReleases}) m WHERE {where}", $"""
             SELECT m.id AS Id, m.display_title AS DisplayTitle, m.system_id AS SystemId, m.ReleaseCount, m.UpdateCount, m.Bytes
             FROM ({GameReleases}) m WHERE {where}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
-        var items = rows.Select(r => new MultipleReleaseItem(r.Id, r.DisplayTitle, r.SystemId, (int)r.ReleaseCount, (int)r.UpdateCount,
+            """, args, page, pageSize, cancellationToken);
+        var items = rows.Items.Select(r => new MultipleReleaseItem(r.Id, r.DisplayTitle, r.SystemId, (int)r.ReleaseCount, (int)r.UpdateCount,
             r.Bytes)).ToList();
-        return new Page<MultipleReleaseItem>(items, page, pageSize, total);
+        return new Page<MultipleReleaseItem>(items, page, pageSize, rows.Total);
     }
 
     public async Task<Page<HackedGameItem>> ListHackedGamesAsync(
@@ -292,7 +279,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         CancellationToken cancellationToken)
     {
         // The key and direction come only from the enum and bool, never from input text.
-        var dir = descending ? "DESC" : "";
+        var dir = SqlOrder.Dir(descending);
         var order = sort switch
         {
             HackedGameSort.Name => $"m.display_title {dir}, m.id",
@@ -310,16 +297,14 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             ) h WHERE h.HackCount > 0
             """;
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM ({hacked}) m", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<HackedGameRow>(new CommandDefinition($"""
+        var rows = await connection.QueryPageAsync<HackedGameRow>($"SELECT COUNT(*) FROM ({hacked}) m", $"""
             SELECT m.id AS Id, m.display_title AS DisplayTitle, m.system_id AS SystemId, m.HackCount, m.ReleaseCount, m.Bytes
             FROM ({hacked}) m
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
-        var items = rows.Select(r => new HackedGameItem(r.Id, r.DisplayTitle, r.SystemId, (int)r.HackCount, (int)r.ReleaseCount, r.Bytes)).ToList();
-        return new Page<HackedGameItem>(items, page, pageSize, total);
+            """, args, page, pageSize, cancellationToken);
+        var items = rows.Items.Select(r => new HackedGameItem(r.Id, r.DisplayTitle, r.SystemId, (int)r.HackCount, (int)r.ReleaseCount, r.Bytes)).ToList();
+        return new Page<HackedGameItem>(items, page, pageSize, rows.Total);
     }
 
     public async Task<IReadOnlyList<NewGameItem>> ListNewlyAddedGamesAsync(string? systemId, int perSystem, CancellationToken cancellationToken)
@@ -423,13 +408,12 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         var groupsSql = match == DuplicateMatch.Igdb ? IgdbGroups : TitleGroups;
         var args = new { systemId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM ({groupsSql}) g", args, cancellationToken: cancellationToken));
-        var groups = (await connection.QueryAsync<GroupRow>(new CommandDefinition(
-            $"{groupsSql} ORDER BY d.SystemId, d.BaseTitle, d.IgdbId LIMIT @pageSize OFFSET @offset", args,
-            cancellationToken: cancellationToken))).AsList();
+        var groups = await connection.QueryPageAsync<GroupRow>(
+            $"SELECT COUNT(*) FROM ({groupsSql}) g",
+            $"{groupsSql} ORDER BY d.SystemId, d.BaseTitle, d.IgdbId LIMIT @pageSize OFFSET @offset",
+            args, page, pageSize, cancellationToken);
 
-        var ids = groups.SelectMany(g => g.GameIds.Split(',')).Distinct().ToList();
+        var ids = groups.Items.SelectMany(g => g.GameIds.Split(',')).Distinct().ToList();
         var games = ids.Count == 0 ? [] : (await connection.QueryAsync<DuplicateGameRow>(new CommandDefinition("""
             SELECT g.id AS Id, g.display_title AS DisplayTitle,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
@@ -441,12 +425,12 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             .Select(r => new DuplicateGame(r.Id, r.DisplayTitle, (int)r.RomCount, r.ZipSizeBytes, r.CreatedAt, r.BoxArtImageId, r.BoxArtSha1))
             .ToDictionary(g => g.Id);
 
-        var items = groups.Select(g => new DuplicateGroup(g.SystemId, g.BaseTitle, g.GamesKey,
+        var items = groups.Items.Select(g => new DuplicateGroup(g.SystemId, g.BaseTitle, g.GamesKey,
             g.GameIds.Split(',').Select(Guid.Parse).Where(games.ContainsKey).Select(id => games[id])
                 // Suggested target first: most releases, then the oldest.
                 .OrderByDescending(x => x.RomCount).ThenBy(x => x.CreatedAt).ThenBy(x => x.Id.ToString("D"), StringComparer.Ordinal)
                 .ToList(), g.IgdbId)).ToList();
-        return new Page<DuplicateGroup>(items, page, pageSize, total);
+        return new Page<DuplicateGroup>(items, page, pageSize, groups.Total);
     }
 
     public async Task DismissDuplicateAsync(

@@ -235,9 +235,7 @@ public sealed class GameRepository : IGameRepository
         });
 
         await using var connection = _connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM {from} {filter}", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<ListRow>(new CommandDefinition($"""
+        var rows = await connection.QueryPageAsync<ListRow>($"SELECT COUNT(*) FROM {from} {filter}", $"""
             SELECT g.id AS Id, g.system_id AS SystemId, g.display_title AS DisplayTitle, g.release_year AS ReleaseYear,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
@@ -258,13 +256,13 @@ public sealed class GameRepository : IGameRepository
             FROM {from} {filter}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
+            """, args, query.Page, query.PageSize, cancellationToken);
 
-        var items = rows.Select(r => new GameListItem(
+        var items = rows.Items.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId, r.BoxArtSha1,
             r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns)),
             (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true, r.IgdbId)).ToList();
-        return new Page<GameListItem>(items, query.Page, query.PageSize, total);
+        return new Page<GameListItem>(items, query.Page, query.PageSize, rows.Total);
     }
 
     public async Task<GameFacets> ListFacetsAsync(GameQuery query, CancellationToken cancellationToken)

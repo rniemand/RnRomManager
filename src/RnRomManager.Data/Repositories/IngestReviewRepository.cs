@@ -50,11 +50,10 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
             q = filter?.Query is { } q ? SqlLike.Contains(q) : null,
             pageSize, offset = (long)(page - 1) * pageSize,
         };
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM ingest_review_items WHERE {where}", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<ReviewItem>(new CommandDefinition(
-            Select + $" WHERE {where} ORDER BY created_at, id LIMIT @pageSize OFFSET @offset", args, cancellationToken: cancellationToken));
-        return new Page<ReviewItem>(rows.AsList(), page, pageSize, total);
+        return await connection.QueryPageAsync<ReviewItem>(
+            $"SELECT COUNT(*) FROM ingest_review_items WHERE {where}",
+            Select + $" WHERE {where} ORDER BY created_at, id LIMIT @pageSize OFFSET @offset",
+            args, page, pageSize, cancellationToken);
     }
 
     public async Task SetResolutionAsync(

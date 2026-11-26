@@ -72,11 +72,10 @@ public sealed class JobRepository(IDbConnectionFactory connections) : IJobReposi
         const string where = "WHERE @type IS NULL OR type = @type";
         var args = new { type = type?.ToString(), offset = Page<Job>.Offset(page, pageSize), pageSize };
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition($"SELECT COUNT(*) FROM jobs {where}", args, cancellationToken: cancellationToken));
-        var items = await connection.QueryAsync<Job>(new CommandDefinition(
-            $"{Select} {where} ORDER BY started_at DESC, id LIMIT @pageSize OFFSET @offset", args, cancellationToken: cancellationToken));
-        return new Page<Job>(items.AsList(), page, pageSize, total);
+        return await connection.QueryPageAsync<Job>(
+            $"SELECT COUNT(*) FROM jobs {where}",
+            $"{Select} {where} ORDER BY started_at DESC, id LIMIT @pageSize OFFSET @offset",
+            args, page, pageSize, cancellationToken);
     }
 
     public async Task<Job?> GetLatestAsync(JobType type, JobMode? mode, CancellationToken cancellationToken)

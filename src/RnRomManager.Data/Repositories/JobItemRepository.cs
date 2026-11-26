@@ -27,14 +27,11 @@ public sealed class JobItemRepository(IDbConnectionFactory connections) : IJobIt
         const string where = "WHERE job_id = @jobId AND (@outcome IS NULL OR outcome = @outcome)";
         var args = new { jobId, outcome, offset = Page<JobItem>.Offset(page, pageSize), pageSize };
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition($"SELECT COUNT(*) FROM job_items {where}", args, cancellationToken: cancellationToken));
-        var items = await connection.QueryAsync<JobItem>(new CommandDefinition($"""
+        return await connection.QueryPageAsync<JobItem>($"SELECT COUNT(*) FROM job_items {where}", $"""
             SELECT id AS Id, job_id AS JobId, file_id AS FileId, system_id AS SystemId, source_path AS SourcePath,
                    archive_entry AS ArchiveEntry, outcome AS Outcome, reason AS Reason, details AS Details,
                    game_id AS GameId, sha1 AS Sha1, created_at AS CreatedAt
             FROM job_items {where} ORDER BY id LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
-        return new Page<JobItem>(items.AsList(), page, pageSize, total);
+            """, args, page, pageSize, cancellationToken);
     }
 }

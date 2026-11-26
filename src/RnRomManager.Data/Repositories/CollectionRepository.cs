@@ -57,11 +57,10 @@ public sealed class CollectionRepository(IDbConnectionFactory connections) : ICo
         }
 
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM collections c {where}", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<Collection>(new CommandDefinition(
-            $"{Select} {where} ORDER BY c.name, c.id LIMIT @pageSize OFFSET @offset", args, cancellationToken: cancellationToken));
-        return new Page<Collection>(rows.AsList(), page, pageSize, total);
+        return await connection.QueryPageAsync<Collection>(
+            $"SELECT COUNT(*) FROM collections c {where}",
+            $"{Select} {where} ORDER BY c.name, c.id LIMIT @pageSize OFFSET @offset",
+            args, page, pageSize, cancellationToken);
     }
 
     public async Task<bool> UpdateAsync(Collection collection, CancellationToken cancellationToken)
