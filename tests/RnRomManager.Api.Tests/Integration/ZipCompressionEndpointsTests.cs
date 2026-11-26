@@ -150,7 +150,7 @@ public class ZipCompressionEndpointsTests
     [Test]
     public async Task Put_WhileAJobRuns_Is409_AndSavesNothing()
     {
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var response = await Put("gba", new { level = "Store" });
 
@@ -176,7 +176,7 @@ public class ZipCompressionEndpointsTests
     [Test]
     public async Task Repack_WhileAJobRuns_Is409()
     {
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var response = await Repack("gba");
 

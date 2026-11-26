@@ -255,7 +255,7 @@ public class BackupEndpointsTests
             Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty("fileName", out _), Is.True, bad);
         }
 
-        using (Factory.Services.GetRequiredService<RnRomManager.Core.Jobs.JobLock>().TryAcquire())
+        using (Factory.Services.GetRequiredService<RnRomManager.Core.Jobs.JobLock>().TryAcquire("test"))
         using (var busy = await RestoreAsync(Admin, earlier))
         {
             Assert.That(busy.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));

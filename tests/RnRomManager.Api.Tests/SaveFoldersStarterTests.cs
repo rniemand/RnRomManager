@@ -97,7 +97,7 @@ public class SaveFoldersStarterTests
     public async Task BusyLock_IsRetriedAfterFiveMinutes()
     {
         Stored(null);
-        var held = _lock.TryAcquire()!;
+        var held = _lock.TryAcquire("test")!;
         _appStarted.Cancel();
         await _starter.StartAsync(CancellationToken.None);
         await Until(() => _time.Timers == 1);

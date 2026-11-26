@@ -53,7 +53,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// <param name="actor">The editing user; null (the rating/favourite endpoint) records nothing.</param>
     public async Task<LibraryEditResult> PatchAsync(Guid gameId, GamePatch patch, AuditActor? actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
@@ -156,7 +156,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     private async Task<LibraryEditResult> WriteNoteAsync(Guid gameId, long romId, byte[]? bytes, bool missingIsNotFound, int? userId,
         CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
@@ -186,7 +186,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
 
     public async Task<LibraryEditResult> DeleteReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
@@ -230,7 +230,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// </summary>
     public async Task<LibraryEditResult> SetPrimaryReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
@@ -269,7 +269,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// </summary>
     public async Task<LibraryEditResult> EditReleaseAsync(Guid gameId, long romId, ReleaseEdit patch, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
@@ -406,7 +406,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
 
     public async Task<LibraryEditResult> DeleteGameAsync(Guid gameId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
@@ -443,7 +443,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         if (ImageFormats.Read(bytes) is not var (format, width, height))
             return Invalid("file", "The image's dimensions can't be read.");
 
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
@@ -502,7 +502,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// </summary>
     public async Task<LibraryEditResult> DeleteImageAsync(Guid gameId, long imageId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         var (error, row, zip, current, image) = await OpenImageAsync(gameId, imageId, ct).ConfigureAwait(false);
@@ -541,7 +541,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// <summary>I7: makes one image the cover (any type, the placeholder too).</summary>
     public async Task<LibraryEditResult> SetCoverAsync(Guid gameId, long imageId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         var (error, row, zip, current, image) = await OpenImageAsync(gameId, imageId, ct).ConfigureAwait(false);
@@ -589,7 +589,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// <summary>§10.2 "Retry media" for one game, with its own circuit breaker. Nothing new found is still a success.</summary>
     public async Task<LibraryEditResult> RetryMediaAsync(Guid gameId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
@@ -610,7 +610,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     public async Task<LibraryEditResult> MoveReleaseAsync(Guid gameId, long romId, Guid? targetGameId, string? newGameTitle, AuditActor actor,
         CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (targetGameId == gameId)
@@ -758,7 +758,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// </summary>
     public async Task<LibraryEditResult> MergeAsync(Guid gameId, Guid targetGameId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (targetGameId == gameId)

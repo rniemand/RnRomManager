@@ -517,7 +517,7 @@ public class LibraryMoveMergeTests
         var tetris = await Game(("t1.gb", TetrisWorld), ("t2.gb", TetrisJapan));
         var zelda = await Game(("z.gb", Zelda));
         var romId = await RomId(tetris, "Tetris (Japan).gb");
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         using var move = await Move(tetris, romId, new { targetGameId = zelda });
         using var merge = await Merge(tetris, zelda);

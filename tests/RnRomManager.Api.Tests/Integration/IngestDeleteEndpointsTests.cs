@@ -225,7 +225,7 @@ public class IngestDeleteEndpointsTests
     {
         var keep = Ingest("gb", "a.gb");
         File.WriteAllBytes(keep, [1]);
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         using var response = await Delete(new { system = "gb", folder = "pending", name = "a.gb" });
 

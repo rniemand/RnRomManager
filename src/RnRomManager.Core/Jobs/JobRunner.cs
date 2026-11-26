@@ -23,7 +23,7 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserReposit
     /// <exception cref="Exception">The <c>jobs</c> insert failed; the lock is released.</exception>
     public async Task<StartedJob?> StartAsync(IJob job, JobTrigger trigger, int? requestedBy, CancellationToken cancellationToken)
     {
-        var release = jobLock.TryAcquire();
+        var release = jobLock.TryAcquire(job.Type.ToString(), job.Type);
         if (release is null)
             return null;
 

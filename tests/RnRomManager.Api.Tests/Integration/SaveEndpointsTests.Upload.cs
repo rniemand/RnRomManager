@@ -199,7 +199,7 @@ public partial class SaveEndpointsTests
     {
         var game = await WriteGame("Tetris", "Tetris (World).gb");
         var romId = await RomId(game.Id, "Tetris (World).gb");
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         using var response = await Upload(game.Id, AddForm(romId, [1, 2]));
 

@@ -88,6 +88,32 @@ public class JobRunnerTests
     }
 
     [Test]
+    public async Task Activity_IsTheJobTypeWhileRunning_ClearedAtTheEnd()
+    {
+        var (job, started) = await StartAsync();
+
+        Assert.That(_lock.Activity, Is.EqualTo(new JobLockActivity("Integrity", JobType.Integrity)));
+        job.Release.SetResult();
+        await started.Completion.WaitAsync(Timeout);
+        Assert.That(_lock.Activity, Is.Null);
+    }
+
+    [Test]
+    public void JobLock_Activity_NullWhenFree_SetWhileHeld_ClearedOnDispose()
+    {
+        Assert.That(_lock.Activity, Is.Null);
+        var held = _lock.TryAcquire("Saving changes")!;
+        Assert.That((_lock.Activity, _lock.TryAcquire("other")), Is.EqualTo((new JobLockActivity("Saving changes", null), (IDisposable?)null)));
+
+        held.Dispose();
+        held.Dispose();
+
+        Assert.That(_lock.Activity, Is.Null);
+        using var again = _lock.TryAcquire("again");
+        Assert.That(_lock.Activity!.Activity, Is.EqualTo("again"));
+    }
+
+    [Test]
     public void JobContext_WithoutAnActor_IsTheJobAsSystem()
     {
         var id = Guid.NewGuid();
@@ -106,7 +132,7 @@ public class JobRunnerTests
 
         await FinishedWith(started.Id, JobStatus.Completed, """{"done":1}""");
         Assert.That(_runner.Current, Is.Null);
-        Assert.That(_lock.TryAcquire(), Is.Not.Null, "lock released");
+        Assert.That(_lock.TryAcquire("test"), Is.Not.Null, "lock released");
     }
 
     [Test]
@@ -155,7 +181,7 @@ public class JobRunnerTests
     [Test]
     public async Task LockHeldByALibraryEdit_ReturnsNull()
     {
-        using var edit = _lock.TryAcquire();
+        using var edit = _lock.TryAcquire("test");
 
         Assert.That(await _runner.StartAsync(new NoopTestJob(), JobTrigger.Manual, null, CancellationToken.None), Is.Null);
     }
@@ -207,7 +233,7 @@ public class JobRunnerTests
         await started.Completion.WaitAsync(Timeout);
 
         await FinishedWith(started.Id, JobStatus.Failed, error: "DAT download failed");
-        Assert.That(_lock.TryAcquire(), Is.Not.Null);
+        Assert.That(_lock.TryAcquire("test"), Is.Not.Null);
     }
 
     [Test]
@@ -220,7 +246,7 @@ public class JobRunnerTests
         await started.Completion.WaitAsync(Timeout);
 
         Assert.That(_runner.Current, Is.Null);
-        Assert.That(_lock.TryAcquire(), Is.Not.Null);
+        Assert.That(_lock.TryAcquire("test"), Is.Not.Null);
     }
 
     [Test]
@@ -229,7 +255,7 @@ public class JobRunnerTests
         _jobs.InsertAsync(default!, default).ThrowsAsyncForAnyArgs(new TimeoutException("DB down"));
 
         await Assert.ThrowsAsync<TimeoutException>(() => _runner.StartAsync(new NoopTestJob(), JobTrigger.Manual, null, CancellationToken.None));
-        Assert.That(_lock.TryAcquire(), Is.Not.Null);
+        Assert.That(_lock.TryAcquire("test"), Is.Not.Null);
         Assert.That(_runner.Current, Is.Null);
     }
 

@@ -147,7 +147,7 @@ public class DatRefreshSchedulerTests
     [Test]
     public async Task BusyLock_RetriesEveryMinute_UntilTheJobStarts()
     {
-        var held = _lock.TryAcquire()!;
+        var held = _lock.TryAcquire("test")!;
         await StartAsync();
         await Eventually(() => Logged("Next scheduled DAT refresh: 2026-11-05T04:00:00"));
 
@@ -169,7 +169,7 @@ public class DatRefreshSchedulerTests
     [Test]
     public async Task BusyUntilTheNextDueTime_SkipsThatDay_AndTriesTheNextAtOnce()
     {
-        var held = _lock.TryAcquire()!;
+        var held = _lock.TryAcquire("test")!;
         await StartAsync();
         await Eventually(() => Logged("Next scheduled DAT refresh: 2026-11-05T04:00:00"));
         await AdvanceTo(At(5, 4));

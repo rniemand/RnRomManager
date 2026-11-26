@@ -195,7 +195,7 @@ public class MediaRetryEndpointsTests
         using (var unknown = await _admin.PostAsync($"/api/games/{Guid.NewGuid()}/media/retry"))
             Assert.That(unknown.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
 
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var busy = await _admin.PostAsync($"/api/games/{id}/media/retry");
             using var busyJob = await _admin.PostAsync("/api/jobs/media-retry");

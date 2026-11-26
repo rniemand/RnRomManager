@@ -242,7 +242,7 @@ public class LibraryImageEditTests
         Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, huge, Actor, default)).Errors!["file"][0], Does.Contain("8 MiB"));
         Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, Placeholder, Actor, default)).Code, Is.EqualTo(LibraryEditResult.DuplicateImage));
         Assert.That((await _editor.AddImageAsync(Guid.NewGuid(), ImageType.Snap, NewPng(), Actor, default)).Code, Is.EqualTo(LibraryEditResult.NotFound));
-        using (_lock.TryAcquire())
+        using (_lock.TryAcquire("test"))
             Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), Actor, default)).Code, Is.EqualTo(LibraryEditResult.JobRunning));
         Assert.That(Stored(), Has.Count.EqualTo(1), "nothing was written");
     }
@@ -312,7 +312,7 @@ public class LibraryImageEditTests
 
         Assert.That((await _editor.DeleteImageAsync(GameId, 1, Actor, default)).Code, Is.EqualTo(LibraryEditResult.DefaultImage));
         Assert.That((await _editor.DeleteImageAsync(GameId, 99, Actor, default)).Code, Is.EqualTo(LibraryEditResult.NotFound));
-        using (_lock.TryAcquire())
+        using (_lock.TryAcquire("test"))
             Assert.That((await _editor.DeleteImageAsync(GameId, 1, Actor, default)).Code, Is.EqualTo(LibraryEditResult.JobRunning));
         Assert.That(Stored(), Has.Count.EqualTo(1));
     }
@@ -328,7 +328,7 @@ public class LibraryImageEditTests
         Assert.That((await _editor.SetCoverAsync(GameId, 2, Actor, default)).Code, Is.Null, "already the cover: a no-op");
         Assert.That(Recorded(), Is.EqualTo(new[] { ("CoverSet", (string?)"snap-01.png") }), "the no-op wrote nothing");
         Assert.That((await _editor.SetCoverAsync(GameId, 99, Actor, default)).Code, Is.EqualTo(LibraryEditResult.NotFound));
-        using (_lock.TryAcquire())
+        using (_lock.TryAcquire("test"))
             Assert.That((await _editor.SetCoverAsync(GameId, 1, Actor, default)).Code, Is.EqualTo(LibraryEditResult.JobRunning));
     }
 }

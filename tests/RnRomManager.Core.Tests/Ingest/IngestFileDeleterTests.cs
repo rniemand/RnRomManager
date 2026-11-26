@@ -103,7 +103,7 @@ public class IngestFileDeleterTests
     public async Task BusyLock_IsJobRunning_AndDeletesNothing()
     {
         var path = Write("gb", "a.gb");
-        using (_lock.TryAcquire())
+        using (_lock.TryAcquire("test"))
             Assert.That((await _deleter.DeleteAsync([new("gb", "pending", "a.gb")], Actor, default)).Code, Is.EqualTo("JobRunning"));
         Assert.That(File.Exists(path), Is.True);
         await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
@@ -122,7 +122,7 @@ public class IngestFileDeleterTests
         Assert.That(File.Exists(loose) || File.Exists(zip), Is.False);
         await _reviews.Received(1).DeletePendingBySourceAsync(loose, null, Arg.Any<CancellationToken>());
         await _reviews.Received(1).DeletePendingBySourceAsync(zip, zip, Arg.Any<CancellationToken>());
-        using var released = _lock.TryAcquire();
+        using var released = _lock.TryAcquire("test");
         Assert.That(released, Is.Not.Null);
     }
 

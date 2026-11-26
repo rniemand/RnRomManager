@@ -103,6 +103,7 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 - `GET /api/integrity/issues` Admin
 
 `src/RnRomManager.Api/Endpoints/JobEndpoints.cs`:
+- `GET /api/activity` Admin
 - `GET /api/jobs/current` Admin
 - `GET /api/jobs` Admin
 - `GET /api/jobs/{id:guid}` Admin

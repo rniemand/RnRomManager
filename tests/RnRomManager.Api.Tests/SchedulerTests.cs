@@ -107,7 +107,7 @@ public class SchedulerTests
     [Test]
     public async Task WhenBusy_TheRunIsSkipped_WithAnInfoLog()
     {
-        using var held = _lock.TryAcquire();
+        using var held = _lock.TryAcquire("test");
         var scheduler = Create();
         await scheduler.StartAsync(CancellationToken.None);
 

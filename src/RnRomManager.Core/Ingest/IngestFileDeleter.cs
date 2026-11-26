@@ -75,7 +75,7 @@ public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository r
     /// <param name="files">Already checked by <see cref="Validate"/>.</param>
     public async Task<IngestDeleteResult> DeleteAsync(IReadOnlyList<IngestDeleteRef> files, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Deleting ingest files");
         if (held is null)
             return new(0, [], "JobRunning");
         var seen = new HashSet<IngestDeleteRef>();

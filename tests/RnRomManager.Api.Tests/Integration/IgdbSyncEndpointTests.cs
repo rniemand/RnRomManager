@@ -120,7 +120,7 @@ public class IgdbSyncEndpointTests
         }
 
         _igdb.Configured.Returns(true);
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var busy = await _admin.PostAsync("/api/jobs/igdb-sync");
             Assert.That((busy.StatusCode, await AuthClient.CodeAsync(busy)), Is.EqualTo((HttpStatusCode.Conflict, "JobRunning")));

@@ -76,7 +76,7 @@ public class ReviewResolverTests
     [Test]
     public async Task BusyLock_RefusesWithoutReadingOrChangingReview()
     {
-        using var held = _lock.TryAcquire();
+        using var held = _lock.TryAcquire("test");
         Assert.That((await _resolver.DismissAsync(1, Actor, default)).Code, Is.EqualTo("JobRunning"));
         await _reviews.DidNotReceiveWithAnyArgs().GetAsync(default, default);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
@@ -88,7 +88,7 @@ public class ReviewResolverTests
     {
         _item = _item with { Status = status };
         Assert.That((await _resolver.DismissAsync(1, Actor, default)).Code, Is.EqualTo("NotFound"));
-        using var released = _lock.TryAcquire();
+        using var released = _lock.TryAcquire("test");
         Assert.That(released, Is.Not.Null);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
     }
@@ -112,7 +112,7 @@ public class ReviewResolverTests
         File.Delete(_item.SourcePath);
         Assert.That((await _resolver.DismissAsync(1, Actor, default)).Code, Is.EqualTo("SourceMissing"));
         await _reviews.Received().DeleteAsync(Arg.Is<IReadOnlyCollection<long>>(ids => ids.Single() == 1), default);
-        using var released = _lock.TryAcquire();
+        using var released = _lock.TryAcquire("test");
         Assert.That(released, Is.Not.Null);
     }
 
@@ -148,7 +148,7 @@ public class ReviewResolverTests
         Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
         await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
-        using var released = _lock.TryAcquire();
+        using var released = _lock.TryAcquire("test");
         Assert.That(released, Is.Not.Null);
     }
 
@@ -160,7 +160,7 @@ public class ReviewResolverTests
         Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
         await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
-        using var released = _lock.TryAcquire();
+        using var released = _lock.TryAcquire("test");
         Assert.That(released, Is.Not.Null);
     }
 
@@ -277,7 +277,7 @@ public class ReviewResolverTests
 
         Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.EqualTo("DeleteFailed"));
         await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
-        using var released = _lock.TryAcquire();
+        using var released = _lock.TryAcquire("test");
         Assert.That(released, Is.Not.Null);
     }
 
@@ -303,14 +303,14 @@ public class ReviewResolverTests
         Assert.That(File.Exists(_item.SourcePath) || File.Exists(archive), Is.False);
         Assert.That(Recorded().Select(r => (r.Action, r.Path)),
             Is.EqualTo(new[] { ("ReviewDeleted", (string?)"ingest/test.gb"), ("ReviewDeleted", "ingest/pack.zip") }));
-        using var released = _lock.TryAcquire();
+        using var released = _lock.TryAcquire("test");
         Assert.That(released, Is.Not.Null);
     }
 
     [Test]
     public async Task DeleteMany_WhenBusy_IsNull_AndDeletesNothing()
     {
-        using (_lock.TryAcquire())
+        using (_lock.TryAcquire("test"))
             Assert.That(await _resolver.DeleteSourcesAsync([1], Actor, default), Is.Null);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         await _reviews.DidNotReceiveWithAnyArgs().GetAsync(default, default);
@@ -322,7 +322,7 @@ public class ReviewResolverTests
         _item = _item with { Status = "Resolved" };
         Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.EqualTo("NotFound"));
         _item = _item with { Status = "Pending" };
-        using (_lock.TryAcquire())
+        using (_lock.TryAcquire("test"))
             Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.EqualTo("JobRunning"));
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);

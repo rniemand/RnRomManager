@@ -352,7 +352,7 @@ public class BackupServiceTests
     [TestCase("")]
     public async Task Restore_NameNotInTheList_IsInvalidName_WithoutTakingALock(string name)
     {
-        using var held = _jobLock.TryAcquire();
+        using var held = _jobLock.TryAcquire("test");
 
         Assert.That((await RestoreAsync(name)).Status, Is.EqualTo(BackupRestoreStatus.InvalidName), "checked before the locks");
         await _maintenance.DidNotReceiveWithAnyArgs().TryEnterAsync(default);
@@ -362,7 +362,7 @@ public class BackupServiceTests
     public async Task Restore_JobLockHeld_IsJobRunning()
     {
         var name = RestorableBackup(T0.AddDays(-1));
-        using var held = _jobLock.TryAcquire();
+        using var held = _jobLock.TryAcquire("test");
 
         Assert.That((await RestoreAsync(name)).Status, Is.EqualTo(BackupRestoreStatus.JobRunning));
         await AssertNothingChanged();
@@ -382,7 +382,7 @@ public class BackupServiceTests
         var running = _service.CreateAsync(5, default);
 
         Assert.That((await RestoreAsync(name)).Status, Is.EqualTo(BackupRestoreStatus.BackupRunning));
-        using (var free = _jobLock.TryAcquire())
+        using (var free = _jobLock.TryAcquire("test"))
             Assert.That(free, Is.Not.Null, "the job lock is released again");
         block.SetResult();
         await running;
@@ -465,7 +465,7 @@ public class BackupServiceTests
         });
         Assert.That((backupWoken, datWoken), Is.EqualTo((1, 1)), "both schedulers re-read the restored settings");
         Assert.That(_windowClosed, Is.EqualTo(1));
-        using (var free = _jobLock.TryAcquire())
+        using (var free = _jobLock.TryAcquire("test"))
             Assert.That(free, Is.Not.Null);
         Assert.That(_service.IsRunning, Is.False);
     }

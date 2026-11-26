@@ -178,7 +178,7 @@ public partial class SaveEndpointsTests
 
         using (var noGame = await _user.PatchAsync($"/api/games/{Guid.NewGuid()}/saves/{unknown}", body))
             Assert.That(noGame.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-        using (var held = Service<JobLock>().TryAcquire())
+        using (var held = Service<JobLock>().TryAcquire("test"))
         {
             using (var migrating = await _user.PatchAsync($"/api/games/{legacy.GameId}/saves/{unknown}", body))
                 await AssertConflict(migrating, "StorageMigrationPending", StorageMigrationTitle);

@@ -24,7 +24,7 @@ public sealed class RemovedFileRestorer(JobLock jobLock, ISystemRegistry systems
     /// <param name="files">Already checked by <see cref="IngestFileDeleter.Validate"/> with folder <c>removed</c>; duplicates are ignored.</param>
     public RemovedRestoreResult Restore(IReadOnlyList<IngestDeleteRef> files, AuditActor actor)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Restoring removed files");
         if (held is null)
             return new([], [], "JobRunning");
         var seen = new HashSet<IngestDeleteRef>();

@@ -493,7 +493,7 @@ public class LibraryEditTests
     {
         var id = await Tetris();
         var romId = await RomId(id, "Tetris (World).gb");
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         foreach (var (method, url) in new[] { (HttpMethod.Patch, $"/api/games/{id}"), (HttpMethod.Delete, $"/api/games/{id}/roms/{romId}"), (HttpMethod.Delete, $"/api/games/{id}") })
         {
@@ -555,7 +555,7 @@ public class LibraryEditTests
             Assert.That((await AuthClient.JsonAsync(update)).GetProperty("fileName").GetString(), Is.EqualTo("Tetris (World)[1.0.1].gb"));
         using (var missing = await _admin.PatchAsync($"/api/games/{id}/roms/999999", new { hack = true }))
             Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var busy = await _admin.PatchAsync($"/api/games/{id}/roms/{world}", new { hack = true });
             Assert.That(await AuthClient.CodeAsync(busy), Is.EqualTo("JobRunning"));

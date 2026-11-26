@@ -297,7 +297,7 @@ public partial class ExternalLibraryTests
     public async Task BusyLock_ChangesNothing()
     {
         var gameId = await TwoReleaseGameAsync();
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         Assert.That((await RetitleAsync(gameId, "Star Game")).Code, Is.EqualTo(LibraryEditResult.JobRunning));
         AssertUntouched();

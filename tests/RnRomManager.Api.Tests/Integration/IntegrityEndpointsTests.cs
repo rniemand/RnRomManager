@@ -114,7 +114,7 @@ public class IntegrityEndpointsTests
     {
         await Start();
         await MirrorLegacyDs("Alpha");
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         using var response = await _admin.PostAsync("/api/jobs/storage-migration");
 
@@ -164,7 +164,7 @@ public class IntegrityEndpointsTests
             Assert.That((await AuthClient.JsonAsync(invalid)).GetProperty("errors").TryGetProperty("mode", out _), Is.True);
         }
 
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
         using var busy = await _admin.PostAsync("/api/jobs/integrity", new { mode = "Quick" });
         Assert.That((busy.StatusCode, await AuthClient.CodeAsync(busy)), Is.EqualTo((HttpStatusCode.Conflict, "JobRunning")));
     }

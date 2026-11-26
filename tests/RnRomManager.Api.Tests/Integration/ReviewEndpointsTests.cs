@@ -406,7 +406,7 @@ public class ReviewEndpointsTests
         Assert.That(code, Is.EqualTo("SourceMissing"));
         Assert.That(await Reviews.GetAsync(item.Id, default), Is.Null);
         await WaitIdleAsync();
-        using var released = Service<JobLock>().TryAcquire();
+        using var released = Service<JobLock>().TryAcquire("test");
         Assert.That(released, Is.Not.Null);
     }
 
@@ -415,7 +415,7 @@ public class ReviewEndpointsTests
     public async Task LockBusy_Is409_LeavesItemPending(string action)
     {
         var item = await Queue();
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
         using var response = await _admin.PostAsync($"/api/review/{item.Id}/{action}", action == "resolve" ? Manual() : null);
         Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("JobRunning"));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
@@ -439,7 +439,7 @@ public class ReviewEndpointsTests
     {
         var item = await Queue();
         using var unknown = await _admin.SendAsync(HttpMethod.Delete, "/api/review/999999", null, true);
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var busy = await _admin.SendAsync(HttpMethod.Delete, $"/api/review/{item.Id}", null, true);
             Assert.That(busy.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
@@ -494,7 +494,7 @@ public class ReviewEndpointsTests
     public async Task DeleteBatch_LockBusy_Is409_AndDeletesNothing()
     {
         var item = await Queue();
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var busy = await _admin.PostAsync("/api/review/delete", new { ids = new[] { item.Id } });
             Assert.That(busy.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));

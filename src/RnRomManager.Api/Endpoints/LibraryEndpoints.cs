@@ -507,7 +507,7 @@ public static class LibraryEndpoints
                 return;
             if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
             {
-                using var held = jobLock.TryAcquire();
+                using var held = jobLock.TryAcquire("Saving changes");
                 if (held is null)
                     logger.LogInformation("Resolving DefaultBoxArt of {ZipPath} skipped: another job is running", row.ZipPath);
                 else

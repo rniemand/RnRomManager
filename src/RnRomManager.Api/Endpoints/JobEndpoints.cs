@@ -10,6 +10,11 @@ public static class JobEndpoints
 {
     public static RouteGroupBuilder MapJobEndpoints(this RouteGroupBuilder api)
     {
+        // L2: what holds the job lock, for every signed-in user's footer.
+        api.MapGet("/activity", (JobLock jobLock) => jobLock.Activity is { } held
+            ? Results.Ok(new { activity = held.Activity, jobType = held.JobType?.ToString() })
+            : Results.NoContent());
+
         var jobs = api.MapGroup("/jobs").RequireAuthorization(AuthSetup.AdminOnly);
 
         jobs.MapGet("/current", (JobRunner runner) =>

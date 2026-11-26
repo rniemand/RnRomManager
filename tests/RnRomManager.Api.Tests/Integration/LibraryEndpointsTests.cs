@@ -856,7 +856,7 @@ public partial class LibraryEndpointsTests
             Assert.That(bad.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
             Assert.That(await AuthClient.CodeAsync(bad), Is.EqualTo("ValidationFailed"));
         }
-        using (Service<RnRomManager.Core.Jobs.JobLock>().TryAcquire())
+        using (Service<RnRomManager.Core.Jobs.JobLock>().TryAcquire("test"))
         using (var busy = await admin.PatchAsync($"/api/games/{id}/rating", new { rating = 3 }))
         {
             Assert.That(busy.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));

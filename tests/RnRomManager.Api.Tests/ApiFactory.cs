@@ -140,7 +140,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         var deadline = DateTime.UtcNow.AddSeconds(30);
         while (true)
         {
-            using (var held = jobLock.TryAcquire())
+            using (var held = jobLock.TryAcquire("test"))
             {
                 if (held is not null)
                     return;

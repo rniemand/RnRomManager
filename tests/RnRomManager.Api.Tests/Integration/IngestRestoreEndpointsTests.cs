@@ -155,7 +155,7 @@ public class IngestRestoreEndpointsTests
         LoadDats();
         var keep = Drop("gb", "_removed", "a.gb");
 
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var response = await Restore(new { system = "gb", name = "a.gb" });
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
@@ -219,7 +219,7 @@ public class IngestRestoreEndpointsTests
         var body = await AuthClient.JsonAsync(response);
         Assert.That((body.GetProperty("restored").GetInt32(), body.GetProperty("jobId").ValueKind), Is.EqualTo((1, JsonValueKind.Null)));
         Assert.That(File.Exists(Ingest("gb", "a.gb")), Is.True);
-        using var free = Service<JobLock>().TryAcquire();
+        using var free = Service<JobLock>().TryAcquire("test");
         Assert.That(free, Is.Not.Null);
     }
 }

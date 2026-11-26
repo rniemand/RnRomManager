@@ -45,7 +45,7 @@ public class ImageEndpointsTests
                 s.AddSingleton<IntegrityJobFactory>(sp => (mode, zipPath) =>
                 {
                     if (_lockBeforeGameCheck && mode == JobMode.Game)
-                        _held = sp.GetRequiredService<JobLock>().TryAcquire();
+                        _held = sp.GetRequiredService<JobLock>().TryAcquire("test");
                     var job = ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode);
                     job.ZipPath = zipPath;
                     return job;
@@ -57,7 +57,7 @@ public class ImageEndpointsTests
                     ActivatorUtilities.CreateInstance<RnRomManager.Data.Repositories.GameRepository>(sp), () =>
                     {
                         if (_lockBeforeResolve && _held is null)
-                            _held = sp.GetRequiredService<JobLock>().TryAcquire();
+                            _held = sp.GetRequiredService<JobLock>().TryAcquire("test");
                     }));
             },
         };
