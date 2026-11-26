@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ViewToggle from '#lib/components/common/ViewToggle.svelte';
 	import DeleteCollectionModal from '#lib/components/modals/DeleteCollectionModal.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { onDestroy, untrack } from 'svelte';
@@ -324,24 +325,7 @@
 				onclick={() => update({ favourite: !filters.favourite })}
 				><Icon name={filters.favourite ? 'favourite-fill' : 'favourite'} /></button
 			>
-			<div class="btn-group" role="group" aria-label="View">
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
-					class:active={view === 'grid'}
-					aria-pressed={view === 'grid'}
-					aria-label="Grid view"
-					onclick={() => setView('grid')}><Icon name="grid" /></button
-				>
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
-					class:active={view === 'list'}
-					aria-pressed={view === 'list'}
-					aria-label="List view"
-					onclick={() => setView('list')}><Icon name="list" /></button
-				>
-			</div>
+			<ViewToggle {view} onchange={setView} />
 		</div>
 	</form>
 

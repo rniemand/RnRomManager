@@ -52,7 +52,6 @@ SV4 src/RnRomManager.Web/src/routes/jobs/[id]/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/login/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/activity/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/duplicates/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/reports/hacks/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/image-resolutions/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/missing-igdb-ids/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/missing-metadata/+page.svelte

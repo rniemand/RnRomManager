@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SortHeader from '#lib/components/common/SortHeader.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -111,27 +112,15 @@
 		<table class="table table-sm table-striped table-hover align-middle mb-0" aria-label="Systems">
 			<thead class="table-dark">
 				<tr>
-					{#each columns as column (column.sort)}
-						<th
-							scope="col"
-							class={column.numeric ? 'text-end text-nowrap' : undefined}
-							aria-sort={column.sort === sortKey
-								? direction === 'asc'
-									? 'ascending'
-									: 'descending'
-								: undefined}
-						>
-							<button
-								type="button"
-								class="btn btn-link p-0 text-reset text-decoration-none fw-semibold"
-								onclick={() => sortBy(column.sort)}
-								>{column.label}
-								{#if column.sort === sortKey}<Icon
-										name={direction === 'asc' ? 'sort-asc' : 'sort-desc'}
-									/>{/if}</button
-							>
-						</th>
-					{/each}
+					<SortHeader
+						columns={columns.map((c) => ({
+							...c,
+							class: c.numeric ? 'text-end text-nowrap' : undefined
+						}))}
+						sort={sortKey}
+						dir={direction}
+						onsort={sortBy}
+					/>
 					{#if admin}
 						<th scope="col"><span class="visually-hidden">Actions</span></th>
 					{/if}

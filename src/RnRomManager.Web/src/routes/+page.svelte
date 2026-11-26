@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ViewToggle from '#lib/components/common/ViewToggle.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { replaceUrl } from '#lib/urlState.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
@@ -316,24 +317,7 @@
 		aria-pressed={selecting}
 		onclick={toggleSelecting}><Icon name="select" /> Select</button
 	>
-	<div class="btn-group" role="group" aria-label="View">
-		<button
-			type="button"
-			class="btn btn-sm btn-outline-secondary"
-			class:active={view === 'grid'}
-			aria-pressed={view === 'grid'}
-			aria-label="Grid view"
-			onclick={() => setView('grid')}><Icon name="grid" /></button
-		>
-		<button
-			type="button"
-			class="btn btn-sm btn-outline-secondary"
-			class:active={view === 'list'}
-			aria-pressed={view === 'list'}
-			aria-label="List view"
-			onclick={() => setView('list')}><Icon name="list" /></button
-		>
-	</div>
+	<ViewToggle {view} onchange={setView} size="sm" />
 </form>
 
 {#if chips.length > 0}

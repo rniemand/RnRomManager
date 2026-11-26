@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SortHeader from '#lib/components/common/SortHeader.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { parseDir } from '#lib/sort.js';
 	import type { SortDir } from '#lib/enums/index.js';
@@ -11,7 +12,6 @@
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
@@ -190,27 +190,12 @@
 				<table class="table table-sm table-striped table-hover align-middle mb-0">
 					<thead class="table-dark">
 						<tr>
-							{#each columns as column (column.sort)}
-								<th
-									scope="col"
-									class={column.numeric ? 'text-end' : undefined}
-									aria-sort={column.sort === sort
-										? dir === 'asc'
-											? 'ascending'
-											: 'descending'
-										: undefined}
-								>
-									<button
-										type="button"
-										class="btn btn-link p-0 text-reset text-decoration-none fw-semibold"
-										onclick={() => sortBy(column.sort)}
-										>{column.label}
-										{#if column.sort === sort}<Icon
-												name={dir === 'asc' ? 'sort-asc' : 'sort-desc'}
-											/>{/if}</button
-									>
-								</th>
-							{/each}
+							<SortHeader
+								columns={columns.map((c) => ({ ...c, class: c.numeric ? 'text-end' : undefined }))}
+								{sort}
+								{dir}
+								onsort={sortBy}
+							/>
 						</tr>
 					</thead>
 					<tbody>
