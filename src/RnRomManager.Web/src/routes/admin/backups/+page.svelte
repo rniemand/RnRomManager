@@ -1,10 +1,10 @@
 <script lang="ts">
+	import RestoreBackupModal from '#lib/components/modals/RestoreBackupModal.svelte';
 	import { onMount } from 'svelte';
 	import { api, resetClient } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { BackupFile, BackupRestoreResult, BackupStatus } from '#lib/types/index.js';
 	import AccordionItem from '#lib/components/layout/AccordionItem.svelte';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
@@ -295,32 +295,10 @@
 	</AccordionItem>
 {/if}
 
-<BaseModal
+<RestoreBackupModal
 	bind:open={restoreOpen}
-	title="Restore backup"
-	confirmLabel="Restore"
-	confirmClass="btn-danger"
+	backup={restoring}
 	busy={restoreBusy}
+	error={restoreError}
 	onconfirm={restore}
->
-	{#if restoring}
-		<p>
-			Restore <strong class="font-monospace">{restoring.fileName}</strong> from {formatDateTime(
-				restoring.createdAt
-			)}?
-		</p>
-		<ul>
-			<li>Every table in the database is replaced by the backup's.</li>
-			<li>A safety backup of the current database is taken first.</li>
-			<li>Everyone, including you, is signed out.</li>
-			<li>Run Integrity → Run quick afterwards: the library ZIPs may be newer than the backup.</li>
-		</ul>
-		{#if restoreError}
-			<div class="alert alert-danger mb-0" role="alert">
-				<strong>{restoreError.title}</strong>{#if restoreError.detail}<div>
-						{restoreError.detail}
-					</div>{/if}
-			</div>
-		{/if}
-	{/if}
-</BaseModal>
+/>

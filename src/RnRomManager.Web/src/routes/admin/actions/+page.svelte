@@ -1,10 +1,10 @@
 <script lang="ts">
+	import PullCoverImagesModal from '#lib/components/modals/PullCoverImagesModal.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { AdminActions } from '#lib/types/index.js';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatCount, formatDateTime } from '#lib/format.js';
@@ -124,18 +124,8 @@
 	</div>
 {/if}
 
-<BaseModal
+<PullCoverImagesModal
 	bind:open={confirmOpen}
-	title="Pull Cover Images"
-	confirmLabel="Pull Cover Images"
+	count={counts?.coversPending ?? 0}
 	onconfirm={confirmPull}
->
-	<p class="mb-0">
-		{#if counts?.coversPending === 1}
-			This replaces the cover of 1 game with its IGDB cover, including covers you uploaded.
-		{:else}
-			This replaces the cover of {formatCount(counts?.coversPending ?? 0)} games with their IGDB cover,
-			including covers you uploaded.
-		{/if}
-	</p>
-</BaseModal>
+/>

@@ -4,10 +4,6 @@ SV1 src/RnRomManager.Web/src/lib/components/bundles/SavedBundleQueues.svelte
 SV1 src/RnRomManager.Web/src/lib/components/games/GameImages.svelte
 SV1 src/RnRomManager.Web/src/lib/components/games/GameResults.svelte
 SV1 src/RnRomManager.Web/src/lib/components/games/GameSaves.svelte
-SV1 src/RnRomManager.Web/src/routes/admin/actions/+page.svelte
-SV1 src/RnRomManager.Web/src/routes/admin/backups/+page.svelte
-SV1 src/RnRomManager.Web/src/routes/admin/rom-storage/+page.svelte
-SV1 src/RnRomManager.Web/src/routes/admin/users/+page.svelte
 SV1 src/RnRomManager.Web/src/routes/bundle-creator/+page.svelte
 SV1 src/RnRomManager.Web/src/routes/collections/[id]/+page.svelte
 SV1 src/RnRomManager.Web/src/routes/deleted/+page.svelte

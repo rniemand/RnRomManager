@@ -1,9 +1,11 @@
 <script lang="ts">
+	import RepackZipsModal from '#lib/components/modals/RepackZipsModal.svelte';
+	import ZipCompressionModal from '#lib/components/modals/ZipCompressionModal.svelte';
+	import StorageMigrationModal from '#lib/components/modals/StorageMigrationModal.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import type { RomStorageRow } from '#lib/types/index.js';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
@@ -334,37 +336,7 @@
 	<p class="small text-body-secondary mt-2">These numbers are typical estimates, not guarantees.</p>
 {/if}
 
-<BaseModal
-	bind:open={confirmOpen}
-	title={target
-		? `${target.embedRoms ? 'Store beside ZIP' : 'Store in ZIP'}: ${target.displayName}`
-		: ''}
-	confirmLabel="Start moving"
-	confirmClass="btn-warning"
-	onconfirm={confirm}
->
-	{#if target}
-		<p>
-			Every game of {target.displayName} is rewritten, one at a time. This takes a long time (hours for
-			a large library) and is heavy on disk and CPU. Free space of about one game's ROMs plus its ZIP
-			is needed.
-		</p>
-		<p>
-			Until it ends, no other job (ingest, integrity, scheduled checks) can run and no game of any
-			system can be edited. Games it doesn't reach (cancelled or failed) stay read-only until they
-			are moved. You can cancel it from the Jobs page and resume it later; games already moved stay
-			moved.
-		</p>
-		{#if target.embedRoms}
-			<p class="mb-0">Each ROM becomes a separate file next to its ZIP.</p>
-		{:else}
-			<p class="mb-0">
-				Saving a game state or battery save for this system then rewrites the whole ZIP, including
-				its ROM (up to 512 MiB), so saves get slower.
-			</p>
-		{/if}
-	{/if}
-</BaseModal>
+<StorageMigrationModal bind:open={confirmOpen} row={target} onconfirm={confirm} />
 
 {#snippet levelBadge(value: Level)}
 	<span class="badge {level(value).badge}">{level(value).label}</span>
@@ -378,46 +350,12 @@
 	>
 {/snippet}
 
-{#snippet repackWarning(name: string)}
-	<p>
-		Every game ZIP of {name} is rewritten, one at a time. On a large library this takes a long time and
-		uses a lot of disk and CPU. No other job runs and no game can be edited until it ends.
-	</p>
-	<p>If you cancel, some ZIPs keep the old level. They still play; use Repack again to finish.</p>
-	<p class="mb-0">
-		Each game needs free space about the size of its uncompressed ROMs while it's rewritten.
-	</p>
-{/snippet}
-
-<BaseModal
+<ZipCompressionModal
 	bind:open={zipOpen}
-	title={zipTarget ? `ZIP compression: ${zipTarget.displayName}` : ''}
-	confirmLabel="Change and repack"
-	confirmClass="btn-warning"
-	confirmDisabled={zipLevel === zipTarget?.zipCompression}
+	row={zipTarget}
+	bind:level={zipLevel}
+	{levels}
 	onconfirm={confirmZip}
->
-	{#if zipTarget}
-		<div class="mb-3">
-			<label for="zip-compression-level" class="form-label">Compression level</label>
-			<select id="zip-compression-level" class="form-select" bind:value={zipLevel}>
-				{#each levels as level (level.value)}
-					<option value={level.value}>{level.label}</option>
-				{/each}
-			</select>
-		</div>
-		{@render repackWarning(zipTarget.displayName)}
-	{/if}
-</BaseModal>
+/>
 
-<BaseModal
-	bind:open={repackOpen}
-	title={zipTarget ? `Repack ${zipTarget.displayName} ZIPs` : ''}
-	confirmLabel="Repack again"
-	confirmClass="btn-warning"
-	onconfirm={confirmRepack}
->
-	{#if zipTarget}
-		{@render repackWarning(zipTarget.displayName)}
-	{/if}
-</BaseModal>
+<RepackZipsModal bind:open={repackOpen} row={zipTarget} onconfirm={confirmRepack} />

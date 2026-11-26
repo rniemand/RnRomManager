@@ -1,16 +1,16 @@
 <script lang="ts">
+	import ResetPasswordModal from '#lib/components/modals/ResetPasswordModal.svelte';
+	import CreateUserModal from '#lib/components/modals/CreateUserModal.svelte';
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { UserInfo } from '#lib/types/index.js';
 	import type { Role } from '#lib/enums/index.js';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
-	import { passwordError, policyHint, usernameError } from '#lib/passwordPolicy.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { tooltip } from '#lib/tooltip.js';
@@ -18,7 +18,6 @@
 	let users = $state<UserInfo[] | null>(null);
 	let error = $state<unknown>(null);
 
-	let newUsername = $state('');
 	/** U1: the two account types, mapped to the API's `roles`. The create form starts on Site user. */
 	type AccountType = 'admin' | 'site-user';
 	const typeLabels: Record<AccountType, string> = { admin: 'Admin', 'site-user': 'Site user' };
@@ -26,17 +25,10 @@
 		user.roles.includes('admin') ? 'admin' : 'site-user';
 	const rolesOf = (type: AccountType): Role[] => (type === 'admin' ? ['admin'] : []);
 	const selfHint = "You can't change your own account type or disable yourself";
-	let newType = $state<AccountType>('site-user');
-	let newPassword = $state('');
 	let createOpen = $state(false);
-	let createErrors = $state<{ username?: string; password?: string; roles?: string }>({});
-	let creating = $state(false);
 
 	let resetUser = $state<UserInfo | null>(null);
 	let resetOpen = $state(false);
-	let resetPassword = $state('');
-	let resetError = $state<string | undefined>();
-	let resetting = $state(false);
 
 	async function load(): Promise<void> {
 		error = null;
@@ -59,47 +51,7 @@
 	}
 
 	function openCreate(): void {
-		newUsername = '';
-		newPassword = '';
-		newType = 'site-user';
-		createErrors = {};
 		createOpen = true;
-	}
-
-	async function create(event?: SubmitEvent): Promise<void> {
-		event?.preventDefault();
-		if (creating) return;
-		const username = newUsername.trim();
-		createErrors = {
-			username: usernameError(username),
-			password: passwordError(newPassword, username)
-		};
-		if (createErrors.username || createErrors.password) return;
-		creating = true;
-		try {
-			const user = await api.post<UserInfo>('/api/users', {
-				username,
-				roles: rolesOf(newType),
-				password: newPassword
-			});
-			createOpen = false;
-			toasts.show(
-				`${user.username} created. They must change the password at first sign-in.`,
-				'success'
-			);
-			await load();
-		} catch (e) {
-			if (isApiError(e, 'UsernameTaken')) createErrors = { username: 'That username is taken.' };
-			else if (isApiError(e, 'ValidationFailed'))
-				createErrors = {
-					username: e.errors.username?.[0],
-					password: e.errors.password?.[0],
-					roles: e.errors.roles?.[0]
-				};
-			else failed(e);
-		} finally {
-			creating = false;
-		}
 	}
 
 	async function update(
@@ -117,32 +69,7 @@
 
 	function openReset(user: UserInfo): void {
 		resetUser = user;
-		resetPassword = '';
-		resetError = undefined;
 		resetOpen = true;
-	}
-
-	async function reset(): Promise<void> {
-		if (!resetUser) return;
-		resetError = passwordError(resetPassword, resetUser.username);
-		if (resetError) return;
-		resetting = true;
-		try {
-			await api.post(`/api/users/${resetUser.id}/reset-password`, { newPassword: resetPassword });
-			resetOpen = false;
-			toasts.show(
-				`Password reset. ${resetUser.username} must change it at next sign-in.`,
-				'success'
-			);
-		} catch (e) {
-			if (isApiError(e, 'ValidationFailed')) resetError = e.errors.newPassword?.[0] ?? e.title;
-			else {
-				resetOpen = false;
-				failed(e);
-			}
-		} finally {
-			resetting = false;
-		}
 	}
 </script>
 
@@ -233,83 +160,12 @@
 		</div>
 	</div>
 
-	<BaseModal
+	<CreateUserModal
 		bind:open={createOpen}
-		title="Create user"
-		confirmLabel="Create"
-		size="lg"
-		busy={creating}
-		onconfirm={() => create()}
-	>
-		<form class="row g-3" onsubmit={create} novalidate>
-			<div class="col-12 col-md-6">
-				<label class="form-label" for="new-username">Username</label>
-				<input
-					id="new-username"
-					class="form-control"
-					class:is-invalid={createErrors.username}
-					autocomplete="off"
-					autocapitalize="none"
-					spellcheck="false"
-					bind:value={newUsername}
-				/>
-				{#if createErrors.username}<div class="invalid-feedback">{createErrors.username}</div>{/if}
-			</div>
-			<div class="col-12 col-md-6">
-				<label class="form-label" for="new-password">Initial password</label>
-				<input
-					id="new-password"
-					type="password"
-					class="form-control"
-					class:is-invalid={createErrors.password}
-					autocomplete="new-password"
-					aria-describedby="new-password-help"
-					bind:value={newPassword}
-				/>
-				{#if createErrors.password}<div class="invalid-feedback">{createErrors.password}</div>{/if}
-				<div id="new-password-help" class="form-text">{policyHint}</div>
-			</div>
-			<div class="col-12 col-md-6">
-				<label class="form-label" for="new-type">Account type</label>
-				<select
-					id="new-type"
-					class="form-select"
-					class:is-invalid={createErrors.roles}
-					bind:value={newType}
-				>
-					{#each Object.entries(typeLabels) as [value, label] (value)}
-						<option {value}>{label}</option>
-					{/each}
-				</select>
-				{#if createErrors.roles}<div class="invalid-feedback">{createErrors.roles}</div>{/if}
-			</div>
-			<!-- Enter in a field submits; the visible button is the modal's Create. -->
-			<button type="submit" class="d-none" tabindex="-1" aria-hidden="true"></button>
-		</form>
-	</BaseModal>
+		{typeLabels}
+		oncreated={() => void load()}
+		onfailed={failed}
+	/>
 
-	<BaseModal
-		bind:open={resetOpen}
-		title="Reset password"
-		confirmLabel="Reset password"
-		busy={resetting}
-		onconfirm={reset}
-	>
-		<p>
-			Set a new password for {resetUser?.username}. They must change it at next sign-in, and their
-			lockout is cleared.
-		</p>
-		<label class="form-label" for="reset-password">New password</label>
-		<input
-			id="reset-password"
-			type="password"
-			class="form-control"
-			class:is-invalid={resetError}
-			autocomplete="new-password"
-			aria-describedby="reset-password-help"
-			bind:value={resetPassword}
-		/>
-		{#if resetError}<div class="invalid-feedback">{resetError}</div>{/if}
-		<div id="reset-password-help" class="form-text">{policyHint}</div>
-	</BaseModal>
+	<ResetPasswordModal bind:open={resetOpen} user={resetUser} onfailed={failed} />
 {/if}
