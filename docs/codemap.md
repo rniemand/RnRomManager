@@ -390,8 +390,10 @@ Read a section with offset/limit instead of the whole doc (`features.md` alone i
 
 - `docs/features.md` (704 lines): Account types :5; Navigation bar, footer and page titles :16; Global search :26; Keyboard shortcuts :30; Sign in and change password :62; Library :67; Collections :84; Publishers and genres :95; Systems :108; Timeline :115; Bundle Creator :125; Game detail :140; Ingestion :224; External storage (Nintendo Switch, Nintendo DS, Nintendo 3DS and disc systems) :252; Disc sets :264; Jobs :279; Job detail :283; Review queue :291; Deleted ROMs :327; Reports :336; Integrity :362; Admin :375; Reference: behaviour and API :389; Ingestion review queue :393; Resolve reviews through the API :403; Browse the library through the API :433; Collections through the API :467; Timeline through the API :480; Bundle Creator through the API :488; Publishers and genres through the API :497; Rate games through the API :512; Select ingestion files through the API :518; Delete ingestion files through the API :526; Deleted ROMs through the API :532; Report APIs :538; File action auditing :559; Edit the library through the API :583; Retry missing media :611; Integrity checker :621; Saves through the API :640; Release notes through the API :651; Keyboard shortcuts through the API :660; Database backups through the API :667; DAT refresh schedule through the API :678; ROM Zip Config :684; Admin settings, logs and About :695
 
+- `docs/style-guide.md` (37 lines): General :5; C# :12; Svelte / TypeScript :26
+
 - `docs/zip-format.md` (323 lines): Layout :7; Naming :96; External ROM files :119; Release notes :132; Saves :141; Writes :155; `info.json` (schema version 8) :163; Game :167; Rom :191; Image :289; Validation :304; Versions :308
 
 - `README.md` (185 lines): Supported systems :26; Quick start :80; Documentation :144; Disclaimer :153; Attribution :157; License :183
 
-- `CONTRIBUTING.md` (21 lines): Specs, branches and PRs :7; Test rule :17; Doc rule :20
+- `CONTRIBUTING.md` (25 lines): Specs, branches and PRs :7; Test rule :17; Doc rule :20; Style rule :23
