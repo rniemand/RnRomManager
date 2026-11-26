@@ -1,6 +1,6 @@
 ---
 title: Admin actions, cover image cache and IGDB ratings
-status: ready
+status: in-progress
 created: 2026-11-26
 ---
 
