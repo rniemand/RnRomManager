@@ -6,6 +6,7 @@ import {
 	jobLabel,
 	latestJobs,
 	outcomeClass,
+	outcomes,
 	percent,
 	severityClass,
 	splitSummary,
@@ -25,7 +26,9 @@ describe('job display helpers', () => {
 					'ReviewResolve',
 					'StorageMigration',
 					'ZipRepack',
-					'SaveFolders'
+					'SaveFolders',
+					'PullCovers',
+					'IgdbSync'
 				] as const
 			).map(jobLabel)
 		).toEqual([
@@ -36,7 +39,9 @@ describe('job display helpers', () => {
 			'Review',
 			'Moving ROMs',
 			'Repacking ZIPs',
-			'Moving Saves to User Folders'
+			'Moving Saves to User Folders',
+			'Pull Cover Images',
+			'Refresh IGDB Ratings'
 		]);
 		expect(jobLabel('Other')).toBe('Other');
 	});
@@ -59,6 +64,19 @@ describe('job display helpers', () => {
 		expect(outcomeClass('Repacked')).toBe('text-bg-success');
 		expect(outcomeClass('Moved')).toBe('text-bg-success');
 		expect(outcomeClass('Weird')).toBe('text-bg-secondary');
+	});
+
+	it('the outcomes of the IGDB jobs are listed with their badges (T4)', () => {
+		const added = ['Pulled', 'NoCover', 'ImageLimit', 'Updated', 'NoRating', 'NotFound'];
+		expect(outcomes).toEqual(expect.arrayContaining(added));
+		expect(added.map(outcomeClass)).toEqual([
+			'text-bg-success',
+			'text-bg-secondary',
+			'text-bg-warning',
+			'text-bg-success',
+			'text-bg-secondary',
+			'text-bg-warning'
+		]);
 	});
 });
 

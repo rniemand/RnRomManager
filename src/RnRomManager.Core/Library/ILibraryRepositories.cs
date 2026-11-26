@@ -39,6 +39,9 @@ public interface IGameRepository
     /// <summary>A5: <c>cover_image_pulled_at</c> (UTC) of every <c>game_actions</c> row that has one.</summary>
     Task<IReadOnlyDictionary<Guid, DateTime>> ListCoverPulledAsync(CancellationToken cancellationToken);
 
+    /// <summary>T2: the Admin Actions tab's counts.</summary>
+    Task<GameActionsSummary> GetActionsSummaryAsync(CancellationToken cancellationToken);
+
     /// <summary>A5: deletes the <c>game_actions</c> rows whose game is gone.</summary>
     /// <returns>How many were deleted.</returns>
     Task<int> DeleteOrphanActionsAsync(CancellationToken cancellationToken);
@@ -146,6 +149,9 @@ public interface IImageRepository
     /// <summary>C5: every game's cover (its lowest-id <c>is_cover</c> image), with the game's ZIP.</summary>
     Task<IReadOnlyList<CoverRow>> ListCoversAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>T2: linked games (<c>igdb_id &gt; 0</c>), those without a pulled cover, and the latest rating refresh (UTC).</summary>
+public sealed record GameActionsSummary(int IgdbLinked, int CoversPending, DateTime? LastIgdbSyncAt);
 
 /// <summary>C5: a game's cover image and the ZIP holding it (relative to <c>Paths:Roms</c>).</summary>
 public sealed record CoverRow(Guid GameId, string ZipPath, string FileName, string Sha1);

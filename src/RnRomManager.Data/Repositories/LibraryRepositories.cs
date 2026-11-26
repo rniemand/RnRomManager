@@ -115,6 +115,20 @@ public sealed class GameRepository : IGameRepository
             .ToDictionary(r => r.GameId, r => DateTime.SpecifyKind(r.PulledAt, DateTimeKind.Utc));
     }
 
+    public async Task<GameActionsSummary> GetActionsSummaryAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        var row = await connection.QuerySingleAsync<(long Linked, long Pending, DateTime? LastSync)>(new CommandDefinition("""
+            SELECT COUNT(*),
+                   CAST(COALESCE(SUM(a.cover_image_pulled_at IS NULL), 0) AS SIGNED),
+                   (SELECT MAX(last_igdb_sync_at) FROM game_actions)
+            FROM games g LEFT JOIN game_actions a ON a.game_id = g.id
+            WHERE g.igdb_id > 0
+            """, cancellationToken: cancellationToken));
+        return new GameActionsSummary((int)row.Linked, (int)row.Pending,
+            row.LastSync is { } last ? DateTime.SpecifyKind(last, DateTimeKind.Utc) : null);
+    }
+
     public async Task<int> DeleteOrphanActionsAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();

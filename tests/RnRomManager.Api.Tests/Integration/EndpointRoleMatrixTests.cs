@@ -47,6 +47,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/games/{id:guid}/images/{imageId:long}"] = Role.User,
         ["GET /api/games/{id:guid}/cover/{sha1}"] = Role.User,
         ["GET /api/activity"] = Role.User,
+        ["GET /api/admin/actions"] = Role.Admin,
         ["GET /api/games/{id:guid}/image-suggestions"] = Role.Admin,
         ["GET /api/games/{id:guid}/igdb-matches"] = Role.Admin,
         ["GET /api/games/{id:guid}/download"] = Role.User,

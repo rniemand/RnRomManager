@@ -42,6 +42,48 @@ public class AdminEndpointsTests
     private string RealDbPassword => new MySqlConnector.MySqlConnectionStringBuilder(_factory.Settings["ConnectionStrings:Default"]!).Password;
 
     [Test]
+    public async Task Actions_CountsLinkedGames_PendingCovers_AndTheLastRefresh()
+    {
+        using (var empty = await _admin.GetAsync("/api/admin/actions"))
+            Assert.That((await AuthClient.JsonAsync(empty)).GetRawText(),
+                Is.EqualTo("""{"igdbConfigured":true,"igdbLinked":0,"coversPending":0,"lastIgdbSyncAt":null}"""));
+
+        var mirror = _factory.Services.GetRequiredService<RnRomManager.Core.Library.ILibraryMirror>();
+        var ids = new List<Guid>();
+        foreach (var (title, igdbId, seed) in new[] { ("Pulled", (int?)1, 1), ("Pending", 2, 2), ("Not on IGDB", 0, 3), ("Unlinked", null, 4) })
+        {
+            var game = TestLibrary.Game(title, TestLibrary.Rom($"{title}.gb", TestLibrary.RomBytes(seed))) with { IgdbId = igdbId };
+            await mirror.ReplaceAsync(new RnRomManager.Core.Library.MirrorEntry(game, $"gb/{title[0]}/{title}.zip", 1, TestLibrary.When.UtcDateTime), default);
+            ids.Add(game.GameId);
+        }
+        await using (var connection = _factory.Services.GetRequiredService<RnRomManager.Core.Database.IDbConnectionFactory>().Create())
+            await Dapper.SqlMapper.ExecuteAsync(connection, """
+                INSERT INTO game_actions (game_id, cover_image_pulled_at, last_igdb_sync_at) VALUES
+                    (@pulled, '2026-11-01 00:00:00', '2026-11-20 10:00:00'), (@pending, NULL, '2026-11-21 11:30:00')
+                """, new { pulled = ids[0], pending = ids[1] });
+
+        using var response = await _admin.GetAsync("/api/admin/actions");
+
+        Assert.That((await AuthClient.JsonAsync(response)).GetRawText(),
+            Is.EqualTo("""{"igdbConfigured":true,"igdbLinked":2,"coversPending":1,"lastIgdbSyncAt":"2026-11-21T11:30:00Z"}"""));
+    }
+
+    [Test]
+    public async Task Actions_WithoutIgdbCredentials_IsNotConfigured()
+    {
+        _admin.Dispose();
+        _factory.Dispose();
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        _admin = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+
+        using var response = await _admin.GetAsync("/api/admin/actions");
+
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("igdbConfigured").GetBoolean(), Is.False);
+    }
+
+    [Test]
     public async Task Settings_AreTheEffectiveConfig_WithSecretsMasked()
     {
         using var response = await _admin.GetAsync("/api/admin/settings");

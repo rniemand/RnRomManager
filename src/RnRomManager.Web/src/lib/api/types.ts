@@ -28,7 +28,9 @@ export interface CurrentJob {
 		| 'ReviewResolve'
 		| 'StorageMigration'
 		| 'ZipRepack'
-		| 'SaveFolders';
+		| 'SaveFolders'
+		| 'PullCovers'
+		| 'IgdbSync';
 	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;
@@ -37,6 +39,14 @@ export interface CurrentJob {
 	startedAt: string;
 	/** The current file's streamed phase; null (or absent from an older server) when none runs. */
 	step?: JobStep | null;
+}
+
+/** T2: `GET /api/admin/actions`, the Admin Actions tab's counts. */
+export interface AdminActions {
+	igdbConfigured: boolean;
+	igdbLinked: number;
+	coversPending: number;
+	lastIgdbSyncAt: string | null;
 }
 
 /** L2: `GET /api/activity`, what holds the job lock; 204 when free. */
