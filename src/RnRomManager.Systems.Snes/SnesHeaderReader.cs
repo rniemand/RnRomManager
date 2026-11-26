@@ -63,7 +63,7 @@ public static class SnesHeaderReader
         if (chosen is { } c)
         {
             var h = rom.Slice(c.Offset, HeaderLength);
-            title = ReadTitle(h[..TitleLength]);
+            title = HeaderText.ReadAscii(h[..TitleLength], trimStart: true);
             fields["title"] = title;
             fields["mapping"] = c.Mapping;
             fields["fastRom"] = (h[0x15] & 0x10) != 0;
@@ -88,13 +88,4 @@ public static class SnesHeaderReader
 
     private static bool MapModeFits(byte mapMode, string mapping) =>
         (mapMode & 0x20) != 0 && (mapping, mapMode & 0x0F) is ("LoROM", 0x0 or 0x2 or 0x3) or ("HiROM", 0x1 or 0xA) or ("ExHiROM", 0x5);
-
-    /// <summary>ASCII up to the first NUL, non-printable → <c>?</c>, trimmed; null when nothing is left (the GB rule).</summary>
-    private static string? ReadTitle(ReadOnlySpan<byte> area)
-    {
-        var end = area.IndexOf((byte)0);
-        var chars = (end < 0 ? area : area[..end]).ToArray().Select(b => b is >= 0x20 and <= 0x7E ? (char)b : '?').ToArray();
-        var title = new string(chars).Trim();
-        return title.Length > 0 ? title : null;
-    }
 }

@@ -38,7 +38,7 @@ public static class GameBoyHeaderReader
         var manufacturerCode = isCgb && rom[0x13F..0x143].ToArray().All(b => b is >= (byte)'A' and <= (byte)'Z' or >= (byte)'0' and <= (byte)'9')
             ? Encoding.ASCII.GetString(rom[0x13F..0x143])
             : null;
-        var title = ReadTitle(rom.Slice(0x134, manufacturerCode is not null ? 11 : isCgb ? 15 : 16));
+        var title = HeaderText.ReadAscii(rom.Slice(0x134, manufacturerCode is not null ? 11 : isCgb ? 15 : 16), trimStart: true);
 
         var cartridgeType = rom[0x147];
         int? romSizeBytes = rom[0x148] <= 0x08 ? (32 * 1024) << rom[0x148] : null;
@@ -65,15 +65,6 @@ public static class GameBoyHeaderReader
         };
 
         return new RomHeader(isCgb ? GameBoyColorId : GameBoyId, title, logoValid || headerChecksumValid, fields);
-    }
-
-    /// <summary>ASCII up to the first NUL, non-printable → <c>?</c>, trimmed; null when nothing is left.</summary>
-    private static string? ReadTitle(ReadOnlySpan<byte> area)
-    {
-        var end = area.IndexOf((byte)0);
-        var chars = (end < 0 ? area : area[..end]).ToArray().Select(b => b is >= 0x20 and <= 0x7E ? (char)b : '?').ToArray();
-        var title = new string(chars).Trim();
-        return title.Length > 0 ? title : null;
     }
 
     private static string Licensee(ReadOnlySpan<byte> rom)

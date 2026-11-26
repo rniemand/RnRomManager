@@ -40,30 +40,13 @@ public static class Nintendo3DsHeaderReader
         if (ncch + 0x200 <= rom.Length && rom.Slice((int)ncch + 0x100, 4).SequenceEqual("NCCH"u8))
         {
             var partition = rom[(int)ncch..];
-            fields["productCode"] = ProductCode(partition.Slice(0x150, 16));
-            fields["makerCode"] = Text(partition.Slice(0x110, 2));
+            fields["productCode"] = HeaderText.ReadAscii(partition.Slice(0x150, 16), trimStart: false);
+            fields["makerCode"] = HeaderText.Printable(partition.Slice(0x110, 2));
             fields["programId"] = BinaryPrimitives.ReadUInt64LittleEndian(partition[0x118..]).ToString("X16");
             // 3DS H1: NCCH flags[7] (0x18F) bit 2 is NoCrypto.
             fields["encrypted"] = (partition[0x18F] & 0x04) == 0;
         }
 
         return new RomHeader(Nintendo3DsId, null, true, fields);
-    }
-
-    /// <summary>Up to the first NUL, trailing spaces trimmed; null when nothing is left.</summary>
-    private static string? ProductCode(ReadOnlySpan<byte> area)
-    {
-        var end = area.IndexOf((byte)0);
-        var code = Text(end < 0 ? area : area[..end]).TrimEnd(' ');
-        return code.Length > 0 ? code : null;
-    }
-
-    /// <summary>Bytes 0x20–0x7E kept; every other byte becomes <c>?</c>.</summary>
-    private static string Text(ReadOnlySpan<byte> area)
-    {
-        var chars = new char[area.Length];
-        for (var i = 0; i < area.Length; i++)
-            chars[i] = area[i] is >= 0x20 and <= 0x7E ? (char)area[i] : '?';
-        return new string(chars);
     }
 }

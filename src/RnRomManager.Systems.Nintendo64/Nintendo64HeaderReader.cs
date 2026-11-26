@@ -20,7 +20,7 @@ public static class Nintendo64HeaderReader
         if (rom.Length < HeaderEnd)
             return null;
 
-        var title = ReadTitle(rom.Slice(0x20, 20));
+        var title = HeaderText.ReadAscii(rom.Slice(0x20, 20), trimStart: true);
         var gameCode = ReadCode(rom.Slice(0x3B, 4));
         var headerValid = rom[0] == 0x80;
 
@@ -39,15 +39,6 @@ public static class Nintendo64HeaderReader
         };
 
         return new RomHeader(Nintendo64Id, title, headerValid, fields);
-    }
-
-    /// <summary>ASCII up to the first NUL, non-printable → <c>?</c>, trimmed; null when nothing is left (the GB rule).</summary>
-    private static string? ReadTitle(ReadOnlySpan<byte> area)
-    {
-        var end = area.IndexOf((byte)0);
-        var chars = (end < 0 ? area : area[..end]).ToArray().Select(b => b is >= 0x20 and <= 0x7E ? (char)b : '?').ToArray();
-        var title = new string(chars).Trim();
-        return title.Length > 0 ? title : null;
     }
 
     private static string? ReadCode(ReadOnlySpan<byte> area) =>
