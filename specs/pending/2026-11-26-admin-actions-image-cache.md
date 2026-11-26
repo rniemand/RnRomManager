@@ -1,0 +1,154 @@
+---
+title: Admin actions, cover image cache and IGDB ratings
+status: ready
+created: 2026-11-26
+---
+
+# Admin actions, cover image cache and IGDB ratings
+
+## Summary
+Admins get an **Actions** tab with two one-click jobs: **Pull Cover Images** (the IGDB cover becomes each linked game's cover, recorded in `info.json` → `actions.coverImagePulled` and in a new `game_actions` table) and **Refresh IGDB Ratings** (IGDB's `total_rating` and vote count, stored in the database and shown on the game page). Library cards load covers from a new resized WebP **image cache** on its own path. Everyone sees in the footer when the job lock is held, Edit Metadata shows a progress bar while it saves, and a game card gets a green **Pick up where you left off** button that plays the user's newest save.
+
+## Out of scope
+- Importing library ZIPs (the table and `info.json` mirror only make it possible later).
+- Real percentage progress for library edits (the save stays one request; the bar is indeterminate).
+- Caching anything but the cover (Images tab, snaps and the game page keep reading the ZIP).
+- IGDB ratings in `info.json` (database only, by decision), schedules for either action, and a per-game "refresh from IGDB" button.
+- A schema version bump: `actions` is optional and left out when empty, as `chosenPrimarySha1` is.
+
+## Behaviour
+
+### `info.json` actions and the `game_actions` table
+- **A1** `info.json` gains an optional top-level object `actions`, written after `images` only when it has a value: `{"coverImagePulled": "<ISO-8601 UTC>"}`, the time written in the same format as `metadata.updatedAt`. `coverImagePulled` is the time Pull Cover Images last made the IGDB cover this game's cover. In C#: `InfoJsonGame.Actions` (`InfoJsonActions?`, declared after `Images` and before `Metadata`), with `InfoJsonActions.CoverImagePulled` a `string?` (so a bad value reaches the validator, not the deserializer). `{coverImagePulled: null}` is normalised to `Actions = null` before writing, so it is left out. `schemaVersion` stays `8` (no upgrader; older apps ignore and drop it, as for `chosenPrimarySha1`).
+- **A2** Validation: `actions` absent, `null` or an object; `actions.coverImagePulled` absent, `null` or a string `DateTimeOffset.TryParse` (invariant culture, round-trip styles) accepts. A non-object `actions` or a bad time is `InfoJsonInvalid` with the rule text "actions.coverImagePulled must be an ISO-8601 time" (a non-object `actions`: "actions must be an object"); `InfoJsonReader` checks the parsed `JsonObject`'s `actions` node before deserializing and returns `InfoJsonReadResult.Invalid("actions must be an object")` when it is neither an object nor null (tested in `InfoJsonTests`). Unknown keys inside `actions` are ignored on read and dropped on write.
+- **A3** New table `game_actions` (migration `0029_game_actions.sql`), one row per game that has any value: `game_id CHAR(36) PRIMARY KEY` (same type as `games.id`; **no** foreign key), `cover_image_pulled_at DATETIME(6) NULL`, `last_igdb_sync_at DATETIME(6) NULL`, `igdb_rating DOUBLE NULL`, `igdb_rating_count INT NULL`. Existing installs start with an empty table; v8 ZIPs have no actions, so that is already correct.
+- **A4** Mirror: every `ILibraryMirror` replace upserts `game_actions.cover_image_pulled_at` from the game's `actions.coverImagePulled` (inserting the row only when the value is non-null, or updating an existing row to the value, null included) and never touches the IGDB columns. There is no FK because the mirror deletes and re-inserts `games` rows on every write, which would cascade away the database-only IGDB columns. A game the mirror removes for good (its id in the mirror's delete list and not re-inserted) has its `game_actions` row deleted in the same transaction; so does a merged-away source game.
+- **A5** Integrity: the database-repair step mirrors `actions` like every other field, so a ZIP whose size or mtime changed (an imported or hand-edited ZIP) updates `cover_image_pulled_at`. A **Deep** or **Game** run also compares, for every ZIP it opens, `cover_image_pulled_at` with `actions.coverImagePulled` and fixes a mismatch through the mirror, recorded as an `AutoRepaired` `DbRowUpdated` issue like other repairs. Each run (not Game mode) deletes `game_actions` rows whose `game_id` has no `games` row.
+- **A6** Changing or clearing a game's IGDB link (Edit Metadata, **Not on IGDB**, the lookup's **Use this match**, or any `PATCH /api/games/{id}` that changes `igdbId`) removes `actions.coverImagePulled` in the same ZIP write and clears the row's `igdb_rating`, `igdb_rating_count` and `last_igdb_sync_at`, so both actions pick the game up again. The clearing is a new `IGameRepository.ClearIgdbSyncAsync(gameId)` (sets the three columns null), which `LibraryEditor` calls right after the mirror succeeds, only when the patch changed `igdbId`; a failure there is logged as a warning and the edit still succeeds.
+
+### Pull Cover Images (job `PullCovers`)
+- **P1** `POST /api/jobs/pull-covers` (Admin, antiforgery) → `202 {jobId}`; `409 JobRunning` when the lock is busy; `409 IgdbNotConfigured` ("Pulling covers needs Sources:IgdbClientId and Sources:IgdbClientSecret.") when IGDB isn't configured. Not cancellable mid-ZIP, but cancellable between games (`Cancellable` true).
+- **P2** Candidates: games with `igdb_id > 0` and no `game_actions.cover_image_pulled_at`, ordered by `title` then `id` (`IGameRepository.ListPullCoverCandidatesAsync`, new). Games of a system whose storage migration is pending (`RomStorage.IsPending`) are skipped (item outcome `Skipped`).
+- **P3** IGDB is queried in batches of up to 500 ids: `fields cover.image_id,total_rating,total_rating_count; where id = (<ids>); limit 500;` (`IgdbClient.GetGamesAsync`, new, shared with R2). The cover downloaded is `https://images.igdb.com/igdb/image/upload/t_1080p/<image_id>.jpg` (the size **Use this match** stores), capped at `ImageFormats.MaxBytes`, via `IgdbClient.DownloadCoverAsync` (new) on the IGDB `HttpClient`.
+- **P4** Per game, under the job lock, from the ZIP's own `info.json` (as `GameMediaRetry` does):
+  - The ZIP already has `actions.coverImagePulled` (the database lost it) → the game is re-mirrored and the outcome is `Skipped`; nothing written.
+  - The ZIP's `igdbId` is null, ≤ 0 or differs from the id queried → `Skipped`; nothing written.
+  - IGDB has no cover, or the IGDB id isn't found → outcome `NoCover`; nothing written or recorded (retried next run).
+  - The download fails or isn't a valid PNG/JPEG → outcome `Error` with the message; the job continues.
+  - An image with the same SHA1 is already in the ZIP → it becomes the cover (`isCover` moves to it).
+  - Otherwise a new `BoxArt` image is added, exactly as `LibraryEditor.AddImageAsync` adds a from-URL upload (`source` `upload`, `sourceUrl` the IGDB URL, the placeholder removed when it was the cover), and made the cover. **It replaces whatever was the cover, an Admin upload included** (user decision). The 20-image limit is checked after the placeholder is removed, as `AddImageAsync` does; still over it → outcome `ImageLimit`, nothing written.
+  - A ZIP write or mirror failure (`IoError`, `VerifyFailed`, `DbWriteFailed`) → outcome `Error` with that code; the job continues.
+  - The write sets `actions.coverImagePulled` to now, goes through `LibraryZipWriter` (checked write when `LibraryTarget.NeedsCheck`), mirrors the row (A4) and records `MediaFetched` in the audit log with Details `IGDB cover <file name>`. Outcome `Pulled`.
+- **P5** Any failure of `GetGamesAsync` (`Unreachable`, `Refused`, `Busy`, `Unreadable`) stops the job, which ends `Failed` with that message. Cover downloads go through a `CircuitBreaker` as `MediaRetryJob` uses it: when it opens on repeated network failures, the job stops and ends `Failed` with "IGDB images couldn't be reached." The comment in `Api/Http/HttpClients.cs` listing the IGDB client's hosts adds `images.igdb.com`. Summary: `{pulled, noCover, imageLimit, skipped, error}`. One job item per game, keyed by its ZIP path.
+
+### Refresh IGDB Ratings (job `IgdbSync`)
+- **R1** `POST /api/jobs/igdb-sync` (Admin, antiforgery) → `202 {jobId}`, `409 JobRunning`, `409 IgdbNotConfigured` ("Refreshing ratings needs Sources:IgdbClientId and Sources:IgdbClientSecret."). Cancellable between batches.
+- **R2** Every game with `igdb_id > 0`, every run, ordered as P2, in batches of 500 through `IgdbClient.GetGamesAsync`. Per game: upsert `game_actions` with `igdb_rating` = `total_rating` (null when IGDB has none), `igdb_rating_count` = `total_rating_count` (null when none) and `last_igdb_sync_at` = now. Outcomes: `Updated` (has a rating), `NoRating`, `NotFound` (id not returned by IGDB; columns set null, sync time set). **Never writes a ZIP or `info.json`** (user decision).
+- **R3** Failure handling as P5 (no downloads, so no breaker). Summary `{updated, noRating, notFound}`. One job item per game.
+- **R4** `GET /api/games/{id}` adds `igdbRating: {score: number, votes: number, syncedAt: string} | null` (null unless `igdb_rating` is set; `score` is the raw value, `votes` the count or 0).
+
+### Admin → Actions tab
+- **T1** New tab **Actions** (`/admin/actions`, icon `admin-actions` → `bi bi-lightning-charge-fill`, new) after **BIOS info** in `routes/admin/+layout.svelte`.
+- **T2** `GET /api/admin/actions` (Admin) → `{igdbConfigured: boolean, igdbLinked: number, coversPending: number, lastIgdbSyncAt: string | null}`: linked games (`igdb_id > 0`), linked games without `cover_image_pulled_at`, and the latest `last_igdb_sync_at`.
+- **T3** The page shows two cards, each with a title, one-line description, a count line and a start button:
+  - **Pull Cover Images** — "Downloads the IGDB cover of every linked game that hasn't had one pulled yet and makes it the game's cover, replacing the current cover." Count: "1 game to process" / "<n> games to process" (`formatCount`). Button **Pull Cover Images** (`btn-primary`).
+  - **Refresh IGDB Ratings** — "Fetches the IGDB rating and vote count of every linked game." Count: "1 linked game" / "<n> linked games", then " · last refreshed <date time>" or " · never refreshed". Button **Refresh IGDB Ratings** (`btn-primary`).
+  - Pull Cover Images asks first with `ConfirmModal` (title "Pull Cover Images", body "This replaces the cover of 1 game / <n> games with its / their IGDB cover, including covers you uploaded.", confirm **Pull Cover Images**). Refresh starts directly.
+  - Buttons are disabled while `jobs.current` is set, while a start is in flight, and when `igdbConfigured` is false; then an info alert says "Set Sources:IgdbClientId and Sources:IgdbClientSecret to use IGDB actions." A start follows the ROM Zip Config repack pattern (`routes/admin/rom-storage/+page.svelte`): a success toast "<job label> started" with a **View job** link to `/jobs/<jobId>`, then `jobs.refresh()`; the page stays. `409 JobRunning` → `toasts.jobRunning(err)`; any other API error (`IgdbNotConfigured` included) → `toasts.show(e.title, 'danger')`. The page calls `jobs.watch()` and reloads its counts on `jobs.onEnded`.
+- **T4** `lib/jobs.ts`: `jobLabel` `PullCovers` → "Pull Cover Images", `IgdbSync` → "Refresh IGDB Ratings"; item outcomes and classes: `Pulled` success, `NoCover` secondary, `ImageLimit` warning, `Updated` success, `NoRating` secondary, `NotFound` warning (`Skipped` and `Error` reuse the existing entries).
+
+### Image cache
+- **C1** New setting `Paths:ImageCache` (env `Paths__ImageCache`, default `/app/imagecache`), the eighth path in `PathsOptions.All()`: same rules (absolute, created, probed at startup, different from and not inside the others). Dockerfile creates `/volumes/imagecache` and declares the volume; `scripts/setup-dev.ps1` creates `.dev/imagecache`. Not in database backups (it is rebuilt from the ZIPs).
+- **C2** A cached cover is `<ImageCache>/<gameId>/<coverSha1>.webp`: the cover decoded with SkiaSharp, its longest side scaled down to at most 512 px (never up, aspect kept, high-quality sampling), encoded WebP quality 80. Written to `<coverSha1>.webp.<random>.tmp` in the same folder, then moved over (two simultaneous generations are harmless). Guards: the dimensions are read with `SKCodec` before decoding, and a side over `ImageFormats.MaxWebpSide` (4096) is a failure (C3 fallback, nothing cached). `CoverCache` runs at most 2 generations at once (`SemaphoreSlim(2)`); a request waits for a slot, cancelled with `RequestAborted`.
+- **C3** `GET /api/games/{id}/cover/{sha1}` (any signed-in user): when `sha1` isn't the game's current cover SHA1 (or the game has no cover) → `404 NotFound`. A cached file → streamed as `image/webp` with `Cache-Control: private, max-age=31536000, immutable` and ETag `"<sha1>"`. Missing → generated from the ZIP entry (C2) and then served. If decoding or encoding fails, the original entry is served exactly as `GET /api/games/{id}/images/{imageId}` does (its own content type, `private, max-age=86400`), nothing is cached and a warning is logged. If the cache folder can't be written, the generated bytes are still served and an error logged. No job lock is taken.
+- **C4** `boxArtUrl` (library list items, discovery and collection pages through the same `GameListItem` mapping in `LibraryEndpoints`, and the duplicates report in `ReportEndpoints`) becomes `/api/games/<id>/cover/<sha1>`. The list query in `LibraryRepositories.cs` adds the cover's SHA1 beside `BoxArtImageId`; the duplicates query in `Data/Repositories/ReportRepository.cs` does the same, with a `BoxArtSha1` added to `DuplicateGame` in `Core/Reports/IReportRepository.cs`. Assertions that change: `LibraryEndpointsTests` (around line 1281, `boxArtUrl` equal to the cover's `/images/` URL → `/api/games/<id>/cover/<sha1>`) and `ReportEndpointsTests` (around line 468, starts with `/api/games/{bravo}/images/` → `/api/games/{bravo}/cover/`). A cover change produces a new SHA1 and therefore a new file; the old one is removed by C5.
+- **C5** Integrity (Quick and Deep, after database repair; not Game mode) adds an **Image cache** step: for each game with a cover whose cache file is missing, generate it (opening only the ZIP's cover entry); then delete every file and folder under `Paths:ImageCache` that isn't a current game's `<id>/<coverSha1>.webp` (stale `.tmp` files older than an hour included), except the startup probe file (`StorageFolders.ProbeFileName`). Links are deleted, never followed. `IntegrityJob` gets `CoverCache` and the actions mirror through its constructor (`IntegrityJobFactory` registration in `AppHost.cs`). A cancelled run generates what it reached and deletes nothing. A failure on one game is logged and counted, never an integrity issue. Summary adds `cacheGenerated`, `cacheRemoved`, `cacheFailed`.
+
+### Busy indicator and Edit Metadata progress
+- **L1** `JobLock.TryAcquire(string activity)` (the parameter is new and required) remembers who holds the lock; `JobLock.Activity` (new) returns `{Activity, JobType?}` or null when free. `JobRunner` passes the job type's name and sets `JobType`; the other holders pass: `LibraryEditor` (all methods, saves included) and the `StartGameCheckAsync` resolve → "Saving changes"; `ReviewResolver` → "Resolving review items"; `IngestFileDeleter` → "Deleting ingest files"; `RemovedFileRestorer` → "Restoring removed files"; `BackupService.RestoreAsync` → "Restoring a backup".
+- **L2** `GET /api/activity` (any signed-in user; `403` while the password must be changed, as other routes) → `200 {activity: string, jobType: string | null}` while the lock is held, `204` when free. Marked `MaintenanceExempt`, so it answers during a backup restore.
+- **L3** New store `lib/stores/activity.svelte.ts`: polls `/api/activity` every 1.5 s while busy and 15 s while idle, only while the tab is visible and the footer is mounted (copy `jobs.svelte.ts`'s watch/refresh pattern); `refresh()` checks at once.
+- **L4** `AppFooter`: when no job progress is shown (non-Admins always; Admins when `jobs.current` is null) and `activity.current` is set, it shows at `ms-auto`, in the job indicator's place: a small spinner (`spinner-border spinner-border-sm`, `aria-hidden`) and the text `jobLabel(jobType)` + " running" for a job, else the `activity` text + "…" (e.g. "Saving changes…"), inside `role="status"`. Below `sm` the text is visually hidden and the spinner stays. Not a link for non-Admins; for Admins a job links to `/jobs`. The existing Admin job progress is unchanged.
+- **L5** Edit Metadata (`GameAdminModal`, edit action): while `busy`, an indeterminate bar (`progress` > `progress-bar progress-bar-striped progress-bar-animated w-100`, `role="progressbar"`, `aria-label="Saving"`) and the text "Saving… large games can take a minute." sit above the tabs. A new `<fieldset disabled={busy}>` wraps the Details form's fields, and the Lookup Info panel and its footer buttons (`lookupFooter`) are disabled while `busy` too. `activity.refresh()` is called when the save starts so the footer shows it at once.
+
+### Pick up where you left off
+- **S1** `GameListItem` gains `ownSaveCount: number`: the caller's own saves (from `game_user_save_counts`, for Admins too); for a Site user it equals `saveCount`. `LibraryEndpoints.ForViewerAsync` fills it for every user.
+- **S2** The playable-save rule in `GameSaves.playableRom` moves to `lib/saves.ts` as `playableRom(game, save)` (unchanged behaviour); `GameSaves` imports it.
+- **S3** `GameResults` shows a green button when `canPlay(game)`, `game.ownSaveCount > 0` and the core doesn't open in a new tab: `btn btn-sm btn-success rounded-circle`, `<Icon name="play" />`, `aria-label="Pick up where you left off in <displayTitle>"`, tooltip "Pick up where you left off". Grid view: it takes the Play button's place at `bottom-0 end-0`; Play drops its `end-0` class and gets `style="right: 2.25rem"` (Bootstrap's `end-0` is `!important`); the saves link stays above. List view: right after Play in the actions cell.
+- **S4** Clicking it loads `GET /api/games/{id}` and the saves list, takes the newest own save (`uploadedBy` equals the user, ignoring case; the list is newest first) for which `playableRom` returns a release, and opens the Play dialog as the Saves tab's Play does, reusing the card list's existing `EmulatorModal` (its `playing` state gains an optional `rom` and `save`; `rom` = that release, `save` = `{saveId, saveKind}`, `disc` = `usesPlayDisc(game.browserCore, rom)`). A battery save first asks with the Saves tab's **Load battery save** confirmation. No playable own save → info toast "No save to pick up here." While loading, the button is disabled with a spinner in place of the icon. A load error → `toasts` error "Couldn't load your saves."
+
+### IGDB rating on the game page
+- **G1** In the game page header row, right after `RatingControl`, when `game.igdbRating` is set: a `badge text-bg-light border` with `IGDB <score>/100 · <votes> vote(s)` (`score` rounded half away from zero, `votes` with `formatCount`, "vote" when 1), tooltip "IGDB rating (users and critics), refreshed <date time>". Shown to every user; nothing when null.
+
+## Changes
+| Area | File(s) | Change |
+|---|---|---|
+| Data | `Migrations/0029_game_actions.sql` (new) | table A3 |
+| Data | `Repositories/LibraryRepositories.cs` | mirror upsert/delete A4; `ListPullCoverCandidatesAsync`, `ListIgdbLinkedAsync`, IGDB column writes, orphan sweep, cover SHA1 in list query, `ownSaveCount` lookup |
+| Core | `Library/InfoJsonGame.cs`, `InfoJsonSerializer.cs`, `InfoJsonValidator.cs`, new `InfoJsonActions` record | A1, A2 |
+| Core | `Library/LibraryEditor.cs` / `GamePatch.cs` | A6 |
+| Core | `Media/IgdbClient.cs` | `GetGamesAsync`, `DownloadCoverAsync` |
+| Core | `Library/PullCoversJob.cs`, `Media/IgdbSyncJob.cs` (new), `Jobs/Job.cs` | `JobType.PullCovers`, `JobType.IgdbSync` |
+| Core | `Library/CoverCache.cs` (new), `Configuration/PathsOptions.cs` | C1, C2 |
+| Core | `Integrity/IntegrityJob.cs` | A5, C5 |
+| Core | `Jobs/JobLock.cs`, `JobRunner.cs` and every `TryAcquire` caller | L1 |
+| Data / Core | `Data/Repositories/ReportRepository.cs`, `Core/Reports/IReportRepository.cs` | cover SHA1 on `DuplicateGame` (C4) |
+| Api | `Endpoints/LibraryEndpoints.cs` (P1 and R1 beside `POST /api/jobs/media-retry`; R4, C3, C4, S1), `ReportEndpoints.cs` (C4), `JobEndpoints.cs` (L2), `AdminEndpoints.cs` (T2), `AppHost.cs` (job and `IntegrityJobFactory` registrations), `Http/HttpClients.cs` (comment) | |
+| Web | `routes/admin/+layout.svelte`, `routes/admin/actions/+page.svelte` (new), `lib/jobs.ts`, `lib/components/icons.ts` | T1–T4 |
+| Web | `lib/stores/activity.svelte.ts` (new), `AppFooter.svelte`, `GameAdminModal.svelte` | L3–L5 |
+| Web | `lib/saves.ts`, `GameSaves.svelte`, `GameResults.svelte`, `lib/api/types.ts` | S1–S4 |
+| Web | `routes/games/[id]/+page.svelte` | G1 |
+| Ops | `Dockerfile`, `scripts/setup-dev.ps1` | C1 volume / dev folder |
+| Docs | `docs/zip-format.md`, `features.md`, `configuration.md`, `deployment.md` | each behaviour |
+
+API contract changes: new routes `POST /api/jobs/pull-covers`, `POST /api/jobs/igdb-sync`, `GET /api/admin/actions`, `GET /api/games/{id}/cover/{sha1}`, `GET /api/activity`; `boxArtUrl` points at the cover route; `GameListItem.ownSaveCount` and `GameDetail.igdbRating` added. New config `Paths:ImageCache`.
+
+## Risks
+- **Pull Cover Images rewrites every linked game's ZIP** (one full re-deflate each) and replaces hand-picked covers; the confirm says so. Old covers stay in the ZIP as non-cover images, so nothing is lost.
+- **Large cache folder on first run**: about 30–60 KB per game; built lazily or by integrity.
+- **DB-only IGDB ratings** are lost if the database is rebuilt without a backup; re-running the action restores them.
+- **Deployments without the new volume** keep the cache in an anonymous volume (lost on recreate, just rebuilt); the docs say to add the mapping.
+- **`TryAcquire` signature change** touches about 25 call sites and their test doubles; compile errors find them all.
+
+## Steps
+- [ ] **1. `actions` in info.json and `game_actions` table**: A1–A4 (mirror only; no integrity yet). Files: `InfoJsonGame.cs`, `InfoJsonActions.cs` (new), `InfoJsonSerializer.cs`, `InfoJsonValidator.cs`, `0029_game_actions.sql` (new), `LibraryRepositories.cs`. Tests: `InfoJsonTests` (round trip, omitted when null, validation), `LibraryMirrorTests` (upsert, IGDB columns survive a re-mirror, removal deletes row), `SchemaMigrationTests`. Done when: a write with `coverImagePulled` round-trips; re-mirroring keeps `igdb_rating`; tests pass.
+- [ ] **2. IGDB batch client**: `IgdbClient.GetGamesAsync(ids)` → `{id, coverImageId?, totalRating?, totalRatingCount?}` and `DownloadCoverAsync(imageId)` (P3). Files: `IgdbClient.cs`, `HttpClients.cs` (comment). Tests: `IgdbClientTests` (body text, batching of 501 ids into 2 requests, missing fields, each failure title). Done when: 501 ids produce exactly 2 requests with the pinned body; a 429 yields `Busy`; tests pass.
+- [ ] **3. Pull Cover Images job and endpoint**: P1–P5, A6. Files: `PullCoversJob.cs` (new), `Job.cs`, `LibraryEditor.cs`/`GamePatch.cs`, `LibraryRepositories.cs` (`ListPullCoverCandidatesAsync`, `ClearIgdbSyncAsync`), `LibraryEndpoints.cs` (beside `media-retry`), `AppHost.cs`. Tests: `PullCoversJobTests` (new; every outcome incl. both `Skipped` cases, cover replaced, same-SHA1 reuse, limit after placeholder removal, `GetGamesAsync` failure and open breaker end `Failed`), `LibraryEditTests` (A6 clears), `MediaRetryEndpointsTests`-style endpoint tests for 202/409s (new `PullCoversEndpointTests`), `EndpointRoleMatrixTests` row. Done when: a pulled game's `info.json` has `actions.coverImagePulled` and its `game_actions` row matches; the job's ZIPs pass a Game integrity check; tests pass.
+- [ ] **4. Refresh IGDB Ratings job, endpoint and detail field**: R1–R4. Files: `IgdbSyncJob.cs` (new), `Job.cs`, `LibraryRepositories.cs`, `LibraryEndpoints.cs`, `AppHost.cs`. Tests: `IgdbSyncJobTests` (new), `LibraryEndpointsTests` (`igdbRating`), new `IgdbSyncEndpointTests` (202/409), role matrix row. Done when: no ZIP's mtime changes during a run; `GET /api/games/{id}` returns `igdbRating` after it; tests pass.
+- [ ] **5. Cover cache and cover route**: C1–C4. Files: `PathsOptions.cs`, `PathsOptionsValidator.cs`, `CoverCache.cs` (new), `LibraryEndpoints.cs`, `ReportEndpoints.cs`, `LibraryRepositories.cs`, `ReportRepository.cs`, `IReportRepository.cs`, `Dockerfile`, `scripts/setup-dev.ps1` (and `docs/development.md` if it lists the dev folders). Tests: `CoverCacheTests` (new; resize bounds, no upscale, WebP output, >4096 side and corrupt bytes fall back, concurrency limit), `PathsOptionsValidatorTests`, `ImageEndpointsTests` (cover route: hit, miss→generate, stale sha1 404), `GameQueryTests` (cover sha1), `LibraryEndpointsTests` and `ReportEndpointsTests` (changed `boxArtUrl` assertions, C4), role matrix row; tests that set every path get `Paths:ImageCache`: `tests/RnRomManager.Api.Tests/ApiFactory.cs`, `OptionsRegistrationTests`, `EffectiveSettingsTests`, `HealthReadyTests` (new `[TestCase("Paths:ImageCache")]`). Done when: `LibraryEndpointsTests` asserts `boxArtUrl` is `/api/games/<id>/cover/<sha1>` and the cover route returns `image/webp` no larger than 512 px; tests pass.
+- [ ] **6. Integrity: actions check and cache step**: A5, C5. Files: `IntegrityJob.cs`, `LibraryRepositories.cs`, `AppHost.cs` (`IntegrityJobFactory`). Tests: `IntegrityJobTests` (Data.Tests: mismatch repaired as `DbRowUpdated`, orphan row swept, cache generated, stale file and old `.tmp` removed, probe file kept, cancelled run removes nothing). Done when: a Quick run on a library with one stale cache file removes it and reports `cacheRemoved: 1`; tests pass.
+- [ ] **7. Lock activity on the server**: L1, L2. Files: `JobLock.cs`, `JobRunner.cs`, every `TryAcquire` caller and test double, `JobEndpoints.cs`. Tests: `JobRunnerTests` (activity set/cleared), `JobEndpointsTests` (`/api/activity` 200/204, Site user allowed, answers during maintenance), role matrix row, existing lock tests updated for the new parameter. Done when: every caller passes its pinned label; tests pass.
+- [ ] **8. Footer indicator and Edit Metadata bar**: L3–L5. Files: `activity.svelte.ts` (new), `AppFooter.svelte`, `GameAdminModal.svelte`, `types.ts`. Tests: `stores/activity.svelte.test.ts` (new), `AppFooter.test.ts` (activity shown for a Site user, job progress wins for an Admin), `routes/games/game-admin.test.ts` (bar and disabled fieldset while saving). Done when: tests, lint and check pass.
+- [ ] **9. Admin Actions tab**: T1–T4. Files: `AdminEndpoints.cs`, `routes/admin/+layout.svelte`, `routes/admin/actions/+page.svelte` (new), `lib/jobs.ts`, `icons.ts`, `types.ts`. Tests: `AdminEndpointsTests` (counts), role matrix row, `routes/admin/actions-page.test.ts` (new; counts with singular, confirm, disabled states, not-configured alert, toasts), `admin-pages.test.ts` (tab list), `jobs.test.ts`. Done when: the tab appears after BIOS info and both buttons post to their routes; tests pass.
+- [ ] **10. Pick up where you left off**: S1–S4. Files: `LibraryEndpoints.cs`, `LibraryRepositories.cs`, `lib/saves.ts`, `GameSaves.svelte`, `GameResults.svelte`, `types.ts`. Tests: `LibraryEndpointsTests` (`ownSaveCount` for Admin and Site user), `saves.test.ts` (`playableRom`), `GameResults.test.ts` (button shown/hidden, newest playable own save opens, battery confirm, none → toast), `GameSaves.test.ts` still green. Done when: an Admin with only another user's saves sees no green button; tests pass.
+- [ ] **11. IGDB rating on the game page**: G1. Files: `routes/games/[id]/+page.svelte`, `types.ts`. Tests: `routes/games/game-page.test.ts` (badge text, singular vote, hidden when null). Done when: `{score: 81.6, votes: 1}` renders "IGDB 82/100 · 1 vote"; tests pass.
+- [ ] **12. Docs and e2e**: `docs/zip-format.md` (A1/A2 under Game and Validation), `docs/features.md` (Admin → Actions, Integrity image cache and actions check, footer, Edit Metadata, game card, game page, API reference for the new routes), `docs/configuration.md` (`Paths:ImageCache`, "eight paths"), `docs/deployment.md` (volume table, chown list, "eight folders", backups note). Playwright: Admin opens Actions and sees both cards; library cards' images load from `/cover/`. Done when: `pwsh scripts/test-all.ps1` and `pwsh scripts/test-e2e.ps1` pass.
+
+## Decisions
+- 2026-11-26 "ROM file" in the request → the game ZIP (one `info.json` per game; `igdbId` is per game) (code)
+- 2026-11-26 Pull Cover Images replaces every cover, Admin uploads included → yes (user)
+- 2026-11-26 Which IGDB rating → `total_rating` + `total_rating_count` (user)
+- 2026-11-26 Where IGDB ratings and sync time live → database only; no `actions.lastIgdbSyncTime` in `info.json`, no ZIP writes (user)
+- 2026-11-26 Footer busy source → server-side job-lock activity, shown to every signed-in user (user)
+- 2026-11-26 Edit Metadata progress → indeterminate bar (user)
+- 2026-11-26 Cache format → WebP q80, longest side ≤ 512 px (user)
+- 2026-11-26 Resume save → newest own playable save of any kind; battery asks first (user)
+- 2026-11-26 IGDB display → `IGDB 82/100 · 1,234 votes` badge (user)
+- 2026-11-26 Schema bump for `actions` → none; optional and left out when empty, like `chosenPrimarySha1` (code)
+- 2026-11-26 `game_actions` FK → none, because the mirror deletes and re-inserts `games` rows on every write (code)
+- 2026-11-26 Pulled cover image `source` → `upload` with the IGDB `sourceUrl`, as Use this match already stores it (no new source value) (code)
+- 2026-11-26 Cache invalidation → files keyed by cover SHA1, generated on first request and by integrity; stale ones removed by integrity (code)
+- 2026-11-26 Review round 1: duplicates report's own query, path-test fixtures, setup-dev folder, no app service in `docker-compose.dev.yml`, Integrity page doesn't navigate, edit form has no fieldset, `end-0` is `!important` → fixed in place (reviewer)
+- 2026-11-26 Cover decode guards → sides over 4096 fall back to the original; at most 2 generations at once (reviewer)
+- 2026-11-26 Job start feedback on Actions → repack-style toast with View job link (reviewer)
+- 2026-11-26 Pull covers when the ZIP disagrees with the DB (already pulled, different or no IGDB id) → `Skipped`, no write (reviewer)
+- 2026-11-26 `/api/activity` during restore → `MaintenanceExempt` (reviewer)
+- 2026-11-26 Clearing IGDB columns on re-link → `ClearIgdbSyncAsync` after the mirror (reviewer)
+- 2026-11-26 Step 7 too big → split into server (7) and SPA (8) (reviewer)
+- 2026-11-26 Non-object `actions` message → explicit node check in `InfoJsonReader` (reviewer)
+
+## Kickoff prompt
+```text
+/spec implement 2026-11-26-admin-actions-image-cache.md
+```
+Starts the spec, or resumes it at the first unticked step.
