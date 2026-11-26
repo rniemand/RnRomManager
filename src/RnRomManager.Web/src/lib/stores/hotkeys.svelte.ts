@@ -1,6 +1,6 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { api } from '../api/client';
+import { api } from '#lib/api/client.js';
 import type {
 	HotkeysResponse,
 	Me,
@@ -9,7 +9,7 @@ import type {
 	Bindings,
 	EditableHotkeyId
 } from '#lib/types/index.js';
-import { actionFor, fromEvent } from '../hotkeys';
+import { actionFor, fromEvent } from '#lib/hotkeys.js';
 import { auth } from './auth.svelte';
 import { toasts } from './toasts.svelte';
 

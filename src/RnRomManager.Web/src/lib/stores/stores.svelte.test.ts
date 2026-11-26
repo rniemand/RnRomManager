@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetClient } from '../api/client';
-import { ApiError } from '../api/errors';
+import { resetClient } from '#lib/api/client.js';
+import { ApiError } from '#lib/api/errors.js';
 import type { CurrentJob } from '#lib/types/index.js';
 import { iconClass } from '#lib/icons/icons.js';
 import { auth } from './auth.svelte';

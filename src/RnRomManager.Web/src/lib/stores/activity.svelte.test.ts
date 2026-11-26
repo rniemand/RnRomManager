@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetClient } from '../api/client';
+import { resetClient } from '#lib/api/client.js';
 import type { Activity } from '#lib/types/index.js';
 import { activity } from './activity.svelte';
 import { idlePollIntervalMs, pollIntervalMs } from './jobs.svelte';

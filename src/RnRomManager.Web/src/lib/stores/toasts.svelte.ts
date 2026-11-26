@@ -1,4 +1,4 @@
-import { isApiError } from '../api/errors';
+import { isApiError } from '#lib/api/errors.js';
 import type { ToastMessage, ToastLink } from '#lib/types/index.js';
 
 export const toastDurationMs = 5000;

@@ -1,10 +1,10 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
-import { api } from '../api/client';
-import { ApiError } from '../api/errors';
+import { api } from '#lib/api/client.js';
+import { ApiError } from '#lib/api/errors.js';
 import type { Job, ReviewResolveSummary, ReviewJob } from '#lib/types/index.js';
-import { nextReviewItem } from '../review';
+import { nextReviewItem } from '#lib/review.js';
 import { pollIntervalMs } from './jobs.svelte';
 import { toasts } from './toasts.svelte';
 
