@@ -23,7 +23,11 @@ public sealed class LimitStream(Stream inner, long limit) : Stream
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
         Count(await inner.ReadAsync(Window(buffer), cancellationToken).ConfigureAwait(false));
 
-    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+    public override Task<int> ReadAsync(
+        byte[] buffer,
+        int offset,
+        int count,
+        CancellationToken cancellationToken) =>
         ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
     // Ask for at most one byte past the limit: enough to detect an overrun without buffering a huge read.

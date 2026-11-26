@@ -9,7 +9,11 @@ namespace RnRomManager.Core.Media;
 /// batches and stored in <c>game_actions</c> only (never a ZIP). One job item per game; cancellable between batches; an
 /// IGDB read failure fails the job with its title.
 /// </summary>
-public sealed class IgdbSyncJob(IGameRepository games, IIgdbGames igdb, IJobItemRepository items, TimeProvider time) : IJob
+public sealed class IgdbSyncJob(
+    IGameRepository games,
+    IIgdbGames igdb,
+    IJobItemRepository items,
+    TimeProvider time) : IJob
 {
     public const string Updated = "Updated";
     public const string NoRating = "NoRating";

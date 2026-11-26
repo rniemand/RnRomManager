@@ -1,5 +1,4 @@
 using System.Net;
-using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
@@ -10,38 +9,6 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Media;
 
-/// <summary>A box art or snap ready to store as <c>images/&lt;fileName&gt;</c>.</summary>
-/// <param name="Source">The <c>info.json</c> source of a fetched image; null means libretro-thumbnails.</param>
-public sealed record MediaImage(ImageType Type, byte[] Bytes, int Width, int Height, string? SourceUrl, bool IsDefault, string? Source = null)
-{
-    public const string BoxArtFileName = "boxart-01.png";
-    public const string SnapFileName = "snap-01.png";
-
-    /// <summary>T8: <c>png</c> or <c>jpg</c>, from the magic bytes.</summary>
-    public string Extension => ImageFormats.Extension(ImageFormats.Detect(Bytes) ?? ImageFormat.Png);
-
-    /// <summary>The name of a new game's first image of this type, by format (<c>boxart-01.jpg</c>).</summary>
-    public string FileName => $"{GameImages.Prefix(Type)}-01.{Extension}";
-
-    public InfoJsonImage ToInfoJson(DateTimeOffset dateAdded, bool isCover) => new()
-    {
-        FileName = FileName,
-        Type = Type,
-        Source = IsDefault ? InfoJsonImage.SourceDefault : Source ?? InfoJsonImage.SourceLibretro,
-        SourceUrl = SourceUrl,
-        IsDefault = IsDefault,
-        IsCover = isCover,
-        SizeBytes = Bytes.Length,
-        Sha1 = Convert.ToHexStringLower(SHA1.HashData(Bytes)),
-        Width = Width,
-        Height = Height,
-        DateAdded = dateAdded,
-    };
-}
-
-/// <param name="BoxArt">Always set: the handler's default when nothing was found.</param>
-public sealed record MediaResult(MediaImage BoxArt, MediaImage? Snap);
-
 /// <summary>
 /// Box art + snap lookup on libretro-thumbnails (spec §10.2). Names are tried in the order given (primary release first,
 /// then primary-rank order; null = a Manual release, skipped); the first valid PNG of each type wins. Network failures
@@ -49,8 +16,13 @@ public sealed record MediaResult(MediaImage BoxArt, MediaImage? Snap);
 /// instead takes each name's entry (by the id its <c>datGameName</c> ends with) and fetches its own CDN URLs, PNG or
 /// JPEG, through <see cref="TitleDbImageClient"/>; an empty <c>Sources:ThumbnailBaseUrl</c> disables both.
 /// </summary>
-public sealed class MediaService(HttpClient http, TitleDbImageClient titleDbImages, DatCache dats, IOptions<SourcesOptions> sources,
-    TimeProvider time, ILogger<MediaService> logger)
+public sealed class MediaService(
+    HttpClient http,
+    TitleDbImageClient titleDbImages,
+    DatCache dats,
+    IOptions<SourcesOptions> sources,
+    TimeProvider time,
+    ILogger<MediaService> logger)
 {
     /// <summary>T8: an external system's image body, opening its stream included, must arrive within this.</summary>
     public static readonly TimeSpan BodyTimeout = TimeSpan.FromSeconds(20);
@@ -59,7 +31,10 @@ public sealed class MediaService(HttpClient http, TitleDbImageClient titleDbImag
     public const int MaxThumbnailBytes = 5 * 1024 * 1024;
 
     public async Task<MediaResult> FindAsync(
-        ISystemHandler handler, IEnumerable<string?> datGameNames, CircuitBreaker breaker, CancellationToken cancellationToken)
+        ISystemHandler handler,
+        IEnumerable<string?> datGameNames,
+        CircuitBreaker breaker,
+        CancellationToken cancellationToken)
     {
         var names = datGameNames.OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         var baseUrl = sources.Value.ThumbnailBaseUrl;

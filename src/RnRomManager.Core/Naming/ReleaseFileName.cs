@@ -1,25 +1,27 @@
 namespace RnRomManager.Core.Naming;
 
-/// <summary>The tags of a release that release editing (B3) can change and that show in its file name.</summary>
-public sealed record ReleaseTags(
-    IReadOnlyList<string> Regions, IReadOnlyList<string> Languages, string? Revision, bool Hack, bool Translated, string? Version);
-
 /// <summary>B7: a release's file name after its tags were edited.</summary>
 public static class ReleaseFileName
 {
-    private enum Insert { Default, AfterTitle, End }
-
     /// <summary>
     /// Edits only the groups of the fields that changed between <paramref name="before"/> and <paramref name="after"/>:
     /// a found group is replaced (or removed with one preceding space), a missing one is inserted before the first
     /// <c>[</c> group (regions right after <paramref name="baseTitle"/>, a version at the very end). The stem is then
     /// sanitized and the extension kept. No change → <paramref name="fileName"/> as it is.
     /// </summary>
-    public static string Edit(string fileName, string baseTitle, ReleaseTags before, ReleaseTags after)
+    public static string Edit(
+        string fileName,
+        string baseTitle,
+        ReleaseTags before,
+        ReleaseTags after)
     {
         var stem = Path.GetFileNameWithoutExtension(fileName);
         var changed = false;
-        void Apply(bool differs, string? oldGroup, string? newGroup, Insert insert)
+        void Apply(
+            bool differs,
+            string? oldGroup,
+            string? newGroup,
+            Insert insert)
         {
             if (!differs)
                 return;
@@ -48,7 +50,12 @@ public static class ReleaseFileName
 
     private static string? Paren(string? value) => string.IsNullOrEmpty(value) ? null : $"({value})";
 
-    private static string Change(string stem, string baseTitle, string? oldGroup, string? newGroup, Insert insert)
+    private static string Change(
+        string stem,
+        string baseTitle,
+        string? oldGroup,
+        string? newGroup,
+        Insert insert)
     {
         var at = oldGroup is null ? -1 : stem.IndexOf(oldGroup, StringComparison.OrdinalIgnoreCase);
         if (at >= 0)

@@ -10,24 +10,15 @@ namespace RnRomManager.Core.Storage;
 /// </summary>
 internal static class NativeCheckedOpen
 {
-    internal enum Outcome
-    {
-        Opened,
-        Missing,
-        Unsafe,
-        Failed,
-    }
-
-    internal readonly record struct Result(Outcome Outcome, SafeFileHandle? Handle, ExternalFileSnapshot? Snapshot, string? Details)
-    {
-        public static Result Fail(Outcome outcome, string details) => new(outcome, null, null, details);
-    }
-
     /// <param name="fullRoot">Fully qualified, no trailing separator.</param>
     /// <param name="components">The names below the root, each as spelled on disk; the last is the file.</param>
     /// <param name="beforeDirectoryOpen">Test seam: runs with each directory's path right before it is opened.</param>
     /// <exception cref="PlatformNotSupportedException">Neither Windows nor Linux.</exception>
-    public static Result OpenRead(string fullRoot, IReadOnlyList<string> components, FileShare share, Action<string>? beforeDirectoryOpen)
+    public static Result OpenRead(
+        string fullRoot,
+        IReadOnlyList<string> components,
+        FileShare share,
+        Action<string>? beforeDirectoryOpen)
     {
         if (OperatingSystem.IsWindows())
             return OpenWindows(fullRoot, components, share, beforeDirectoryOpen);
@@ -82,25 +73,25 @@ internal static class NativeCheckedOpen
             var pinned = Hold(held, pinnedFd);
             var pinnedStat = NativeFileStat.Read(pinned);
             if (pinnedStat.Outcome != NativeStatOutcome.Found)
-                return Result.Fail(Outcome.Failed, $"{path}: {pinnedStat.Error ?? "can't be inspected"}");
+                return Result.Fail(NativeCheckedOpenOutcome.Failed, $"{path}: {pinnedStat.Error ?? "can't be inspected"}");
             if (pinnedStat.IsLink)
-                return Result.Fail(Outcome.Unsafe, $"{path} is a link");
+                return Result.Fail(NativeCheckedOpenOutcome.Unsafe, $"{path} is a link");
             if (!pinnedStat.IsRegularFile)
-                return Result.Fail(Outcome.Unsafe, $"{path} is not a regular file");
+                return Result.Fail(NativeCheckedOpenOutcome.Unsafe, $"{path} is not a regular file");
 
             // Reopening through procfs opens the pinned object itself, whatever the name points at by now. There is
             // no fallback to the path: without procfs the open fails.
             var readFd = open("/proc/self/fd/" + pinnedFd.ToString(CultureInfo.InvariantCulture), ORdOnly | ONonBlock | OCloExec);
             if (readFd < 0)
-                return Result.Fail(Outcome.Failed, $"{path} can't be opened through /proc/self/fd (errno {Marshal.GetLastPInvokeError()}); procfs must be mounted");
+                return Result.Fail(NativeCheckedOpenOutcome.Failed, $"{path} can't be opened through /proc/self/fd (errno {Marshal.GetLastPInvokeError()}); procfs must be mounted");
             var readable = new SafeFileHandle(readFd, ownsHandle: true);
             var readStat = NativeFileStat.Read(readable);
             if (readStat.Outcome != NativeStatOutcome.Found || !readStat.IsRegularFile || readStat.Snapshot!.Identity != pinnedStat.Snapshot!.Identity)
             {
                 readable.Dispose();
-                return Result.Fail(Outcome.Unsafe, $"{path} is not the file that was checked");
+                return Result.Fail(NativeCheckedOpenOutcome.Unsafe, $"{path} is not the file that was checked");
             }
-            return new Result(Outcome.Opened, readable, readStat.Snapshot, null);
+            return new Result(NativeCheckedOpenOutcome.Opened, readable, readStat.Snapshot, null);
         }
         finally
         {
@@ -120,11 +111,11 @@ internal static class NativeCheckedOpen
 
     private static Result LinuxFailure(string path, int errno, bool directory) => errno switch
     {
-        ENOENT => Result.Fail(Outcome.Missing, $"{path} does not exist"),
-        ENOTDIR when directory => Result.Fail(Outcome.Unsafe, $"{path} is a link or not a directory"),
-        ENOTDIR => Result.Fail(Outcome.Missing, $"{path} does not exist"),
-        ELOOP => Result.Fail(Outcome.Unsafe, $"{path} is a link"),
-        _ => Result.Fail(Outcome.Failed, $"{path} can't be opened (errno {errno})"),
+        ENOENT => Result.Fail(NativeCheckedOpenOutcome.Missing, $"{path} does not exist"),
+        ENOTDIR when directory => Result.Fail(NativeCheckedOpenOutcome.Unsafe, $"{path} is a link or not a directory"),
+        ENOTDIR => Result.Fail(NativeCheckedOpenOutcome.Missing, $"{path} does not exist"),
+        ELOOP => Result.Fail(NativeCheckedOpenOutcome.Unsafe, $"{path} is a link"),
+        _ => Result.Fail(NativeCheckedOpenOutcome.Failed, $"{path} can't be opened (errno {errno})"),
     };
 
     [DllImport("libc", SetLastError = true)]
@@ -148,7 +139,11 @@ internal static class NativeCheckedOpen
     private const int ErrorPathNotFound = 3;
     private const int ErrorSharingViolation = 32;
 
-    private static Result OpenWindows(string fullRoot, IReadOnlyList<string> components, FileShare share, Action<string>? beforeDirectoryOpen)
+    private static Result OpenWindows(
+        string fullRoot,
+        IReadOnlyList<string> components,
+        FileShare share,
+        Action<string>? beforeDirectoryOpen)
     {
         var held = new List<SafeFileHandle>();
         try
@@ -167,9 +162,9 @@ internal static class NativeCheckedOpen
                     return WindowsFailure(path, Marshal.GetLastPInvokeError());
                 var stat = NativeFileStat.Read(directory);
                 if (stat.Outcome != NativeStatOutcome.Found)
-                    return Result.Fail(Outcome.Failed, $"{path}: {stat.Error ?? "can't be inspected"}");
+                    return Result.Fail(NativeCheckedOpenOutcome.Failed, $"{path}: {stat.Error ?? "can't be inspected"}");
                 if (stat.IsLink || !stat.IsDirectory)
-                    return Result.Fail(Outcome.Unsafe, $"{path} is a reparse point or not a directory");
+                    return Result.Fail(NativeCheckedOpenOutcome.Unsafe, $"{path} is a reparse point or not a directory");
             }
 
             path = Path.Combine(path, components[^1]);
@@ -188,10 +183,10 @@ internal static class NativeCheckedOpen
             {
                 leaf.Dispose();
                 return leafStat.Outcome != NativeStatOutcome.Found
-                    ? Result.Fail(Outcome.Failed, $"{path}: {leafStat.Error ?? "can't be inspected"}")
-                    : Result.Fail(Outcome.Unsafe, leafStat.IsLink ? $"{path} is a reparse point" : $"{path} is not a regular file");
+                    ? Result.Fail(NativeCheckedOpenOutcome.Failed, $"{path}: {leafStat.Error ?? "can't be inspected"}")
+                    : Result.Fail(NativeCheckedOpenOutcome.Unsafe, leafStat.IsLink ? $"{path} is a reparse point" : $"{path} is not a regular file");
             }
-            return new Result(Outcome.Opened, leaf, leafStat.Snapshot, null);
+            return new Result(NativeCheckedOpenOutcome.Opened, leaf, leafStat.Snapshot, null);
         }
         finally
         {
@@ -202,12 +197,18 @@ internal static class NativeCheckedOpen
 
     private static Result WindowsFailure(string path, int error) => error switch
     {
-        ErrorFileNotFound or ErrorPathNotFound => Result.Fail(Outcome.Missing, $"{path} does not exist"),
-        ErrorSharingViolation => Result.Fail(Outcome.Failed, $"{path} is in use by another process"),
-        _ => Result.Fail(Outcome.Failed, $"{path} can't be opened (error {error})"),
+        ErrorFileNotFound or ErrorPathNotFound => Result.Fail(NativeCheckedOpenOutcome.Missing, $"{path} does not exist"),
+        ErrorSharingViolation => Result.Fail(NativeCheckedOpenOutcome.Failed, $"{path} is in use by another process"),
+        _ => Result.Fail(NativeCheckedOpenOutcome.Failed, $"{path} can't be opened (error {error})"),
     };
 
     [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
-    private static extern SafeFileHandle CreateFileW(string fileName, uint desiredAccess, uint shareMode, IntPtr securityAttributes,
-        uint creationDisposition, uint flagsAndAttributes, IntPtr templateFile);
+    private static extern SafeFileHandle CreateFileW(
+        string fileName,
+        uint desiredAccess,
+        uint shareMode,
+        IntPtr securityAttributes,
+        uint creationDisposition,
+        uint flagsAndAttributes,
+        IntPtr templateFile);
 }

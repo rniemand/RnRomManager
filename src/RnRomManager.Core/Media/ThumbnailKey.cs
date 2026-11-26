@@ -13,6 +13,10 @@ public static class ThumbnailKey
         Uri.EscapeDataString(string.Concat(datGameName.Select(c => Replaced.Contains(c) ? '_' : c)));
 
     /// <summary><c>{base}/{DatName}/{folder}/{key}.png</c>.</summary>
-    public static string Url(string baseUrl, string datName, string folder, string datGameName) =>
+    public static string Url(
+        string baseUrl,
+        string datName,
+        string folder,
+        string datGameName) =>
         $"{baseUrl.TrimEnd('/')}/{Uri.EscapeDataString(datName)}/{folder}/{For(datGameName)}.png";
 }

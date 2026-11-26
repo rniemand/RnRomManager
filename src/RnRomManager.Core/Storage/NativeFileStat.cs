@@ -4,29 +4,14 @@ using Microsoft.Win32.SafeHandles;
 
 namespace RnRomManager.Core.Storage;
 
-/// <summary>Which file a path named when it was looked at: device + inode on Linux, volume serial + file index on Windows.</summary>
-public readonly record struct FileIdentity(ulong Volume, ulong FileId);
-
-/// <summary>
-/// A regular file as it was when checked: which file it is, its length and its last write time. Comparing two
-/// snapshots tells whether a path still names the same, unchanged file.
-/// </summary>
-public sealed record ExternalFileSnapshot(FileIdentity Identity, long Length, DateTime LastWriteTimeUtc);
-
-internal enum NativeStatOutcome
-{
-    Found,
-
-    /// <summary>The entry, or a directory on the way to it, doesn't exist.</summary>
-    NotFound,
-
-    /// <summary>Anything else (permission, IO): the entry may exist but can't be inspected.</summary>
-    Failed,
-}
-
 /// <summary>What one path or open handle names, read without following a link and without reading file content.</summary>
 internal readonly record struct NativeFileStat(
-    NativeStatOutcome Outcome, bool IsLink, bool IsDirectory, bool IsRegularFile, ExternalFileSnapshot? Snapshot, string? Error)
+    NativeStatOutcome Outcome,
+    bool IsLink,
+    bool IsDirectory,
+    bool IsRegularFile,
+    ExternalFileSnapshot? Snapshot,
+    string? Error)
 {
     /// <param name="fullPath">Fully qualified, as <see cref="Path.GetFullPath(string)"/> returns it.</param>
     /// <exception cref="PlatformNotSupportedException">Neither Windows nor Linux.</exception>
@@ -103,7 +88,12 @@ internal readonly record struct NativeFileStat(
     }
 
     [DllImport("libc", SetLastError = true)]
-    private static extern int statx(int dirfd, [MarshalAs(UnmanagedType.LPUTF8Str)] string pathname, int flags, uint mask, byte[] buffer);
+    private static extern int statx(
+        int dirfd,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string pathname,
+        int flags,
+        uint mask,
+        byte[] buffer);
 
     // --- Windows: an attribute-only handle on the entry itself (a reparse point is not followed) ---
 
@@ -145,27 +135,15 @@ internal readonly record struct NativeFileStat(
             regular ? new ExternalFileSnapshot(identity, length, mtime) : null, null);
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ByHandleFileInformation
-    {
-        public uint FileAttributes;
-        public uint CreationTimeLow;
-        public uint CreationTimeHigh;
-        public uint LastAccessTimeLow;
-        public uint LastAccessTimeHigh;
-        public uint LastWriteTimeLow;
-        public uint LastWriteTimeHigh;
-        public uint VolumeSerialNumber;
-        public uint FileSizeHigh;
-        public uint FileSizeLow;
-        public uint NumberOfLinks;
-        public uint FileIndexHigh;
-        public uint FileIndexLow;
-    }
-
     [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
-    private static extern SafeFileHandle CreateFileW(string fileName, uint desiredAccess, uint shareMode, IntPtr securityAttributes,
-        uint creationDisposition, uint flagsAndAttributes, IntPtr templateFile);
+    private static extern SafeFileHandle CreateFileW(
+        string fileName,
+        uint desiredAccess,
+        uint shareMode,
+        IntPtr securityAttributes,
+        uint creationDisposition,
+        uint flagsAndAttributes,
+        IntPtr templateFile);
 
     [DllImport("kernel32", SetLastError = true, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

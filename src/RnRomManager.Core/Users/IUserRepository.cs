@@ -30,7 +30,11 @@ public interface IUserRepository
     Task<int> IncrementFailedLoginCountAsync(int id, CancellationToken cancellationToken);
 
     /// <summary>Sets <c>lockout_until</c> and resets the failure count (spec §9.1).</summary>
-    Task LockOutAsync(int id, DateTime until, DateTime now, CancellationToken cancellationToken);
+    Task LockOutAsync(
+        int id,
+        DateTime until,
+        DateTime now,
+        CancellationToken cancellationToken);
 
     /// <summary>Resets the failure count and lockout, sets <c>last_login_at</c>.</summary>
     Task RecordSuccessfulLoginAsync(int id, DateTime now, CancellationToken cancellationToken);
@@ -47,5 +51,3 @@ public interface IUserRepository
     /// <summary>B27.6: gives every user a new security stamp (each its own), so every session ends at its next request.</summary>
     Task RotateAllSecurityStampsAsync(CancellationToken cancellationToken);
 }
-
-public sealed record LastSignIn(string Username, DateTime At);

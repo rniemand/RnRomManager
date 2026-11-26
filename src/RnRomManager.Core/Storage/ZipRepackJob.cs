@@ -14,9 +14,18 @@ namespace RnRomManager.Core.Storage;
 /// through the checked write (tmp, verify, atomic move) and mirrored. One job item per game; cancel and shutdown stop
 /// between games.
 /// </summary>
-public sealed class ZipRepackJob(IGameRepository games, ILibraryMirror mirror, InfoJsonReader reader, ISystemRegistry systems,
-    IJobItemRepository items, IOptions<PathsOptions> paths, IAuditLog audit, IFreeSpace freeSpace, TimeProvider time,
-    IRomStorageSettings settings, ILogger<ZipRepackJob> logger) : IJob
+public sealed class ZipRepackJob(
+    IGameRepository games,
+    ILibraryMirror mirror,
+    InfoJsonReader reader,
+    ISystemRegistry systems,
+    IJobItemRepository items,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    IFreeSpace freeSpace,
+    TimeProvider time,
+    IRomStorageSettings settings,
+    ILogger<ZipRepackJob> logger) : IJob
 {
     public const string Repacked = "Repacked";
     public const string Error = "Error";
