@@ -15,7 +15,12 @@ public interface ICollectionRepository
     /// The owner's collections whose name contains every word (case/accent-insensitive, <c>%</c>/<c>_</c> literal),
     /// sorted by name then id.
     /// </summary>
-    Task<Page<Collection>> ListAsync(int userId, IReadOnlyList<string> words, int page, int pageSize, CancellationToken cancellationToken);
+    Task<Page<Collection>> ListAsync(
+        int userId,
+        IReadOnlyList<string> words,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Writes name, notes, cover columns and <c>updated_at</c> of the owner's row; false when missing or another user's.
@@ -30,7 +35,11 @@ public interface ICollectionRepository
     /// Adds the ids that are library games and not yet members (B13), with <paramref name="addedAt"/>; returns how many were added.
     /// Membership calls don't check ownership: callers check it with <see cref="GetAsync"/> first.
     /// </summary>
-    Task<int> AddGamesAsync(Guid collectionId, IReadOnlyCollection<Guid> gameIds, DateTime addedAt, CancellationToken cancellationToken);
+    Task<int> AddGamesAsync(
+        Guid collectionId,
+        IReadOnlyCollection<Guid> gameIds,
+        DateTime addedAt,
+        CancellationToken cancellationToken);
 
     /// <summary>Removes one membership (B14); false when it wasn't there.</summary>
     Task<bool> RemoveGameAsync(Guid collectionId, Guid gameId, CancellationToken cancellationToken);

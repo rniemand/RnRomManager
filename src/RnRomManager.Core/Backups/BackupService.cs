@@ -11,12 +11,6 @@ using RnRomManager.Core.Users;
 
 namespace RnRomManager.Core.Backups;
 
-/// <summary>A backup ZIP in <c>Paths:Backups</c> (B17).</summary>
-public sealed record BackupFile(string FileName, long SizeBytes, DateTimeOffset CreatedAt);
-
-/// <summary>The outcome of the last run, scheduled or manual (B16); kept in memory only.</summary>
-public sealed record BackupResult(DateTimeOffset At, bool Ok, string? FileName, string? Error);
-
 /// <summary>
 /// Creates database backups (B13), applies retention (B14) and lists them. One run at a time, on its own lock: the
 /// store reads a consistent snapshot, so jobs and edits keep running and the job lock isn't taken. A live restore (B27)
@@ -150,8 +144,12 @@ public sealed class BackupService(
     }
 
     /// <summary>B27.6–7, B27.10: everything from the drop on, with <see cref="CancellationToken.None"/>.</summary>
-    private async Task<BackupRestoreResult> ReplaceAsync(string fileName, string safety, System.IO.Compression.ZipArchive zip,
-        BackupManifest manifest, AuditActor actor)
+    private async Task<BackupRestoreResult> ReplaceAsync(
+        string fileName,
+        string safety,
+        System.IO.Compression.ZipArchive zip,
+        BackupManifest manifest,
+        AuditActor actor)
     {
         var none = CancellationToken.None;
         try

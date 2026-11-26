@@ -3,13 +3,6 @@ using RnRomManager.Core.Storage;
 
 namespace RnRomManager.Core.Dats;
 
-/// <summary>Test seams of <see cref="DatPublication"/>: the directory renames and deletes it makes.</summary>
-public sealed class DatPublicationHooks
-{
-    public Action<string, string> Move { get; init; } = Directory.Move;
-    public Action<string> Delete { get; init; } = path => Directory.Delete(path, recursive: true);
-}
-
 /// <summary>
 /// Spec T2: swaps a staged DAT set in for <c>cache/dats/</c> through a fixed backup, <c>cache/dats.previous/</c>
 /// (outside <c>cache/work/</c>, so crash cleanup never deletes it), and reconciles a backup an interrupted swap left
@@ -54,7 +47,11 @@ public static class DatPublication
     /// live. If the second rename fails the old set is moved back; if that fails too, the backup is kept and logged.
     /// </summary>
     /// <exception cref="IOException">Nothing was published; the old set is live, or kept in the backup.</exception>
-    public static void Swap(string cacheRoot, string staged, ILogger logger, DatPublicationHooks? hooks = null)
+    public static void Swap(
+        string cacheRoot,
+        string staged,
+        ILogger logger,
+        DatPublicationHooks? hooks = null)
     {
         hooks ??= new();
         try
@@ -143,10 +140,5 @@ public static class DatPublication
         var check = ExternalRomPath.ClassifyDirectory(cacheRoot, path);
         details = check.Details;
         return check.Status;
-    }
-
-    private sealed class UnsafeDatSetException(string message, bool liveUnsafe) : Exception(message)
-    {
-        public bool LiveUnsafe { get; } = liveUnsafe;
     }
 }

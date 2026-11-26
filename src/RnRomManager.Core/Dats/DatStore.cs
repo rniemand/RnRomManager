@@ -64,7 +64,11 @@ public sealed class DatStore
     /// <param name="datName">The system's <c>DatName</c> (<see cref="MameName"/> for MAME).</param>
     /// <param name="version">The manifest's download time.</param>
     /// <param name="romExtension">The system's first ROM extension (<c>.mamez</c> for MAME).</param>
-    public DatStore(MameDat dat, string datName, string version, string romExtension)
+    public DatStore(
+        MameDat dat,
+        string datName,
+        string version,
+        string romExtension)
     {
         DatName = datName;
         Version = version;

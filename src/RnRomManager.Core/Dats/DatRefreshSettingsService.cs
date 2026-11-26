@@ -6,7 +6,11 @@ using RnRomManager.Core.Jobs;
 namespace RnRomManager.Core.Dats;
 
 /// <summary>B28: loads and saves the DAT refresh schedule and tells the scheduler when it changes (as <see cref="BackupService"/> does for backups).</summary>
-public sealed class DatRefreshSettingsService(ISettingsRepository settings, TimeZoneInfo zone, TimeProvider time, ILogger<DatRefreshSettingsService> logger)
+public sealed class DatRefreshSettingsService(
+    ISettingsRepository settings,
+    TimeZoneInfo zone,
+    TimeProvider time,
+    ILogger<DatRefreshSettingsService> logger)
 {
     /// <summary>The container's time zone (<c>TZ</c>) the daily time is in.</summary>
     public string TimeZoneId => zone.Id;

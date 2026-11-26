@@ -16,7 +16,7 @@ public static class ClrMameProParser
         return root;
     }
 
-    private static DatBlock ParseItems(List<Token> tokens, ref int position, bool nested)
+    private static DatBlock ParseItems(List<ClrMameProParserToken> tokens, ref int position, bool nested)
     {
         var items = new List<KeyValuePair<string, object>>();
         while (position < tokens.Count)
@@ -54,9 +54,9 @@ public static class ClrMameProParser
         return nested ? throw new DatParseException("Missing ')' at end of file.") : new DatBlock(items);
     }
 
-    private static List<Token> Tokenize(string text)
+    private static List<ClrMameProParserToken> Tokenize(string text)
     {
-        var tokens = new List<Token>();
+        var tokens = new List<ClrMameProParserToken>();
         var line = 1;
         for (var i = 0; i < text.Length; i++)
         {
@@ -93,14 +93,4 @@ public static class ClrMameProParser
         }
         return tokens;
     }
-
-    private enum TokenKind
-    {
-        Open,
-        Close,
-        String,
-        Word,
-    }
-
-    private readonly record struct Token(TokenKind Kind, string Text, int Line);
 }

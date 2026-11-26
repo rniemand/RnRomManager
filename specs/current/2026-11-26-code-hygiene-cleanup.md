@@ -125,7 +125,7 @@ Phase 0: foundations
 
 Phase 1: C# structure (C1, C2) — each step splits types, wraps declarations and removes its `CS1`/`CS2` baseline lines
 - [x] **3. Api**: `src/RnRomManager.Api/**` (incl. `Paging` out of `JobEndpoints.cs`, `ImageUrlRequest` out of `LibraryEndpoints.cs`). Tests: `dotnet test tests/RnRomManager.Api.Tests` (build) + `CodeStyleTests`. Done when: no `CS1`/`CS2` baseline line under `src/RnRomManager.Api/`.
-- [ ] **4. Core A**: `Core/{Audit,Backups,Bundles,Collections,Dats,Discovery}`. Tests: Core.Tests filtered to those folders' test classes + `CodeStyleTests`. Done when: no baseline line for those folders.
+- [x] **4. Core A**: `Core/{Audit,Backups,Bundles,Collections,Dats,Discovery}`. Tests: Core.Tests filtered to those folders' test classes + `CodeStyleTests`. Done when: no baseline line for those folders.
 - [ ] **5. Core Ingest**: `Core/Ingest/**` (incl. `IngestPipeline`'s `IngestItemResult`, `IngestErrors`, `IngestFailures`, `ExternalIngestHooks`, and `IngestPipeline`'s 7 nested types `HashOutcome`, `Release`, `ExternalSource`, `ExternalPlacement`, `SetPlacement`, `RepairPlan`, `RomHashes`). Tests: `FullyQualifiedName~RnRomManager.Core.Tests.Ingest` + `CodeStyleTests`. Done when: as above.
 - [ ] **6. Core Integrity/Jobs/Library**: `Core/{Integrity,Jobs,Library}`. Tests: those namespaces + `CodeStyleTests`. Done when: as above.
 - [ ] **7. Core rest**: every remaining `Core` folder (`Media`, `Naming`, `Reports`, `Storage`, `Users`, …). Tests: those namespaces + `CodeStyleTests`. Done when: no baseline line under `src/RnRomManager.Core/`.

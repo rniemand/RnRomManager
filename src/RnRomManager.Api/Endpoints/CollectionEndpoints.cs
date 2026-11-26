@@ -112,10 +112,10 @@ public static class CollectionEndpoints
 
     internal static IResult ToResult(HttpContext ctx, CollectionResult result, Func<CollectionResult, IResult> ok) => result.Error switch
     {
-        CollectionResult.Failure.None => ok(result),
-        CollectionResult.Failure.NotFound => Problems.NotFound(ctx),
-        CollectionResult.Failure.ValidationFailed => Problems.Validation(ctx, result.Errors!),
-        CollectionResult.Failure.NameTaken => Problems.Create(ctx, StatusCodes.Status409Conflict, "CollectionNameTaken",
+        CollectionResultFailure.None => ok(result),
+        CollectionResultFailure.NotFound => Problems.NotFound(ctx),
+        CollectionResultFailure.ValidationFailed => Problems.Validation(ctx, result.Errors!),
+        CollectionResultFailure.NameTaken => Problems.Create(ctx, StatusCodes.Status409Conflict, "CollectionNameTaken",
             "You already have a collection with this name."),
         _ => throw new ArgumentOutOfRangeException(nameof(result)),
     };
@@ -127,7 +127,7 @@ public static class CollectionEndpoints
         CollectionService service,
         Guid id)
     {
-        if (result.Error != CollectionResult.Failure.None)
+        if (result.Error != CollectionResultFailure.None)
             return ToResult(ctx, result, _ => Results.Empty);
         return await service.GetAsync(id, UserId(ctx), ctx.RequestAborted) is { } fresh ? Results.Ok(ToDto(fresh)) : Problems.NotFound(ctx);
     }
