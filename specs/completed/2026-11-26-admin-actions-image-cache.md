@@ -1,6 +1,6 @@
 ---
 title: Admin actions, cover image cache and IGDB ratings
-status: in-progress
+status: completed
 created: 2026-11-26
 ---
 
@@ -170,3 +170,4 @@ API contract changes: new routes `POST /api/jobs/pull-covers`, `POST /api/jobs/i
 /spec implement 2026-11-26-admin-actions-image-cache.md
 ```
 Starts the spec, or resumes it at the first unticked step.
+- 2026-11-26 Implement: `TryAcquire` had 65 test call sites, not 63; `GameDetail.igdbRating` is optional in `types.ts` so existing fixtures type-check; `audit-page.test.ts` (tab order) also lists Actions (code)
