@@ -12,7 +12,7 @@
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
-	import GameResults from '#lib/components/GameResults.svelte';
+	import GameResults from '#lib/components/games/GameResults.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';

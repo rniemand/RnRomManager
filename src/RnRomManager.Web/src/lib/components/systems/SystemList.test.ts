@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
-import { auth } from '../stores/auth.svelte';
+import { auth } from '#lib/stores/auth.svelte.js';
 import type { SystemInfo } from '#lib/types/index.js';
 
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));

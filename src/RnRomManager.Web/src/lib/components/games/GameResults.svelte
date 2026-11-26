@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
-	import { api } from '../api/client';
+	import { api } from '#lib/api/client.js';
 	import type {
 		GameDetail,
 		GameListItem,
@@ -9,19 +9,19 @@
 		SaveItem,
 		PlaySave
 	} from '#lib/types/index.js';
-	import { formatCount } from '../format';
-	import { tooltip } from '../tooltip';
-	import { opensInNewTab, playLinkEvents, playUrl, usesPlayDisc } from '../emulator';
-	import { playableRom, savesApi } from '../saves';
-	import { toasts } from '../stores/toasts.svelte';
+	import { formatCount } from '#lib/format.js';
+	import { tooltip } from '#lib/tooltip.js';
+	import { opensInNewTab, playLinkEvents, playUrl, usesPlayDisc } from '#lib/emulator.js';
+	import { playableRom, savesApi } from '#lib/saves.js';
+	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import EmulatorModal from '#lib/components/modals/EmulatorModal.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import { auth } from '../stores/auth.svelte';
+	import { auth } from '#lib/stores/auth.svelte.js';
 	import RatingControl from '#lib/components/forms/RatingControl.svelte';
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
-	import { systemColour } from '../systemColours';
+	import { systemColour } from '#lib/systemColours.js';
 
 	/** The Library's game grid / list (spec §11), shared by the Library and a collection's page (B24). */
 	interface Props {

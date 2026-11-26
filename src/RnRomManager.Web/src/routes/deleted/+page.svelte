@@ -17,7 +17,7 @@
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
-	import IngestFileTable from '#lib/components/IngestFileTable.svelte';
+	import IngestFileTable from '#lib/components/ingest/IngestFileTable.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatCount } from '#lib/format.js';

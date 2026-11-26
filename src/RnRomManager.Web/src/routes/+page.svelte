@@ -20,7 +20,7 @@
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import GameResults from '#lib/components/GameResults.svelte';
+	import GameResults from '#lib/components/games/GameResults.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import {

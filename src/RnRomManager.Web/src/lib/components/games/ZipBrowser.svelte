@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { SvelteSet } from 'svelte/reactivity';
-	import { api } from '../api/client';
+	import { api } from '#lib/api/client.js';
 	import type { GameDetail, ZipEntries, ZipFolder } from '#lib/types/index.js';
-	import { formatDateTime, formatSize } from '../format';
-	import { ancestors, buildTree } from '../zipTree';
+	import { formatDateTime, formatSize } from '#lib/format.js';
+	import { ancestors, buildTree } from '#lib/zipTree.js';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';

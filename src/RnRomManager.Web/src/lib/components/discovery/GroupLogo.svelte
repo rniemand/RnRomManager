@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import { logoSources } from '../discovery';
+	import { logoSources } from '#lib/discovery.js';
 	import type { LogoKind } from '#lib/enums/index.js';
 
 	/**

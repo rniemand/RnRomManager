@@ -17,7 +17,7 @@
 	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import GameResults from '#lib/components/GameResults.svelte';
+	import GameResults from '#lib/components/games/GameResults.svelte';
 	import GameTypeahead from '#lib/components/forms/GameTypeahead.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';

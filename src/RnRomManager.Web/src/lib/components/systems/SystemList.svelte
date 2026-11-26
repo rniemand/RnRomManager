@@ -2,12 +2,12 @@
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { SystemInfo } from '#lib/types/index.js';
-	import { defaultDir, maxFind, systemsSearch } from '../discovery';
+	import { defaultDir, maxFind, systemsSearch } from '#lib/discovery.js';
 	import type { GroupSort, SortDir } from '#lib/enums/index.js';
-	import { formatCount } from '../format';
-	import { auth } from '../stores/auth.svelte';
+	import { formatCount } from '#lib/format.js';
+	import { auth } from '#lib/stores/auth.svelte.js';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
-	import GroupLogo from './GroupLogo.svelte';
+	import GroupLogo from '#lib/components/discovery/GroupLogo.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 
 	/**

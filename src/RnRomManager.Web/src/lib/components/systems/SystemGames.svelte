@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { api } from '../api/client';
+	import { api } from '#lib/api/client.js';
 	import type { GameListItem, Page, SystemInfo } from '#lib/types/index.js';
-	import { pageCount, readPageSize, writePageSize } from '../pageSize';
+	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import GameResults from './GameResults.svelte';
-	import { auth } from '../stores/auth.svelte';
-	import GroupLogo from './GroupLogo.svelte';
+	import GameResults from '#lib/components/games/GameResults.svelte';
+	import { auth } from '#lib/stores/auth.svelte.js';
+	import GroupLogo from '#lib/components/discovery/GroupLogo.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';

@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { ApiError } from '../api/errors';
+	import { ApiError } from '#lib/api/errors.js';
 	import type { GameListItem, Page, DiscoveryState } from '#lib/types/index.js';
-	import { discoveryApi, discoverySearch, discoveryText } from '../discovery';
-	import { pageCount, readPageSize, writePageSize } from '../pageSize';
+	import { discoveryApi, discoverySearch, discoveryText } from '#lib/discovery.js';
+	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import GameResults from './GameResults.svelte';
+	import GameResults from '#lib/components/games/GameResults.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
 

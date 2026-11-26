@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { SvelteSet } from 'svelte/reactivity';
-import { resetClient } from '../api/client';
+import { resetClient } from '#lib/api/client.js';
 import type { GameDetail } from '#lib/types/index.js';
 import ZipBrowser from './ZipBrowser.svelte';
 

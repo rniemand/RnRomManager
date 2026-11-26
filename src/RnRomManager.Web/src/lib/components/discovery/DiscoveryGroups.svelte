@@ -1,12 +1,18 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { auth } from '../stores/auth.svelte';
+	import { auth } from '#lib/stores/auth.svelte.js';
 	import { resolve } from '$app/paths';
 	import type { DiscoveryGroup, Page, DiscoveryState } from '#lib/types/index.js';
-	import { defaultDir, discoveryApi, discoverySearch, discoveryText, maxFind } from '../discovery';
+	import {
+		defaultDir,
+		discoveryApi,
+		discoverySearch,
+		discoveryText,
+		maxFind
+	} from '#lib/discovery.js';
 	import type { GroupSort, SortDir } from '#lib/enums/index.js';
-	import { formatCount } from '../format';
-	import { pageCount, readPageSize, writePageSize } from '../pageSize';
+	import { formatCount } from '#lib/format.js';
+	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';

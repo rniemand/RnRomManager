@@ -1,20 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import { resetClient } from '../api/client';
+import { resetClient } from '#lib/api/client.js';
 import type { GameListItem, DiscoveryState } from '#lib/types/index.js';
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
-vi.mock('../bootstrap', () => ({
+vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}
 		hide() {}
 		dispose() {}
 	}
 }));
-vi.mock('../modal', () => ({ releaseModal: () => {} }));
-vi.mock('../tooltip', () => ({ tooltip: () => ({}) }));
+vi.mock('#lib/modal.js', () => ({ releaseModal: () => {} }));
+vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 
 const { default: DiscoveryGames } = await import('./DiscoveryGames.svelte');
 

@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { api } from '../api/client';
-	import { isApiError } from '../api/errors';
+	import { api } from '#lib/api/client.js';
+	import { isApiError } from '#lib/api/errors.js';
 	import type { GameDetail } from '#lib/types/index.js';
-	import { titleError } from '../gameEdit';
-	import { toasts } from '../stores/toasts.svelte';
-	import { tooltip } from '../tooltip';
+	import { titleError } from '#lib/gameEdit.js';
+	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import { tooltip } from '#lib/tooltip.js';
 	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {

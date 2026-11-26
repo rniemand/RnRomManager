@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
-import { resetClient } from '../api/client';
+import { resetClient } from '#lib/api/client.js';
 import type { BundleEntry, BundleQueueSummary } from '#lib/types/index.js';
-import { bundle } from '../stores/bundle.svelte';
-import { toasts } from '../stores/toasts.svelte';
+import { bundle } from '#lib/stores/bundle.svelte.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
 
-vi.mock('../bootstrap', () => ({
+vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}
 		hide() {}

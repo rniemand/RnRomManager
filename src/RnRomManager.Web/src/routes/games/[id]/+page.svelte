@@ -21,8 +21,8 @@
 	import CopyButton from '#lib/components/forms/CopyButton.svelte';
 	import GameAdminModal from '#lib/components/modals/GameAdminModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
-	import GameImages from '#lib/components/GameImages.svelte';
-	import GameSaves from '#lib/components/GameSaves.svelte';
+	import GameImages from '#lib/components/games/GameImages.svelte';
+	import GameSaves from '#lib/components/games/GameSaves.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
 	import GameCollectionsModal from '#lib/components/modals/GameCollectionsModal.svelte';
@@ -32,7 +32,7 @@
 	import InfoJsonModal from '#lib/components/modals/InfoJsonModal.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import RatingControl from '#lib/components/forms/RatingControl.svelte';
-	import GameTitle from '#lib/components/GameTitle.svelte';
+	import GameTitle from '#lib/components/games/GameTitle.svelte';
 	import ReleaseNoteModal from '#lib/components/modals/ReleaseNoteModal.svelte';
 	import EditReleaseModal from '#lib/components/modals/EditReleaseModal.svelte';
 	import type { ReleaseKind, AddResult } from '#lib/enums/index.js';
@@ -46,7 +46,7 @@
 		usesPlayDisc
 	} from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
-	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
+	import ZipBrowser from '#lib/components/games/ZipBrowser.svelte';
 	import { formatCount, formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { renderMarkdown } from '#lib/markdown.js';

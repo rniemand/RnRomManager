@@ -16,7 +16,8 @@ vi.mock('#lib/bootstrap.js', () => ({
 vi.mock('#lib/modal.js', () => ({ releaseModal: () => {} }));
 
 const { default: LogoModal } = await import('./LogoModal.svelte');
-const { default: DiscoveryGroups } = await import('#lib/components/DiscoveryGroups.svelte');
+const { default: DiscoveryGroups } =
+	await import('#lib/components/discovery/DiscoveryGroups.svelte');
 
 const nintendo = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
 const hudson = '1'.repeat(64);

@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
-import { resetClient } from '../api/client';
+import { resetClient } from '#lib/api/client.js';
 import type { GameDetail, SaveItem } from '#lib/types/index.js';
-import { auth } from '../stores/auth.svelte';
-import { toasts } from '../stores/toasts.svelte';
+import { auth } from '#lib/stores/auth.svelte.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
 
-vi.mock('../bootstrap', () => ({
+vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}
 		hide() {}
 		dispose() {}
 	}
 }));
-vi.mock('../modal', () => ({ releaseModal: () => {} }));
+vi.mock('#lib/modal.js', () => ({ releaseModal: () => {} }));
 
 const { default: GameSaves } = await import('./GameSaves.svelte');
 

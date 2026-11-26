@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { SvelteSet } from 'svelte/reactivity';
-	import { formatDateTime } from '../format';
-	import { fileKey } from '../ingestDelete';
-	import { pageCount } from '../pageSize';
-	import { tooltip } from '../tooltip';
+	import { formatDateTime } from '#lib/format.js';
+	import { fileKey } from '#lib/ingestDelete.js';
+	import { pageCount } from '#lib/pageSize.js';
+	import { tooltip } from '#lib/tooltip.js';
 	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';

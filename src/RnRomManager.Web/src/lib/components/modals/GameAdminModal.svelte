@@ -17,7 +17,7 @@
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import GameTypeahead from '#lib/components/forms/GameTypeahead.svelte';
-	import IgdbLookup from '#lib/components/IgdbLookup.svelte';
+	import IgdbLookup from '#lib/components/games/IgdbLookup.svelte';
 
 	interface Props {
 		game: GameDetail;

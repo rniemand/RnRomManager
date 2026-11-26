@@ -23,7 +23,7 @@
 	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
 	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
-	import IngestFileTable from '#lib/components/IngestFileTable.svelte';
+	import IngestFileTable from '#lib/components/ingest/IngestFileTable.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
 	import { formatDateTime } from '#lib/format.js';

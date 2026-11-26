@@ -40,7 +40,7 @@ vi.mock('#lib/bootstrap.js', () => ({
 // The release note button has a tooltip (R4); Bootstrap's Tooltip isn't mocked here.
 vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 const { default: GamePage } = await import('./[id]/+page.svelte');
-const { default: GameImages } = await import('#lib/components/GameImages.svelte');
+const { default: GameImages } = await import('#lib/components/games/GameImages.svelte');
 
 const image = (id: number, type: ImageInfo['type'], extra: Partial<ImageInfo> = {}): ImageInfo => ({
 	id,

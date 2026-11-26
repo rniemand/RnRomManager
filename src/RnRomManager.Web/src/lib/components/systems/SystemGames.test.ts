@@ -1,22 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
-import { auth } from '../stores/auth.svelte';
-import { resetClient } from '../api/client';
+import { auth } from '#lib/stores/auth.svelte.js';
+import { resetClient } from '#lib/api/client.js';
 import type { GameListItem, SystemInfo } from '#lib/types/index.js';
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
-vi.mock('../bootstrap', () => ({
+vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}
 		hide() {}
 		dispose() {}
 	}
 }));
-vi.mock('../modal', () => ({ releaseModal: () => {} }));
-vi.mock('../tooltip', () => ({ tooltip: () => ({}) }));
+vi.mock('#lib/modal.js', () => ({ releaseModal: () => {} }));
+vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 
 const { default: SystemGames } = await import('./SystemGames.svelte');
 

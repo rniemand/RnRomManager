@@ -3,23 +3,23 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import type { GameListItem } from '#lib/types/index.js';
-import { resetClient } from '../api/client';
-import { auth } from '../stores/auth.svelte';
-import { toasts } from '../stores/toasts.svelte';
+import { resetClient } from '#lib/api/client.js';
+import { auth } from '#lib/stores/auth.svelte.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
-vi.mock('../bootstrap', () => ({
+vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}
 		hide() {}
 		dispose() {}
 	}
 }));
-vi.mock('../modal', () => ({ releaseModal: () => {} }));
+vi.mock('#lib/modal.js', () => ({ releaseModal: () => {} }));
 const tooltips: string[] = [];
-vi.mock('../tooltip', () => ({
+vi.mock('#lib/tooltip.js', () => ({
 	tooltip: (_node: Element, text: string) => {
 		tooltips.push(text);
 		return {};

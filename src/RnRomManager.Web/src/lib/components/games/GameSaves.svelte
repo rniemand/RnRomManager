@@ -2,8 +2,8 @@
 	import { untrack } from 'svelte';
 	import type { GameDetail, RomDetail, SaveItem } from '#lib/types/index.js';
 	import type { SaveKind } from '#lib/enums/index.js';
-	import { usesPlayDisc } from '../emulator';
-	import { formatDateTime } from '../format';
+	import { usesPlayDisc } from '#lib/emulator.js';
+	import { formatDateTime } from '#lib/format.js';
 	import {
 		descriptionError,
 		fileError,
@@ -13,9 +13,9 @@
 		nameError,
 		playableRom,
 		savesApi
-	} from '../saves';
-	import { auth } from '../stores/auth.svelte';
-	import { toasts } from '../stores/toasts.svelte';
+	} from '#lib/saves.js';
+	import { auth } from '#lib/stores/auth.svelte.js';
+	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import EmulatorModal from '#lib/components/modals/EmulatorModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';

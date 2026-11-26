@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { resolve } from '$app/paths';
-	import { BundleDownloadRun, runItemLabel } from '../bundleDownload';
+	import { BundleDownloadRun, runItemLabel } from '#lib/bundleDownload.js';
 	import type { RunView } from '#lib/types/index.js';
 	import type { PauseReason } from '#lib/enums/index.js';
-	import { formatCount } from '../format';
-	import { bundle } from '../stores/bundle.svelte';
+	import { formatCount } from '#lib/format.js';
+	import { bundle } from '#lib/stores/bundle.svelte.js';
 	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {

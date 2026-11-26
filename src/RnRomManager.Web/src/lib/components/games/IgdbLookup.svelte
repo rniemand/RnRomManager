@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
-	import { api } from '../api/client';
-	import { isApiError } from '../api/errors';
+	import { api } from '#lib/api/client.js';
+	import { isApiError } from '#lib/api/errors.js';
 	import type {
 		GameDetail,
 		IgdbMatch,
@@ -9,7 +9,7 @@
 		CopyState,
 		GameEditForm
 	} from '#lib/types/index.js';
-	import { applyMatch, copyFields, defaultCopyFields, toList } from '../gameEdit';
+	import { applyMatch, copyFields, defaultCopyFields, toList } from '#lib/gameEdit.js';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 

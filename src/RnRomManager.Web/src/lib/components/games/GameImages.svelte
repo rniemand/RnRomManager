@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { api } from '../api/client';
-	import { isApiError } from '../api/errors';
-	import { gameSearchQuery, googleImagesUrl } from '../googleSearch';
-	import { imageTypeLabels } from '../imageResolutions';
+	import { api } from '#lib/api/client.js';
+	import { isApiError } from '#lib/api/errors.js';
+	import { gameSearchQuery, googleImagesUrl } from '#lib/googleSearch.js';
+	import { imageTypeLabels } from '#lib/imageResolutions.js';
 	import type {
 		GameDetail,
 		ImageInfo,
 		ImageSuggestion,
 		ImageSuggestions
 	} from '#lib/types/index.js';
-	import { auth } from '../stores/auth.svelte';
-	import { toasts } from '../stores/toasts.svelte';
+	import { auth } from '#lib/stores/auth.svelte.js';
+	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';

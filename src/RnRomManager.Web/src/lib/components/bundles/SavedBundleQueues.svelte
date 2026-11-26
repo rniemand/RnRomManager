@@ -1,10 +1,15 @@
 <script lang="ts">
-	import { isApiError } from '../api/errors';
+	import { isApiError } from '#lib/api/errors.js';
 	import type { BundleQueue, BundleQueueSummary } from '#lib/types/index.js';
-	import { bundleQueuesApi, queueErrorMessage, queueNameError, sameQueueName } from '../bundles';
-	import { formatCount } from '../format';
-	import { bundle } from '../stores/bundle.svelte';
-	import { toasts } from '../stores/toasts.svelte';
+	import {
+		bundleQueuesApi,
+		queueErrorMessage,
+		queueNameError,
+		sameQueueName
+	} from '#lib/bundles.js';
+	import { formatCount } from '#lib/format.js';
+	import { bundle } from '#lib/stores/bundle.svelte.js';
+	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import Icon from '#lib/icons/Icon.svelte';

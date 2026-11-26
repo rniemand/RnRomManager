@@ -32,15 +32,15 @@
 		tabSearch
 	} from '#lib/discovery.js';
 	import CollectionModal from '#lib/components/modals/CollectionModal.svelte';
-	import DiscoveryGames from '#lib/components/DiscoveryGames.svelte';
-	import DiscoveryGroups from '#lib/components/DiscoveryGroups.svelte';
+	import DiscoveryGames from '#lib/components/discovery/DiscoveryGames.svelte';
+	import DiscoveryGroups from '#lib/components/discovery/DiscoveryGroups.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
-	import SystemGames from '#lib/components/SystemGames.svelte';
-	import SystemList from '#lib/components/SystemList.svelte';
+	import SystemGames from '#lib/components/systems/SystemGames.svelte';
+	import SystemList from '#lib/components/systems/SystemList.svelte';
 	import LogoModal from '#lib/components/modals/LogoModal.svelte';
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 
