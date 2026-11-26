@@ -1,6 +1,6 @@
 import { api } from './api/client';
 import { isApiError } from './api/errors';
-import type { BundleDownloadTicket, BundleEntry, BundleTicketStatus } from './api/types';
+import type { BundleDownloadTicket, BundleEntry, BundleTicketStatus } from '#lib/types/index.js';
 import { entryKey, type BundleIdentity } from './stores/bundle.svelte';
 
 /** B7: how often the page asks for the current ticket's state. */

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import type { Me } from '../api/types';
+import type { Me } from '#lib/types/index.js';
 
 const page = vi.hoisted(() => ({ url: new URL('http://localhost/review') }));
 vi.mock('$app/state', () => ({ page }));

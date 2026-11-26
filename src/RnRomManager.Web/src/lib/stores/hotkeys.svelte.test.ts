@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { resetClient } from '../api/client';
-import type { Me } from '../api/types';
+import type { Me } from '#lib/types/index.js';
 import { defaultBindings } from '../hotkeys';
 import { auth } from './auth.svelte';
 import { toasts } from './toasts.svelte';

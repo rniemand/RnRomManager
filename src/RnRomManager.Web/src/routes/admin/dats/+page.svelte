@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { DatRefreshSettings, DatVersion } from '#lib/api/types.js';
+	import type { DatRefreshSettings, DatVersion } from '#lib/types/index.js';
 	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';

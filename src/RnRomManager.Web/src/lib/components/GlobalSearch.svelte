@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { CollectionListItem, GameListItem, Page } from '../api/types';
+	import type { CollectionListItem, GameListItem, Page } from '#lib/types/index.js';
 	import { Modal } from '../bootstrap';
 	import { opensInNewTab, playUrl, recordPlay } from '../emulator';
 	import { releaseModal } from '../modal';

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { api } from '../api/client';
-	import type { GameListItem, Page } from '../api/types';
+	import type { GameListItem, Page } from '#lib/types/index.js';
 	import Icon from './Icon.svelte';
 	import SystemBadge from './SystemBadge.svelte';
 

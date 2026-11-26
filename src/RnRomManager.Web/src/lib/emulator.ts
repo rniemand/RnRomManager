@@ -1,5 +1,5 @@
 import { api } from './api/client';
-import type { GameDetail, RomDetail } from './api/types';
+import type { GameDetail, RomDetail } from '#lib/types/index.js';
 
 /**
  * Play B1: the cores that play a release stored outside the ZIP through play-disc: a PlayStation disc, (PSP B2) a

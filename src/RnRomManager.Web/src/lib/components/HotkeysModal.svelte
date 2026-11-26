@@ -2,7 +2,7 @@
 	import { tick, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { isApiError } from '../api/errors';
-	import type { Me } from '../api/types';
+	import type { Me } from '#lib/types/index.js';
 	import {
 		actions,
 		allowedFor,

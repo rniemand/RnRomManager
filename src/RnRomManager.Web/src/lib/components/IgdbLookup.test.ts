@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
-import type { GameDetail, IgdbMatch } from '../api/types';
+import type { GameDetail, IgdbMatch } from '#lib/types/index.js';
 import type { GameEditForm } from '../gameEdit';
 import IgdbLookup from './IgdbLookup.svelte';
 

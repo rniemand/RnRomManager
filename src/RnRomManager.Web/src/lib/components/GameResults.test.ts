@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
-import type { GameListItem } from '../api/types';
+import type { GameListItem } from '#lib/types/index.js';
 import { resetClient } from '../api/client';
 import { auth } from '../stores/auth.svelte';
 import { toasts } from '../stores/toasts.svelte';

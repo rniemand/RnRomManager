@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { Page, SystemInfo } from '#lib/api/types.js';
+	import type { Page, SystemInfo } from '#lib/types/index.js';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';

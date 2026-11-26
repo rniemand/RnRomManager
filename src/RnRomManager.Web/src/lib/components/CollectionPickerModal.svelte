@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { CollectionListItem } from '../api/types';
+	import type { CollectionListItem } from '#lib/types/index.js';
 	import { collectionsApi } from '../collections';
 	import { toasts } from '../stores/toasts.svelte';
 	import CollectionChooser from './CollectionChooser.svelte';

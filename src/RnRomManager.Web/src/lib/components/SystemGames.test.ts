@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { auth } from '../stores/auth.svelte';
 import { resetClient } from '../api/client';
-import type { GameListItem, SystemInfo } from '../api/types';
+import type { GameListItem, SystemInfo } from '#lib/types/index.js';
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')

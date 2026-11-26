@@ -5,7 +5,7 @@
  */
 
 import { api } from './api/client';
-import type { DiscoveryGroup, GameListItem, Page } from './api/types';
+import type { DiscoveryGroup, GameListItem, Page } from '#lib/types/index.js';
 import { remembered } from './remembered';
 
 export type DiscoveryKind = 'publishers' | 'developers' | 'genres';

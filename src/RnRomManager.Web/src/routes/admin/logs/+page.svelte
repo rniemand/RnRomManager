@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { api } from '#lib/api/client.js';
-	import type { LogEntry } from '#lib/api/types.js';
+	import type { LogEntry } from '#lib/types/index.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import { auth } from '#lib/stores/auth.svelte.js';

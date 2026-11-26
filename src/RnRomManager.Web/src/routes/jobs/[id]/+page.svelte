@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { Job, JobItem, Page } from '#lib/api/types.js';
+	import type { Job, JobItem, Page } from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';

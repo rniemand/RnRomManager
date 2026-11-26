@@ -1,4 +1,4 @@
-import type { RomDetail } from '#lib/api/types.js';
+import type { RomDetail } from '#lib/types/index.js';
 
 type UpdateFields = Pick<RomDetail, 'version' | 'revision' | 'dateAdded' | 'fileName'>;
 

@@ -10,7 +10,7 @@
 		RemovedRestoreResponse,
 		RemovedSystem,
 		SystemInfo
-	} from '#lib/api/types.js';
+	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';

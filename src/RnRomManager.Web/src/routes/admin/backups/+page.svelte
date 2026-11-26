@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api, resetClient } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { BackupFile, BackupRestoreResult, BackupStatus } from '#lib/api/types.js';
+	import type { BackupFile, BackupRestoreResult, BackupStatus } from '#lib/types/index.js';
 	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';

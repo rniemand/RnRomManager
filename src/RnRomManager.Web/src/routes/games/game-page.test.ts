@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { GameDetail, ReleaseFile, RomDetail } from '#lib/api/types.js';
+import type { GameDetail, ReleaseFile, RomDetail } from '#lib/types/index.js';
 import { formatDateTime, formatSize } from '#lib/format.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 import { auth } from '#lib/stores/auth.svelte.js';

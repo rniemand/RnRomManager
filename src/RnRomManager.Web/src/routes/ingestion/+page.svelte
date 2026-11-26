@@ -14,7 +14,7 @@
 		Job,
 		Page,
 		PendingSystem
-	} from '#lib/api/types.js';
+	} from '#lib/types/index.js';
 	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
-	import type { BiosFileStatus, BiosGroup, BiosInfo } from '#lib/api/types.js';
+	import type { BiosFileStatus, BiosGroup, BiosInfo } from '#lib/types/index.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';

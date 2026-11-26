@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
-import type { GameListItem } from '../api/types';
+import type { GameListItem } from '#lib/types/index.js';
 import type { DiscoveryState } from '../discovery';
 
 vi.mock('$app/paths', () => ({

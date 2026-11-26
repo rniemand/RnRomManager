@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
-import type { Me } from '../api/types';
+import type { Me } from '#lib/types/index.js';
 import { defaultBindings, type Bindings } from '../hotkeys';
 import { toasts } from '../stores/toasts.svelte';
 

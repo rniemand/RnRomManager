@@ -1,6 +1,6 @@
 import { api } from '../api/client';
 import { isApiError } from '../api/errors';
-import type { Me } from '../api/types';
+import type { Me } from '#lib/types/index.js';
 
 /** The signed-in user (`GET /api/auth/me`), loaded once on boot and after login/logout. */
 class Auth {

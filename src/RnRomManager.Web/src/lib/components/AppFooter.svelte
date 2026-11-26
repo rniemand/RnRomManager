@@ -6,7 +6,7 @@
 	import { activity } from '../stores/activity.svelte';
 	import { hotkeys } from '../stores/hotkeys.svelte';
 	import { jobs } from '../stores/jobs.svelte';
-	import type { About, Me } from '../api/types';
+	import type { About, Me } from '#lib/types/index.js';
 	import AboutModal from './AboutModal.svelte';
 	import Icon from './Icon.svelte';
 

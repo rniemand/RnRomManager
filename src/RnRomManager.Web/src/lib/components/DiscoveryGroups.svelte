@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { auth } from '../stores/auth.svelte';
 	import { resolve } from '$app/paths';
-	import type { DiscoveryGroup, Page } from '../api/types';
+	import type { DiscoveryGroup, Page } from '#lib/types/index.js';
 	import {
 		defaultDir,
 		discoveryApi,

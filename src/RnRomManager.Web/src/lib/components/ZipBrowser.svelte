@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import type { SvelteSet } from 'svelte/reactivity';
 	import { api } from '../api/client';
-	import type { GameDetail, ZipEntries } from '../api/types';
+	import type { GameDetail, ZipEntries } from '#lib/types/index.js';
 	import { formatDateTime, formatSize } from '../format';
 	import { ancestors, buildTree, type ZipFolder } from '../zipTree';
 	import EmptyState from './EmptyState.svelte';

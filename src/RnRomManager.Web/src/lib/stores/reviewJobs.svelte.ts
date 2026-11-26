@@ -3,7 +3,7 @@ import { resolve } from '$app/paths';
 import { page } from '$app/state';
 import { api } from '../api/client';
 import { ApiError } from '../api/errors';
-import type { Job, ReviewResolveSummary } from '../api/types';
+import type { Job, ReviewResolveSummary } from '#lib/types/index.js';
 import { nextReviewItem } from '../review';
 import { pollIntervalMs } from './jobs.svelte';
 import { toasts } from './toasts.svelte';

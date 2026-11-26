@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { Role, UserInfo } from '#lib/api/types.js';
+	import type { UserInfo } from '#lib/types/index.js';
+	import type { Role } from '#lib/enums/index.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';

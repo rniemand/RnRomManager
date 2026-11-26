@@ -2,7 +2,7 @@
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { GameDetail, IgdbMatch } from '../api/types';
+	import type { GameDetail, IgdbMatch } from '#lib/types/index.js';
 	import {
 		applyMatch,
 		copyFields,

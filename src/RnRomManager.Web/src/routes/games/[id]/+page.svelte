@@ -13,7 +13,7 @@
 		GameDetail,
 		ReleaseFile,
 		RomDetail
-	} from '#lib/api/types.js';
+	} from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import CopyButton from '#lib/components/CopyButton.svelte';

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { GameDetail, RomDetail, SaveItem, SaveKind } from '../api/types';
+	import type { GameDetail, RomDetail, SaveItem } from '#lib/types/index.js';
+	import type { SaveKind } from '#lib/enums/index.js';
 	import { usesPlayDisc } from '../emulator';
 	import { formatDateTime } from '../format';
 	import {

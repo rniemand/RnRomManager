@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GameDetail, IgdbMatch } from './api/types';
+import type { GameDetail, IgdbMatch } from '#lib/types/index.js';
 import {
 	applyMatch,
 	defaultCopyFields,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { GameDetail, ReleaseFile } from '#lib/api/types.js';
+import type { GameDetail, ReleaseFile } from '#lib/types/index.js';
 import { bundle } from '#lib/stores/bundle.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';

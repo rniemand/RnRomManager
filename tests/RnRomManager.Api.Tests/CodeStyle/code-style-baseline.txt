@@ -33,7 +33,6 @@ SV1 src/RnRomManager.Web/src/routes/review/+page.svelte
 SV1 src/RnRomManager.Web/src/routes/review/[id]/+page.svelte
 SV2 src/RnRomManager.Web/src/lib/api/client.ts
 SV2 src/RnRomManager.Web/src/lib/api/errors.ts
-SV2 src/RnRomManager.Web/src/lib/api/types.ts
 SV2 src/RnRomManager.Web/src/lib/bundleDownload.ts
 SV2 src/RnRomManager.Web/src/lib/components/EditReleaseModal.svelte
 SV2 src/RnRomManager.Web/src/lib/components/FilterDropdown.svelte
@@ -127,8 +126,6 @@ SV4 src/RnRomManager.Web/src/routes/reports/newly-added/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/review/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/review/[id]/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/timeline/+page.svelte
-SV5 src/RnRomManager.Web/src/lib/api/types.ts
-SV5 src/RnRomManager.Web/src/lib/components/AboutModal.svelte
 SV5 src/RnRomManager.Web/src/lib/components/AboutModal.test.ts
 SV5 src/RnRomManager.Web/src/lib/components/AdminOnly.svelte
 SV5 src/RnRomManager.Web/src/lib/components/AppFooter.svelte

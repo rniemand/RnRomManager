@@ -1,5 +1,10 @@
 import { api } from './api/client';
-import type { CollectionDetail, CollectionListItem, CollectionRef, Page } from './api/types';
+import type {
+	CollectionDetail,
+	CollectionListItem,
+	CollectionRef,
+	Page
+} from '#lib/types/index.js';
 import { maxNoteBytes, noteBytes } from './markdown';
 
 /** B2: mirrors `CollectionService.MaxNameLength` (code points, after trimming). */

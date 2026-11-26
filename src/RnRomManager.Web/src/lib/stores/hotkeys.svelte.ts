@@ -1,7 +1,7 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { api } from '../api/client';
-import type { HotkeysResponse, Me, Page, ReviewListItem } from '../api/types';
+import type { HotkeysResponse, Me, Page, ReviewListItem } from '#lib/types/index.js';
 import { actionFor, fromEvent, type Bindings, type EditableHotkeyId } from '../hotkeys';
 import { auth } from './auth.svelte';
 import { toasts } from './toasts.svelte';

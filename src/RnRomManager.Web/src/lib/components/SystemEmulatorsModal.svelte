@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SystemInfo } from '../api/types';
+	import type { SystemInfo } from '#lib/types/index.js';
 	import { emulatorGroups, linkHost } from '../systemEmulators';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import Icon from './Icon.svelte';

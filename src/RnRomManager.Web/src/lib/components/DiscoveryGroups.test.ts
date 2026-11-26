@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
-import type { DiscoveryGroup } from '../api/types';
+import type { DiscoveryGroup } from '#lib/types/index.js';
 import type { DiscoveryState } from '../discovery';
 import { auth } from '../stores/auth.svelte';
 

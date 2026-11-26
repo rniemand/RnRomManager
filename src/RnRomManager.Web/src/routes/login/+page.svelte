@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { Me } from '#lib/api/types.js';
+	import type { Me } from '#lib/types/index.js';
 	import Icon from '#lib/components/Icon.svelte';
 	import { safeReturnUrl } from '#lib/guard.js';
 	import { navigate } from '#lib/navigation.js';

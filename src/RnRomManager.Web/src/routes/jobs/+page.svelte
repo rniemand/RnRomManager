@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { Job, Page } from '#lib/api/types.js';
+	import type { Job, Page } from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';

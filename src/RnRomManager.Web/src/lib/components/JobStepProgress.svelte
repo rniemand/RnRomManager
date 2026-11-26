@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { JobStep } from '../api/types';
+	import type { JobStep } from '#lib/types/index.js';
 	import { formatStep, stepPercent } from '../jobs';
 
 	interface Props {

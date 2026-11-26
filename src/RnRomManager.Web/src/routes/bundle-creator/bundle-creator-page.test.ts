@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { BundleEntry } from '#lib/api/types.js';
+import type { BundleEntry } from '#lib/types/index.js';
 import { bundle } from '#lib/stores/bundle.svelte.js';
 
 vi.mock('$app/paths', () => ({

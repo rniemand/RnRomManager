@@ -9,7 +9,7 @@
 	import { untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { RomDetail } from '../api/types';
+	import type { RomDetail } from '#lib/types/index.js';
 	import { editReleaseFileName, type ReleaseTags } from '../releaseName';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';

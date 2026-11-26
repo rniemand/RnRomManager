@@ -5,7 +5,7 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { CollectionDetail, GameListItem, Page, SystemInfo } from '#lib/api/types.js';
+	import type { CollectionDetail, GameListItem, Page, SystemInfo } from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
 	import CollectionModal from '#lib/components/CollectionModal.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';

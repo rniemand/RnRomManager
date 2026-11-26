@@ -1,5 +1,5 @@
 <script lang="ts" module>
-	import type { GameDetail, RomDetail } from '../api/types';
+	import type { GameDetail, RomDetail } from '#lib/types/index.js';
 
 	export type AdminAction =
 		| { kind: 'edit'; lookup?: boolean }
@@ -21,7 +21,7 @@
 	import { untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { ApiError, isApiError } from '../api/errors';
-	import type { GameListItem, IgdbMatch, Page } from '../api/types';
+	import type { GameListItem, IgdbMatch, Page } from '#lib/types/index.js';
 	import {
 		titleError,
 		toForm,

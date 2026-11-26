@@ -1,4 +1,4 @@
-import type { Me } from './api/types';
+import type { Me } from '#lib/types/index.js';
 
 /** Routes reachable without a session. */
 export const publicRoutes = ['/login'];

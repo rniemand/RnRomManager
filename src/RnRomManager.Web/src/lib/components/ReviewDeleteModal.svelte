@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { api } from '../api/client';
 	import { deleteReviewItem } from '../review';
-	import type { ReviewDetail } from '../api/types';
+	import type { ReviewDetail } from '#lib/types/index.js';
 	import { formatDateTime, formatKey, formatValue } from '../format';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';

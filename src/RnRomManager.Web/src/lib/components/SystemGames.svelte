@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { api } from '../api/client';
-	import type { GameListItem, Page, SystemInfo } from '../api/types';
+	import type { GameListItem, Page, SystemInfo } from '#lib/types/index.js';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
 	import EmptyState from './EmptyState.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';

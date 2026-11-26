@@ -1,6 +1,6 @@
 import { api } from './api/client';
 import { isApiError } from './api/errors';
-import type { GameDetail } from './api/types';
+import type { GameDetail } from '#lib/types/index.js';
 
 export interface RatingChange {
 	/** 1–5; null clears it. Absent = unchanged. */

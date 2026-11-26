@@ -1,4 +1,4 @@
-import type { ImageInfo } from './api/types';
+import type { ImageInfo } from '#lib/types/index.js';
 import { remembered } from './remembered';
 
 type ImageType = ImageInfo['type'];

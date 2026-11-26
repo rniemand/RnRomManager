@@ -1,5 +1,5 @@
 /** Edit-metadata form (spec §11 Admin, §23 `PATCH /api/games/{id}` rules), checked client-side; the API checks again. */
-import type { GameDetail, IgdbMatch } from './api/types';
+import type { GameDetail, IgdbMatch } from '#lib/types/index.js';
 
 export interface GameEditForm {
 	title: string;

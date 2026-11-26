@@ -1,4 +1,4 @@
-import type { Role } from './api/types';
+import type { Role } from '#lib/enums/index.js';
 
 /**
  * B21–B22 hotkey actions and binding rules. Mirrors `RnRomManager.Core/Users/Hotkeys.cs`; keep both in step (the

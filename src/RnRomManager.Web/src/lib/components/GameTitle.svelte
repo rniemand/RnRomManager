@@ -2,7 +2,7 @@
 	import { tick } from 'svelte';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { GameDetail } from '../api/types';
+	import type { GameDetail } from '#lib/types/index.js';
 	import { titleError } from '../gameEdit';
 	import { toasts } from '../stores/toasts.svelte';
 	import { tooltip } from '../tooltip';

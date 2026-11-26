@@ -6,7 +6,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { GameFacets, GameListItem, Page, SystemInfo } from '#lib/api/types.js';
+	import type { GameFacets, GameListItem, Page, SystemInfo } from '#lib/types/index.js';
 	import CollectionPickerModal from '#lib/components/CollectionPickerModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import FilterDropdown, { type FilterOption } from '#lib/components/FilterDropdown.svelte';

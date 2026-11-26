@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { isApiError } from '../api/errors';
-	import type { BundleQueue, BundleQueueSummary } from '../api/types';
+	import type { BundleQueue, BundleQueueSummary } from '#lib/types/index.js';
 	import { bundleQueuesApi, queueErrorMessage, queueNameError, sameQueueName } from '../bundles';
 	import { formatCount } from '../format';
 	import { bundle } from '../stores/bundle.svelte';

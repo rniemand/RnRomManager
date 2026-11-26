@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from './api/errors';
-import type { BundleEntry, BundleTicketState, BundleTicketStatus } from './api/types';
+import type { BundleEntry, BundleTicketStatus } from '#lib/types/index.js';
+import type { BundleTicketState } from '#lib/enums/index.js';
 import {
 	BundleDownloadRun,
 	clickDownload,

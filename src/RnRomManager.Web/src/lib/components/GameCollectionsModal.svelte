@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { isApiError } from '../api/errors';
-	import type { CollectionListItem, CollectionRef } from '../api/types';
+	import type { CollectionListItem, CollectionRef } from '#lib/types/index.js';
 	import { collectionsApi } from '../collections';
 	import { toasts } from '../stores/toasts.svelte';
 	import CollectionChooser from './CollectionChooser.svelte';

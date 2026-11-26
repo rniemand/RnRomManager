@@ -1,6 +1,6 @@
 import { api } from './api/client';
 import { isApiError } from './api/errors';
-import type { Page, ReviewListItem } from './api/types';
+import type { Page, ReviewListItem } from '#lib/types/index.js';
 import { parseReviewFilter, readSavedReviewFilter, reviewApiUrl } from './reviewFilter';
 import { toasts } from './stores/toasts.svelte';
 

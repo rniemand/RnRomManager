@@ -3,7 +3,12 @@
 	import { isApiError } from '../api/errors';
 	import { gameSearchQuery, googleImagesUrl } from '../googleSearch';
 	import { imageTypeLabels } from '../imageResolutions';
-	import type { GameDetail, ImageInfo, ImageSuggestion, ImageSuggestions } from '../api/types';
+	import type {
+		GameDetail,
+		ImageInfo,
+		ImageSuggestion,
+		ImageSuggestions
+	} from '#lib/types/index.js';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';

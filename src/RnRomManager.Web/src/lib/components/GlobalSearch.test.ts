@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
 import { auth } from '../stores/auth.svelte';
-import type { Role } from '../api/types';
+import type { Role } from '#lib/enums/index.js';
 
 const goto = vi.fn();
 vi.mock('$app/navigation', () => ({

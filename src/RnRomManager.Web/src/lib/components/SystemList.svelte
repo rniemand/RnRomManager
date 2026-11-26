@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
-	import type { SystemInfo } from '../api/types';
+	import type { SystemInfo } from '#lib/types/index.js';
 	import { defaultDir, maxFind, systemsSearch, type GroupSort, type SortDir } from '../discovery';
 	import { formatCount } from '../format';
 	import { auth } from '../stores/auth.svelte';

@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { onDestroy } from 'svelte';
 	import { resolve } from '$app/paths';
-	import type { CollectionListItem, Page } from '../api/types';
+	import type { CollectionListItem, Page } from '#lib/types/index.js';
 	import { collectionsApi } from '../collections';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import Loading from './Loading.svelte';

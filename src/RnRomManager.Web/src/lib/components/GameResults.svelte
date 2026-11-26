@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '../api/client';
-	import type { GameDetail, GameListItem, RomDetail, SaveItem } from '../api/types';
+	import type { GameDetail, GameListItem, RomDetail, SaveItem } from '#lib/types/index.js';
 	import { formatCount } from '../format';
 	import { tooltip } from '../tooltip';
 	import { opensInNewTab, playLinkEvents, playUrl, usesPlayDisc, type PlaySave } from '../emulator';

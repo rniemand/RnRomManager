@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { isApiError } from '../api/errors';
-	import type { GameDetail } from '../api/types';
+	import type { GameDetail } from '#lib/types/index.js';
 	import { saveRating, type RatingChange } from '../rating';
 	import { toasts } from '../stores/toasts.svelte';
 	import Icon from './Icon.svelte';

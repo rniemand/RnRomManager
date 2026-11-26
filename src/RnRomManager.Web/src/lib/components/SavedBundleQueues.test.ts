@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
-import type { BundleEntry, BundleQueueSummary } from '../api/types';
+import type { BundleEntry, BundleQueueSummary } from '#lib/types/index.js';
 import { bundle } from '../stores/bundle.svelte';
 import { toasts } from '../stores/toasts.svelte';
 

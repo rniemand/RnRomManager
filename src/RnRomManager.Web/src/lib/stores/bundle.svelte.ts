@@ -1,5 +1,5 @@
 import { api } from '../api/client';
-import type { BundleEntry, BundleMember, BundleResolvedItem, Me } from '../api/types';
+import type { BundleEntry, BundleMember, BundleResolvedItem, Me } from '#lib/types/index.js';
 
 /** B2: the most files a cart or saved queue holds. */
 export const maxBundleEntries = 500;

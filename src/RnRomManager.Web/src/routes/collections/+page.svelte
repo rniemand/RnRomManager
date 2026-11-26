@@ -6,7 +6,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { CollectionListItem, Page, SystemInfo } from '#lib/api/types.js';
+	import type { CollectionListItem, Page, SystemInfo } from '#lib/types/index.js';
 	import { collectionsApi, collectionsSearch } from '#lib/collections.js';
 	import {
 		collectionsTab,

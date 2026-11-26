@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { Page, SystemInfo } from '#lib/api/types.js';
+	import type { Page, SystemInfo } from '#lib/types/index.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import FilterDropdown from '#lib/components/FilterDropdown.svelte';

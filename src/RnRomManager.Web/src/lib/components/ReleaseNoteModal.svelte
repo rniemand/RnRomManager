@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { RomDetail } from '../api/types';
+	import type { RomDetail } from '#lib/types/index.js';
 	import { maxNoteBytes, normaliseNote, noteBytes, renderMarkdown } from '../markdown';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { About } from '../api/types';
+	import type { About } from '#lib/types/index.js';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import Icon from './Icon.svelte';

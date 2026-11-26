@@ -14,7 +14,7 @@ Short playbooks for the changes this repo gets most often: where each change mus
 - Errors are ProblemDetails from `Problems`: `Validation(ctx, errors)` (400, keyed by field), `NotFound`, `Forbidden`, or `Create(ctx, status, code, title)` for a coded error. A busy job lock → `JobStart.Running(ctx)` (or `JobStart.StartManualAsync(runner, job, ctx, ct)` to start a job by hand) (409 `JobRunning`).
 - A JSON body that needs exact type checks is read as `JsonElement`, as in `PUT /api/admin/rom-storage/{systemId}`.
 - Tests: `tests/RnRomManager.Api.Tests/Integration/<Area>EndpointsTests.cs` (Testcontainers, so Docker must be running), plus a row in `EndpointRoleMatrixTests` for every new route.
-- SPA: add the response type to `lib/api/types.ts` and call it through `lib/api/client.ts`.
+- SPA: add the response type to `lib/types/<Name>.ts` and `lib/types/index.ts`, and call it through `lib/api/client.ts`.
 
 ## Persisted setting
 - Store it in `app_settings` through `ISettingsRepository`. No migration needed; keys are at most 64 characters. `GetAsync` takes exact names; there is no prefix query.

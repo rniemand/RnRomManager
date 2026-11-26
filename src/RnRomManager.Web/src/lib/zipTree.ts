@@ -1,4 +1,4 @@
-import type { ZipEntry } from './api/types';
+import type { ZipEntry } from '#lib/types/index.js';
 
 /** A folder of a library ZIP (Z4): `path` is `''` for the root, else `a/b` (no trailing slash). */
 export interface ZipFolder {

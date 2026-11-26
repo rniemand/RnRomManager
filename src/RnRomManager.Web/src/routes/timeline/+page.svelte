@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { GameListItem, Page, SystemInfo, TimelineYears } from '#lib/api/types.js';
+	import type { GameListItem, Page, SystemInfo, TimelineYears } from '#lib/types/index.js';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FilterDropdown from '#lib/components/FilterDropdown.svelte';

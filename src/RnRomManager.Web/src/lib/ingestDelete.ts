@@ -1,6 +1,6 @@
 import { api } from './api/client';
 import { isApiError } from './api/errors';
-import type { IngestDeleteEntry, IngestDeleteResponse } from './api/types';
+import type { IngestDeleteEntry, IngestDeleteResponse } from '#lib/types/index.js';
 import { toasts } from './stores/toasts.svelte';
 
 /** D2's per-request cap. */

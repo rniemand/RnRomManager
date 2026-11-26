@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { api, resetClient } from '#lib/api/client.js';
-import type { BackupStatus } from '#lib/api/types.js';
+import type { BackupStatus } from '#lib/types/index.js';
 import { formatDateTime } from '#lib/format.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { navCounts } from '#lib/stores/navCounts.svelte.js';

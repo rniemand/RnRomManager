@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
-	import type { RomStorageRow } from '#lib/api/types.js';
+	import type { RomStorageRow } from '#lib/types/index.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';

@@ -1,6 +1,6 @@
 import { untrack } from 'svelte';
 import { api } from '../api/client';
-import type { CurrentJob } from '../api/types';
+import type { CurrentJob } from '#lib/types/index.js';
 
 export const pollIntervalMs = 1500;
 

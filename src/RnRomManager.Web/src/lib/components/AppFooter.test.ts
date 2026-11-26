@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
-import type { Me } from '../api/types';
+import type { Me } from '#lib/types/index.js';
 import { activity } from '../stores/activity.svelte';
 import { hotkeys } from '../stores/hotkeys.svelte';
 import { jobs } from '../stores/jobs.svelte';

@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { IntegrityIssue, IntegrityStatus, Job, Page } from '#lib/api/types.js';
+	import type { IntegrityIssue, IntegrityStatus, Job, Page } from '#lib/types/index.js';
 	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';

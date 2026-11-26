@@ -12,7 +12,7 @@ import {
 	trimBounds,
 	usesPlayDisc
 } from './emulator';
-import type { ReleaseFile } from './api/types';
+import type { ReleaseFile } from '#lib/types/index.js';
 
 describe('canPlay', () => {
 	it('is false without a browser core', () => {

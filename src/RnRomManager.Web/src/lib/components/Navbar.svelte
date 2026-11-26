@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Collapse } from '../bootstrap';
-	import type { Me } from '../api/types';
+	import type { Me } from '#lib/types/index.js';
 	import { formatCount } from '../format';
 	import Icon from './Icon.svelte';
 	import { theme, type ThemeChoice } from '../theme.svelte';

@@ -1,5 +1,6 @@
 /** Display helpers for jobs (spec §3.1 statuses, §7.2 outcomes). */
-import type { CurrentJob, JobStatus, JobStep } from './api/types';
+import type { CurrentJob, JobStep } from '#lib/types/index.js';
+import type { JobStatus } from '#lib/enums/index.js';
 import { formatSize } from './format';
 
 export const outcomes = [

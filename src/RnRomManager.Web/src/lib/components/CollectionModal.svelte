@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { isApiError } from '../api/errors';
-	import type { CollectionDetail } from '../api/types';
+	import type { CollectionDetail } from '#lib/types/index.js';
 	import {
 		collectionsApi,
 		maxNameLength,

@@ -6,7 +6,7 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { DatSearchResult, GameListItem, ReviewDetail } from '#lib/api/types.js';
+	import type { DatSearchResult, GameListItem, ReviewDetail } from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import CopyButton from '#lib/components/CopyButton.svelte';
