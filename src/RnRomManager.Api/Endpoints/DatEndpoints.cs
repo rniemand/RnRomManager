@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RnRomManager.Api.Auth;
@@ -18,8 +17,7 @@ public static class DatEndpoints
     {
         api.MapPost("/jobs/dat-refresh", async (HttpContext ctx, JobRunner runner, DatRefreshJobFactory jobs) =>
         {
-            var started = await runner.StartAsync(jobs(), JobTrigger.Manual, UserId(ctx.User), ctx.RequestAborted);
-            return started is null ? JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+            return await JobStart.StartManualAsync(runner, jobs(), ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // B28: the daily refresh schedule; not audited, like the backup settings.
@@ -117,9 +115,4 @@ public static class DatEndpoints
         return errors.Count > 0 ? (null, errors) : (new DatRefreshSettings(enabled!.Value, time!), errors);
     }
 
-    public static IResult JobRunning(HttpContext ctx) =>
-        Problems.Create(ctx, StatusCodes.Status409Conflict, "JobRunning", "Another job is running");
-
-    public static int? UserId(ClaimsPrincipal user) =>
-        int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 }

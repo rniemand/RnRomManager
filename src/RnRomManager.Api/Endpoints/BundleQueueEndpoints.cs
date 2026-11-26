@@ -21,7 +21,7 @@ public static class BundleQueueEndpoints
 
         queues.MapGet("", async (HttpContext ctx, IBundleQueueRepository repository) =>
         {
-            var list = await repository.ListAsync(CollectionEndpoints.UserId(ctx), ctx.RequestAborted);
+            var list = await repository.ListAsync(EndpointUser.RequiredId(ctx), ctx.RequestAborted);
             return Results.Ok(list.Select(q => new { id = q.Id, name = q.Name, revision = q.Revision, itemCount = q.ItemCount }));
         });
 
@@ -34,13 +34,13 @@ public static class BundleQueueEndpoints
             if (errors is not null)
                 return Problems.Validation(ctx, errors);
 
-            var write = await repository.CreateAsync(CollectionEndpoints.UserId(ctx), Guid.NewGuid(), name!, entries!,
+            var write = await repository.CreateAsync(EndpointUser.RequiredId(ctx), Guid.NewGuid(), name!, entries!,
                 time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
             return WriteResult(ctx, write, q => Results.Created($"/api/bundle-queues/{q.Id}", ToDto(q)));
         }).WithMetadata(new RequestSizeLimitAttribute(RequestLimit));
 
         queues.MapGet("/{id:guid}", async (Guid id, HttpContext ctx, IBundleQueueRepository repository) =>
-            await repository.GetAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is { } queue
+            await repository.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is { } queue
                 ? Results.Ok(ToDto(queue))
                 : Problems.NotFound(ctx));
 
@@ -58,7 +58,7 @@ public static class BundleQueueEndpoints
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
-            var write = await repository.ReplaceAsync(id, CollectionEndpoints.UserId(ctx), name!, entries!, revision,
+            var write = await repository.ReplaceAsync(id, EndpointUser.RequiredId(ctx), name!, entries!, revision,
                 time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
             return WriteResult(ctx, write, q => Results.Ok(ToDto(q)));
         }).WithMetadata(new RequestSizeLimitAttribute(RequestLimit));
@@ -69,7 +69,7 @@ public static class BundleQueueEndpoints
             if (!int.TryParse(revision, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var expected)
                 || expected <= 0)
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["revision"] = ["The queue's current revision is required."] });
-            var status = await repository.DeleteAsync(id, CollectionEndpoints.UserId(ctx), expected, ctx.RequestAborted);
+            var status = await repository.DeleteAsync(id, EndpointUser.RequiredId(ctx), expected, ctx.RequestAborted);
             return WriteResult(ctx, new BundleQueueWrite(status), _ => Results.NoContent());
         });
 

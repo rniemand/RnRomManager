@@ -23,8 +23,7 @@ public static class IntegrityEndpoints
             if (request.Mode is not (nameof(JobMode.Quick) or nameof(JobMode.Deep)))
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["mode"] = ["Must be Quick or Deep."] });
             var job = integrity(Enum.Parse<JobMode>(request.Mode));
-            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+            return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // S4, B11: how many games still wait to be moved (either direction), and a manual start (resume) of the storage job.
@@ -38,8 +37,7 @@ public static class IntegrityEndpoints
         {
             if ((await StorageMigrationJob.ListMovesAsync(games, systems, ctx.RequestAborted)).Count == 0)
                 return Results.NoContent();
-            var started = await runner.StartAsync(createJob(), JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+            return await JobStart.StartManualAsync(runner, createJob(), ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         var integrityGroup = api.MapGroup("/integrity").RequireAuthorization(AuthSetup.AdminOnly);

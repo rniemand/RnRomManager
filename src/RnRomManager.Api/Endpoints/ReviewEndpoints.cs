@@ -85,8 +85,7 @@ public static class ReviewEndpoints
             job.ReviewId = id;
             job.FileName = item.OriginalFileName;
             job.Request = request;
-            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+            return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         });
         review.MapPost("/{id:long}/dismiss", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {
@@ -105,7 +104,7 @@ public static class ReviewEndpoints
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["ids"] = ["Must be 1–500 distinct positive ids."] });
             var result = await resolver.DeleteSourcesAsync(ids, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result is null
-                ? DatEndpoints.JobRunning(ctx)
+                ? JobStart.Running(ctx)
                 : Results.Ok(new { deleted = result.Deleted, skipped = result.Skipped, failed = result.Failed.Select(f => new { id = f.Id, code = f.Code }) });
         });
         api.MapGet("/dat/search", (string? system, string? q, int? limit, HttpContext ctx, ISystemRegistry systems, DatCache dats) =>

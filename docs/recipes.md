@@ -11,7 +11,7 @@ Short playbooks for the changes this repo gets most often: where each change mus
 
 ## API endpoint
 - Add it to `src/RnRomManager.Api/Endpoints/<Area>Endpoints.cs`, on the area's `MapGroup`. Admin-only routes use `.RequireAuthorization(AuthSetup.AdminOnly)`, on the group or on the route.
-- Errors are ProblemDetails from `Problems`: `Validation(ctx, errors)` (400, keyed by field), `NotFound`, `Forbidden`, or `Create(ctx, status, code, title)` for a coded error. A busy job lock → `DatEndpoints.JobRunning(ctx)` (409 `JobRunning`).
+- Errors are ProblemDetails from `Problems`: `Validation(ctx, errors)` (400, keyed by field), `NotFound`, `Forbidden`, or `Create(ctx, status, code, title)` for a coded error. A busy job lock → `JobStart.Running(ctx)` (or `JobStart.StartManualAsync(runner, job, ctx, ct)` to start a job by hand) (409 `JobRunning`).
 - A JSON body that needs exact type checks is read as `JsonElement`, as in `PUT /api/admin/rom-storage/{systemId}`.
 - Tests: `tests/RnRomManager.Api.Tests/Integration/<Area>EndpointsTests.cs` (Testcontainers, so Docker must be running), plus a row in `EndpointRoleMatrixTests` for every new route.
 - SPA: add the response type to `lib/api/types.ts` and call it through `lib/api/client.ts`.

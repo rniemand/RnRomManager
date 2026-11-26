@@ -31,36 +31,36 @@ public static class CollectionEndpoints
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
-            var result = await repository.ListAsync(UserId(ctx), words, page ?? 1, pageSize ?? Page<Collection>.DefaultSize, ctx.RequestAborted);
+            var result = await repository.ListAsync(EndpointUser.RequiredId(ctx), words, page ?? 1, pageSize ?? Page<Collection>.DefaultSize, ctx.RequestAborted);
             return Results.Ok(Paging.ToDto(result, ToListDto));
         });
 
         collections.MapPost("", async (CreateCollectionRequest? request, HttpContext ctx, CollectionService service) =>
-            ToResult(ctx, await service.CreateAsync(UserId(ctx), request?.Name, request?.Notes, ctx.RequestAborted),
+            ToResult(ctx, await service.CreateAsync(EndpointUser.RequiredId(ctx), request?.Name, request?.Notes, ctx.RequestAborted),
                 r => Results.Created($"/api/collections/{r.Collection!.Id}", ToDto(r.Collection))));
 
         collections.MapGet("/{id:guid}", async (Guid id, HttpContext ctx, CollectionService service) =>
-            await service.GetAsync(id, UserId(ctx), ctx.RequestAborted) is { } collection ? Results.Ok(ToDto(collection)) : Problems.NotFound(ctx));
+            await service.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is { } collection ? Results.Ok(ToDto(collection)) : Problems.NotFound(ctx));
 
         collections.MapPatch("/{id:guid}", async (Guid id, JsonElement body, HttpContext ctx, CollectionService service) =>
         {
             var (patch, errors) = ParsePatch(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await service.UpdateAsync(id, UserId(ctx), patch, ctx.RequestAborted);
+            var result = await service.UpdateAsync(id, EndpointUser.RequiredId(ctx), patch, ctx.RequestAborted);
             // The detail carries gameCount, which the update itself doesn't read.
             return await DetailResultAsync(ctx, result, service, id);
         });
 
         collections.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, CollectionService service) =>
-            ToResult(ctx, await service.DeleteAsync(id, UserId(ctx), ctx.RequestAborted), _ => Results.NoContent()));
+            ToResult(ctx, await service.DeleteAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted), _ => Results.NoContent()));
 
         collections.MapPost("/{id:guid}/games", async (Guid id, AddGamesRequest? request, HttpContext ctx, CollectionService service) =>
-            ToResult(ctx, await service.AddGamesAsync(id, UserId(ctx), request?.GameIds, ctx.RequestAborted),
+            ToResult(ctx, await service.AddGamesAsync(id, EndpointUser.RequiredId(ctx), request?.GameIds, ctx.RequestAborted),
                 r => Results.Ok(new { added = r.Added })));
 
         collections.MapDelete("/{id:guid}/games/{gameId:guid}", async (Guid id, Guid gameId, HttpContext ctx, CollectionService service) =>
-            ToResult(ctx, await service.RemoveGameAsync(id, UserId(ctx), gameId, ctx.RequestAborted), _ => Results.NoContent()));
+            ToResult(ctx, await service.RemoveGameAsync(id, EndpointUser.RequiredId(ctx), gameId, ctx.RequestAborted), _ => Results.NoContent()));
 
         // B8: same form handling and limits as the game image upload.
         collections.MapPost("/{id:guid}/cover", async (Guid id, HttpContext ctx, CollectionService service) =>
@@ -72,7 +72,7 @@ public static class CollectionEndpoints
             var bytes = await LibraryEndpoints.ReadImageFileAsync(form!, errors, ctx.RequestAborted);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            return await DetailResultAsync(ctx, await service.SetCoverAsync(id, UserId(ctx), bytes!, ctx.RequestAborted), service, id);
+            return await DetailResultAsync(ctx, await service.SetCoverAsync(id, EndpointUser.RequiredId(ctx), bytes!, ctx.RequestAborted), service, id);
         }).WithMetadata(new RequestSizeLimitAttribute(LibraryEndpoints.UploadRequestLimit));
 
         // B9: open to plain users on purpose; the downloader only reaches public addresses.
@@ -81,20 +81,20 @@ public static class CollectionEndpoints
         {
             if (LibraryEndpoints.ParseImageUrl(request?.Url) is not { } url)
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = ["Enter an http or https image URL."] });
-            if (await service.GetAsync(id, UserId(ctx), ctx.RequestAborted) is null)
+            if (await service.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is null)
                 return Problems.NotFound(ctx);
             var download = await downloader.DownloadAsync(url, ctx.RequestAborted);
             if (download.Bytes is not { } bytes)
                 return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
             if (LibraryEndpoints.DownloadedImageError(bytes) is { } bytesError)
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [bytesError] });
-            return await DetailResultAsync(ctx, await service.SetCoverAsync(id, UserId(ctx), bytes, ctx.RequestAborted), service, id);
+            return await DetailResultAsync(ctx, await service.SetCoverAsync(id, EndpointUser.RequiredId(ctx), bytes, ctx.RequestAborted), service, id);
         });
 
         // B11: the row's format decides which file is served; a missing file (e.g. after a restore) is 404.
         collections.MapGet("/{id:guid}/cover", async (Guid id, HttpContext ctx, CollectionService service, CollectionCovers covers) =>
         {
-            if (await service.GetAsync(id, UserId(ctx), ctx.RequestAborted) is not { CoverFormat: { } format }
+            if (await service.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is not { CoverFormat: { } format }
                 || covers.Open(id, format) is not { } stream)
                 return Problems.NotFound(ctx);
             ctx.Response.Headers.CacheControl = "private, max-age=86400";
@@ -102,13 +102,12 @@ public static class CollectionEndpoints
         });
 
         collections.MapDelete("/{id:guid}/cover", async (Guid id, HttpContext ctx, CollectionService service) =>
-            await DetailResultAsync(ctx, await service.RemoveCoverAsync(id, UserId(ctx), ctx.RequestAborted), service, id));
+            await DetailResultAsync(ctx, await service.RemoveCoverAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted), service, id));
 
         return api;
     }
 
     /// <summary>The signed-in user's id; every route here runs behind the authenticated policy.</summary>
-    internal static int UserId(HttpContext ctx) => AuditActor.From(ctx.User).UserId ?? throw new InvalidOperationException("No user id claim.");
 
     internal static IResult ToResult(HttpContext ctx, CollectionResult result, Func<CollectionResult, IResult> ok) => result.Error switch
     {
@@ -129,7 +128,7 @@ public static class CollectionEndpoints
     {
         if (result.Error != CollectionResultFailure.None)
             return ToResult(ctx, result, _ => Results.Empty);
-        return await service.GetAsync(id, UserId(ctx), ctx.RequestAborted) is { } fresh ? Results.Ok(ToDto(fresh)) : Problems.NotFound(ctx);
+        return await service.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is { } fresh ? Results.Ok(ToDto(fresh)) : Problems.NotFound(ctx);
     }
 
     /// <summary>

@@ -41,8 +41,7 @@ public static class IngestEndpoints
             }
             try
             {
-                var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-                return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+                return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
             }
             catch (JobRefusedException ex) when (ex.Code == IngestJob.DatsMissing)
             {
@@ -90,7 +89,7 @@ public static class IngestEndpoints
             var result = await deleter.DeleteAsync(request!.Files!.Select(f => f!).ToList(), AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null
                 ? Results.Ok(new { deleted = result.Deleted, failed = result.Failed.Select(f => new { system = f.System, folder = f.Folder, name = f.Name }) })
-                : DatEndpoints.JobRunning(ctx);
+                : JobStart.Running(ctx);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         api.MapPost("/ingest/restore", async (HttpContext ctx, RemovedFileRestorer restorer, JobRunner runner, IngestJob job,
@@ -115,7 +114,7 @@ public static class IngestEndpoints
                 return Problems.Validation(ctx, errors);
             var result = restorer.Restore(files!.Select(f => f!).ToList(), AuditActor.From(ctx.User));
             if (result.Code is not null)
-                return DatEndpoints.JobRunning(ctx);
+                return JobStart.Running(ctx);
             // After the lock is released: ingest exactly the restored files under their new names. If it can't start, they wait on Ingestion.
             Guid? jobId = null;
             if (result.Restored.Count > 0)
@@ -123,7 +122,7 @@ public static class IngestEndpoints
                 job.Selection = result.Restored.Select(f => (f.System, f.Name)).ToHashSet();
                 try
                 {
-                    jobId = (await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), CancellationToken.None))?.Id;
+                    jobId = (await runner.StartAsync(job, JobTrigger.Manual, EndpointUser.Id(ctx.User), CancellationToken.None))?.Id;
                 }
                 catch (JobRefusedException ex) when (ex.Code == IngestJob.DatsMissing)
                 {

@@ -76,7 +76,7 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, errors);
             // B15/P1: another user's collection answers 404 like a missing one, before any membership is queried.
             foreach (var collectionId in new[] { query.CollectionId, query.NotInCollectionId })
-                if (collectionId is { } id && await collections.GetAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is null)
+                if (collectionId is { } id && await collections.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is null)
                     return Problems.NotFound(ctx);
             var result = await ForViewerAsync(await repository.ListAsync(query, ctx.RequestAborted), ctx, repository);
             return Results.Ok(Paging.ToDto(result, game => ToListItemDto(game, systems)));
@@ -199,7 +199,7 @@ public static class LibraryEndpoints
         {
             if (await repository.GetAsync(id, ctx.RequestAborted) is null)
                 return Problems.NotFound(ctx);
-            var list = await collections.ListForGameAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted);
+            var list = await collections.ListForGameAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted);
             return Results.Ok(list.Select(c => new { id = c.Id, name = c.Name }));
         });
 
@@ -442,8 +442,7 @@ public static class LibraryEndpoints
 
         api.MapPost("/jobs/media-retry", async (HttpContext ctx, JobRunner runner, MediaRetryJob job) =>
         {
-            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+            return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // Admin actions R1.
@@ -452,8 +451,7 @@ public static class LibraryEndpoints
             if (!igdb.Configured)
                 return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
                     "Refreshing ratings needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
-            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+            return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // Admin actions P1.
@@ -462,8 +460,7 @@ public static class LibraryEndpoints
             if (!igdb.Configured)
                 return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
                     "Pulling covers needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
-            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+            return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         games.MapPost("/{id:guid}/merge", async (Guid id, MergeRequest request, HttpContext ctx, LibraryEditor editor) =>
@@ -523,7 +520,7 @@ public static class LibraryEndpoints
                     await issues.ResolveOpenAsync(row.ZipPath, IntegrityIssueType.DefaultBoxArt, time.GetUtcNow().UtcDateTime, CancellationToken.None);
                 return;
             }
-            var started = await runner.StartAsync(integrity(JobMode.Game, row.ZipPath), JobTrigger.Manual, DatEndpoints.UserId(ctx.User),
+            var started = await runner.StartAsync(integrity(JobMode.Game, row.ZipPath), JobTrigger.Manual, EndpointUser.Id(ctx.User),
                 CancellationToken.None);
             if (started is null)
                 logger.LogInformation("Game check of {ZipPath} skipped: another job is running", row.ZipPath);

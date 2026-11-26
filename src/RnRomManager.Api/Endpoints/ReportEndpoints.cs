@@ -373,7 +373,7 @@ public static partial class ReportEndpoints
                 return Problems.Validation(ctx, errors);
             // A key that matches no current group is stored anyway: the group may have just changed (RP8).
             await repository.DismissDuplicateAsync(igdbGiven ? DuplicateMatch.Igdb : DuplicateMatch.Title, request.System!,
-                igdbGiven ? igdbId.ToString(CultureInfo.InvariantCulture) : request.BaseTitle!, request.GamesKey!, DatEndpoints.UserId(ctx.User),
+                igdbGiven ? igdbId.ToString(CultureInfo.InvariantCulture) : request.BaseTitle!, request.GamesKey!, EndpointUser.Id(ctx.User),
                 time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
             return Results.NoContent();
         }).RequireAuthorization(AuthSetup.AdminOnly);

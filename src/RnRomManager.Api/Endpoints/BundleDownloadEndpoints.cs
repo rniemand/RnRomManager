@@ -31,7 +31,7 @@ public static class BundleDownloadEndpoints
         if ((await roms.ResolveBundleFilesAsync([identity!], ctx.RequestAborted))[0] is null)
             return Problems.NotFound(ctx);
 
-        var issue = tickets.Issue(CollectionEndpoints.UserId(ctx), identity!);
+        var issue = tickets.Issue(EndpointUser.RequiredId(ctx), identity!);
         return issue.Status switch
         {
             BundleTicketIssueStatus.Issued => Results.Created($"/api/bundle-downloads/{issue.Ticket}",
@@ -51,7 +51,7 @@ public static class BundleDownloadEndpoints
     public static IResult Status(string ticket, HttpContext ctx, BundleDownloadTickets tickets)
     {
         ctx.Response.Headers.CacheControl = NoStore;
-        if (tickets.Status(ticket, CollectionEndpoints.UserId(ctx)) is not { } status)
+        if (tickets.Status(ticket, EndpointUser.RequiredId(ctx)) is not { } status)
             return Problems.NotFound(ctx);
         return Results.Ok(new { state = StateName(status.State), errorCode = status.ErrorCode });
     }
@@ -85,7 +85,7 @@ public static class BundleDownloadEndpoints
         ILoggerFactory loggers)
     {
         ctx.Response.Headers.CacheControl = NoStore;
-        var claim = tickets.Claim(ticket, CollectionEndpoints.UserId(ctx));
+        var claim = tickets.Claim(ticket, EndpointUser.RequiredId(ctx));
         if (claim.Status == BundleTicketClaimStatus.NotFound)
             return Problems.NotFound(ctx);
         if (claim.Status == BundleTicketClaimStatus.Consumed)
