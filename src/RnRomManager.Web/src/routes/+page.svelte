@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { replaceUrl } from '#lib/urlState.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -166,8 +167,7 @@
 				restoring = false;
 				const saved = toSearch(parseFilters(new URLSearchParams(readSavedLibraryFilter())));
 				saveLibraryFilter(saved);
-				// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-				void goto(`/${saved}`, { replace: true, reset: false });
+				void replaceUrl(`/${saved}`);
 			} else saveLibraryFilter(search);
 		});
 	});

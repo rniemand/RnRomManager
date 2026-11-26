@@ -25,9 +25,6 @@ vi.mock('$app/state', () => ({
 		}
 	}
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 // Bootstrap's Modal needs layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
 	// Toggles `show` so a test can tell an open modal from a closed one.

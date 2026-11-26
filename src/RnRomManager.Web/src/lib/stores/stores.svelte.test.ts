@@ -12,9 +12,6 @@ import ToastHost from '#lib/components/layout/ToastHost.svelte';
 
 const app = vi.hoisted(() => ({ goto: vi.fn(), url: new URL('http://localhost/review/7') }));
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => app.goto(...args) }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 vi.mock('$app/state', () => ({
 	page: {
 		get url() {

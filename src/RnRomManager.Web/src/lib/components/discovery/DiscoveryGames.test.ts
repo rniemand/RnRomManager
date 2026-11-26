@@ -3,9 +3,6 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import type { GameListItem, DiscoveryState } from '#lib/types/index.js';
 
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}

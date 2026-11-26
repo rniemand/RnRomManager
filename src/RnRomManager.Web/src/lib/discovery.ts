@@ -21,6 +21,8 @@ import type {
 	RememberedTab,
 	LogoKind
 } from '#lib/enums/index.js';
+import { parseDir } from '#lib/sort.js';
+import { pageParam } from '#lib/urlState.js';
 
 export const collectionsTabs: readonly { tab: CollectionsTab; label: string }[] = [
 	{ tab: 'collections', label: 'User collections' },
@@ -72,10 +74,10 @@ function findParam(params: UrlLike['searchParams']): string | undefined {
 /** G5: `sort`/`dir` from exact lowercase values, kept only when not the default, so default states keep their shape. */
 function sortParams(params: UrlLike['searchParams']): { sort?: GroupSort; dir?: SortDir } {
 	const sort: GroupSort = params.get('sort') === 'games' ? 'games' : 'name';
-	const dir = params.get('dir');
+	const dir = parseDir(params.get('dir'), null);
 	return {
 		...(sort === 'games' ? { sort } : {}),
-		...((dir === 'asc' || dir === 'desc') && dir !== defaultDir(sort) ? { dir } : {})
+		...(dir && dir !== defaultDir(sort) ? { dir } : {})
 	};
 }
 
@@ -84,10 +86,6 @@ function setSort(params: URLSearchParams, state: { sort?: GroupSort; dir?: SortD
 	const sort = state.sort ?? 'name';
 	if (sort !== 'name') params.set('sort', sort);
 	if (state.dir && state.dir !== defaultDir(sort)) params.set('dir', state.dir);
-}
-
-function pageParam(params: UrlLike['searchParams'], name: string): number {
-	return Math.max(1, Math.floor(Number(params.get(name))) || 1);
 }
 
 /** The tab a `/collections` URL shows: a bare URL, or any other `tab` value, is User collections. */

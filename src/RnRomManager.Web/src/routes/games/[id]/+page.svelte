@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { replaceUrl } from '#lib/urlState.js';
 	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import { untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -256,8 +257,7 @@
 			}
 			const next = new URL(page.url.href);
 			next.searchParams.delete('play');
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-			void goto(`${next.pathname}${next.search}`, { replace: true, reset: false });
+			void replaceUrl(`${next.pathname}${next.search}`);
 		});
 	});
 
@@ -477,8 +477,7 @@
 		]
 			.filter(Boolean)
 			.join('&');
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
-		void goto(query ? `${path}?${query}` : path, { replace: true, reset: false });
+		void replaceUrl(query ? `${path}?${query}` : path);
 	}
 </script>
 

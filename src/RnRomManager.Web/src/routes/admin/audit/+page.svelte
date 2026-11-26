@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { replaceUrl } from '#lib/urlState.js';
 	import { onDestroy } from 'svelte';
 	import { SvelteDate, SvelteURLSearchParams } from 'svelte/reactivity';
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
@@ -65,8 +65,7 @@
 			if (value) next.set(key, value);
 			else next.delete(key);
 		}
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/admin/audit${next.size ? `?${next}` : ''}`, { replace: true, reset: false });
+		void replaceUrl(`/admin/audit${next.size ? `?${next}` : ''}`);
 	}
 	function clear(): void {
 		cancelTimers();

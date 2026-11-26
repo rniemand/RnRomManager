@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { replaceUrl } from '#lib/urlState.js';
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
-	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import type {
@@ -35,8 +35,7 @@
 	const pageSize = 50;
 
 	function go(search: string): void {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
-		void goto(`${resolve('/reports/image-resolutions')}${search}`, { replace: true, reset: false });
+		void replaceUrl(`${resolve('/reports/image-resolutions')}${search}`);
 	}
 
 	const view = $derived(parseImageResolutionFilter(page.url.searchParams));

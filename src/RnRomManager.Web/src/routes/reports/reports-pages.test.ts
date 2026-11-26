@@ -25,9 +25,6 @@ vi.mock('#lib/bootstrap.js', () => ({
 	},
 	Dropdown: { getOrCreateInstance: () => ({ hide() {} }) }
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 const { default: ReportsIndex } = await import('./+page.svelte');
 const { default: ReportsLayout } = await import('./+layout.svelte');

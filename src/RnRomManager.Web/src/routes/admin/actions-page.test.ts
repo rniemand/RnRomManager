@@ -14,9 +14,6 @@ vi.mock('#lib/bootstrap.js', () => ({
 		dispose() {}
 	}
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 const { default: ActionsPage } = await import('./actions/+page.svelte');
 

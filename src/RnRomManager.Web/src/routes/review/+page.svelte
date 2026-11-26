@@ -1,8 +1,8 @@
 <script lang="ts">
+	import { replaceUrl } from '#lib/urlState.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
@@ -42,8 +42,7 @@
 	import { tooltip } from '#lib/tooltip.js';
 
 	function go(search: string): void {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/review${search}`, { replace: true, reset: false });
+		void replaceUrl(`/review${search}`);
 	}
 
 	const filter = $derived(parseReviewFilter(page.url.searchParams));

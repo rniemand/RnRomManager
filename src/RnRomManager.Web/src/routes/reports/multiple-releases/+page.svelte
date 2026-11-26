@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { parseDir } from '#lib/sort.js';
+	import type { SortDir } from '#lib/enums/index.js';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -31,12 +33,11 @@
 	}
 
 	type Sort = 'name' | 'system' | 'releases' | 'updates' | 'size';
-	type Dir = 'asc' | 'desc';
 	interface View {
 		system: string;
 		min: number;
 		sort: Sort;
-		dir: Dir;
+		dir: SortDir;
 		page: number;
 	}
 
@@ -44,7 +45,8 @@
 	const defaultMin = 2;
 	const defaultSort: Sort = 'releases';
 	/** B16: text columns start ascending, numbers descending. */
-	const defaultDir = (sort: Sort): Dir => (sort === 'name' || sort === 'system' ? 'asc' : 'desc');
+	const defaultDir = (sort: Sort): SortDir =>
+		sort === 'name' || sort === 'system' ? 'asc' : 'desc';
 
 	/** B19: the headers, each a sort button. */
 	const columns: { sort: Sort; label: string; numeric: boolean }[] = [
@@ -71,10 +73,7 @@
 	const sort = $derived(
 		columns.find((c) => c.sort === page.url.searchParams.get('sort'))?.sort ?? defaultSort
 	);
-	const dir = $derived.by<Dir>(() => {
-		const value = page.url.searchParams.get('dir');
-		return value === 'asc' || value === 'desc' ? value : defaultDir(sort);
-	});
+	const dir = $derived(parseDir(page.url.searchParams.get('dir'), defaultDir(sort)));
 
 	/** The last response's `maxReleases`; null until the first one arrives. */
 	let maxReleases = $state<number | null>(null);

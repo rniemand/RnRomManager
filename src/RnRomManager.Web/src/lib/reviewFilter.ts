@@ -1,15 +1,15 @@
 import { remembered } from './remembered';
 import type { ReviewFilter } from '#lib/types/index.js';
+import { pageParam } from '#lib/urlState.js';
 
 export const reviewFilterParams = ['q', 'system', 'reason', 'page'] as const;
 
 export function parseReviewFilter(params: Pick<URLSearchParams, 'get'>): ReviewFilter {
-	const n = Number(params.get('page'));
 	return {
 		q: params.get('q')?.trim() ?? '',
 		system: params.get('system') ?? '',
 		reason: params.get('reason') ?? '',
-		page: Number.isInteger(n) && n > 1 ? n : 1
+		page: pageParam(params, 'page', 'integer')
 	};
 }
 

@@ -1,8 +1,8 @@
 <script lang="ts">
+	import { pageParam, replaceUrl } from '#lib/urlState.js';
 	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
@@ -61,13 +61,10 @@
 	onDestroy(() => clearTimeout(filterTimer));
 
 	const q = $derived(page.url.searchParams.get('q')?.trim() ?? '');
-	const pageNumber = $derived(
-		Math.max(1, Math.floor(Number(page.url.searchParams.get('page'))) || 1)
-	);
+	const pageNumber = $derived(pageParam(page.url.searchParams));
 
 	function go(next: { q: string; page: number }): void {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${collectionsSearch(next)}`, { replace: true, reset: false });
+		void replaceUrl(`/collections${collectionsSearch(next)}`);
 	}
 
 	const discovery = $derived(discoveryState(page.url));
@@ -81,8 +78,7 @@
 	function goDiscovery(next: DiscoveryState, remember = false): void {
 		const search = discoverySearch(next);
 		if (remember) saveCollectionsTab(next.kind, listSearch(search));
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${search}`, { replace: true, reset: false });
+		void replaceUrl(`/collections${search}`);
 	}
 
 	/**
@@ -98,8 +94,7 @@
 			saveCollectionsTab(current, '');
 			return;
 		}
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${search}`, { replace: true, reset: false });
+		void replaceUrl(`/collections${search}`);
 	});
 
 	/**
@@ -146,8 +141,7 @@
 	function goSystems(next: SystemsState, remember = false): void {
 		const search = systemsSearch(next);
 		if (remember) saveCollectionsTab('systems', listSearch(search));
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${search}`, { replace: true, reset: false });
+		void replaceUrl(`/collections${search}`);
 	}
 
 	$effect(() => {

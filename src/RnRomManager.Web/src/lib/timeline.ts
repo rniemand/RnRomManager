@@ -1,4 +1,5 @@
 import type { YearRange, TimelineState } from '#lib/types/index.js';
+import { pageParam } from '#lib/urlState.js';
 
 /**
  * Timeline T3/T4: the `/timeline` URL state (`?system=&from=&to=&page=`) and the zoom and pan math over the data range
@@ -35,7 +36,7 @@ export function timelineState(
 	let from = clamp(year(url.searchParams.get('from')) ?? range.min, range);
 	let to = clamp(year(url.searchParams.get('to')) ?? range.max, range);
 	if (from > to) [from, to] = [to, from];
-	const page = Math.max(1, Math.floor(Number(url.searchParams.get('page'))) || 1);
+	const page = pageParam(url.searchParams);
 	return { system, from, to, page };
 }
 

@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { pageParam } from '#lib/urlState.js';
+	import { parseDir } from '#lib/sort.js';
+	import type { SortDir } from '#lib/enums/index.js';
 	import { onDestroy, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
@@ -23,13 +26,12 @@
 	 */
 	type Missing = 'any' | 'year' | 'developer' | 'publisher';
 	type Sort = 'name' | 'system' | 'year';
-	type Dir = 'asc' | 'desc';
 	interface View {
 		system: string;
 		missing: Missing;
 		q: string;
 		sort: Sort;
-		dir: Dir;
+		dir: SortDir;
 		page: number;
 	}
 
@@ -52,15 +54,13 @@
 	const view = $derived.by<View>(() => {
 		const missing = params.get('missing');
 		const sort = params.get('sort');
-		const dir = params.get('dir');
-		const p = params.get('page');
 		return {
 			system: params.get('system') ?? '',
 			missing: missingOptions.some((o) => o.value === missing) ? (missing as Missing) : 'any',
 			q: (params.get('q') ?? '').trim(),
 			sort: sort === 'system' || sort === 'year' ? sort : 'name',
-			dir: dir === 'desc' ? 'desc' : 'asc',
-			page: p !== null && /^\d+$/.test(p) && Number(p) >= 1 ? Number(p) : 1
+			dir: parseDir(params.get('dir'), 'asc'),
+			page: pageParam(params, 'page', 'digits')
 		};
 	});
 	const filtered = $derived(!!(view.system || view.missing !== 'any' || view.q));

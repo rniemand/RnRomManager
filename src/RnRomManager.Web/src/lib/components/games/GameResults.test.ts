@@ -7,9 +7,6 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}

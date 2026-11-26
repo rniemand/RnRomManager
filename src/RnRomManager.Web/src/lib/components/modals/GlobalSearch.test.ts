@@ -10,9 +10,6 @@ vi.mock('$app/navigation', () => ({
 	afterNavigate: () => {}
 }));
 vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/') } }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 // jsdom has no layout/transitions for Bootstrap's Modal; record show/hide instead.
 const shown = { count: 0, hidden: 0, options: [] as unknown[], calls: [] as string[] };

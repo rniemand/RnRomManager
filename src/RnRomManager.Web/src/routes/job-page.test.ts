@@ -7,9 +7,6 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/state', () => ({
 	page: { params: { id: 'j1' }, url: new URL('http://localhost/jobs/j1') }
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 function stubJob(fields: Record<string, unknown>): void {
 	const job = {

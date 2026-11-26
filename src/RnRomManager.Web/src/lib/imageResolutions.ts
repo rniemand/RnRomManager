@@ -1,5 +1,6 @@
 import type { ImageInfo, ImageResolutionFilter } from '#lib/types/index.js';
 import { remembered } from './remembered';
+import { pageParam } from '#lib/urlState.js';
 
 type ImageType = ImageInfo['type'];
 
@@ -24,14 +25,12 @@ export function parseImageResolutionFilter(
 	params: Pick<URLSearchParams, 'get'>
 ): ImageResolutionFilter {
 	const type = params.get('type') ?? '';
-	const page = params.get('page') ?? '';
-	const n = Number(page);
 	return {
 		system: params.get('system') ?? '',
 		type: Object.hasOwn(imageTypeLabels, type) ? (type as ImageType) : '',
 		maxWidth: parseLimit(params.get('maxWidth')),
 		maxHeight: parseLimit(params.get('maxHeight')),
-		page: /^\d+$/.test(page) && n > 1 ? n : 1
+		page: pageParam(params, 'page', 'digits')
 	};
 }
 

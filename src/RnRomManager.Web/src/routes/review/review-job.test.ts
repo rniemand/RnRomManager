@@ -18,9 +18,6 @@ vi.mock('$app/state', () => ({
 		}
 	}
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 
 const { default: ReviewPage } = await import('./[id]/+page.svelte');

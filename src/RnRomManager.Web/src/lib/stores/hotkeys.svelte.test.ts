@@ -8,9 +8,6 @@ import { toasts } from './toasts.svelte';
 
 const goto = vi.fn<(url: string) => Promise<void>>(() => Promise.resolve());
 vi.mock('$app/navigation', () => ({ goto: (url: string) => goto(url) }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 const { hotkeys, missingIgdbIdMessages, missingImageMessages, missingMetadataMessages } =
 	await import('./hotkeys.svelte');

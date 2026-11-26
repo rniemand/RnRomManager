@@ -5,9 +5,6 @@ import { auth } from '#lib/stores/auth.svelte.js';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/state', () => ({ page: { params: {}, url: new URL('http://localhost/ingestion') } }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 
 const { default: Page } = await import('./ingestion/+page.svelte');

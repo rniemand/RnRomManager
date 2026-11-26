@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { pageParam } from '#lib/urlState.js';
+	import { parseDir } from '#lib/sort.js';
+	import type { SortDir } from '#lib/enums/index.js';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -28,18 +31,18 @@
 	}
 
 	type Sort = 'name' | 'system' | 'hacks' | 'releases' | 'size';
-	type Dir = 'asc' | 'desc';
 	interface View {
 		system: string;
 		sort: Sort;
-		dir: Dir;
+		dir: SortDir;
 		page: number;
 	}
 
 	const pageSize = 50;
 	const defaultSort: Sort = 'hacks';
 	/** Text columns start ascending, numbers descending. */
-	const defaultDir = (sort: Sort): Dir => (sort === 'name' || sort === 'system' ? 'asc' : 'desc');
+	const defaultDir = (sort: Sort): SortDir =>
+		sort === 'name' || sort === 'system' ? 'asc' : 'desc';
 
 	const columns: { sort: Sort; label: string; numeric: boolean }[] = [
 		{ sort: 'name', label: 'Game', numeric: false },
@@ -50,17 +53,11 @@
 	];
 
 	const system = $derived(page.url.searchParams.get('system') ?? '');
-	const pageNumber = $derived.by(() => {
-		const value = page.url.searchParams.get('page');
-		return value !== null && /^\d+$/.test(value) && Number(value) >= 1 ? Number(value) : 1;
-	});
+	const pageNumber = $derived(pageParam(page.url.searchParams, 'page', 'digits'));
 	const sort = $derived(
 		columns.find((c) => c.sort === page.url.searchParams.get('sort'))?.sort ?? defaultSort
 	);
-	const dir = $derived.by<Dir>(() => {
-		const value = page.url.searchParams.get('dir');
-		return value === 'asc' || value === 'desc' ? value : defaultDir(sort);
-	});
+	const dir = $derived(parseDir(page.url.searchParams.get('dir'), defaultDir(sort)));
 
 	let result = $state<Page<HackedGame> | null>(null);
 	let error = $state<unknown>(null);

@@ -14,9 +14,6 @@ vi.mock('$app/state', () => ({
 		}
 	}
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 const { default: ActivityPage } = await import('./activity/+page.svelte');
 const { default: ReportsLayout } = await import('./+layout.svelte');

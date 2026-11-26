@@ -15,9 +15,6 @@ vi.mock('$app/state', () => ({
 		}
 	}
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}

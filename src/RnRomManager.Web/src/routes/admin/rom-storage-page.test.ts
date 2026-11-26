@@ -23,9 +23,6 @@ vi.mock('#lib/tooltip.js', () => ({
 		return {};
 	}
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 const { default: RomStoragePage } = await import('./rom-storage/+page.svelte');
 

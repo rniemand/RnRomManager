@@ -4,9 +4,6 @@ import { resetClient } from '#lib/api/client.js';
 import type { BundleEntry } from '#lib/types/index.js';
 import { bundle } from '#lib/stores/bundle.svelte.js';
 
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}

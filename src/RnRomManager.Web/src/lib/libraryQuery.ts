@@ -1,5 +1,7 @@
 import type { LibraryFilters, QueryScope } from '#lib/types/index.js';
 import type { SortDir, LibrarySort } from '#lib/enums/index.js';
+import { parseDir } from '#lib/sort.js';
+import { pageParam } from '#lib/urlState.js';
 
 /** Library filters (spec §11 Library row) ↔ the page URL query ↔ the `GET /api/games` query (§23). */
 
@@ -29,7 +31,6 @@ export function parseFilters(
 	const letter = params.get('letter')?.toUpperCase() ?? null;
 	const sort = params.get('sort');
 	const dir = params.get('dir');
-	const page = Number(params.get('page'));
 	return {
 		system: params.get('system') || null,
 		letter: !scope && letter && letters.includes(letter) ? letter : null,
@@ -39,9 +40,9 @@ export function parseFilters(
 			sort === 'title' || sort === 'year' || sort === 'added' || sort === 'rating'
 				? sort
 				: defaultSort(scope),
-		dir: dir === 'asc' || dir === 'desc' ? dir : null,
+		dir: parseDir(dir, null),
 		favourite: params.get('favourite') === 'true',
-		page: Number.isInteger(page) && page > 1 ? page : 1
+		page: pageParam(params, 'page', 'integer')
 	};
 }
 

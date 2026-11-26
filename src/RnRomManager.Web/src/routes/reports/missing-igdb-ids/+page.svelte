@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { pageParam } from '#lib/urlState.js';
+	import { parseDir } from '#lib/sort.js';
+	import type { SortDir } from '#lib/enums/index.js';
 	import { onDestroy, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
@@ -23,13 +26,12 @@
 	 */
 	type Status = 'missing' | 'not-on-igdb';
 	type Sort = 'name' | 'system' | 'year';
-	type Dir = 'asc' | 'desc';
 	interface View {
 		system: string;
 		status: Status;
 		q: string;
 		sort: Sort;
-		dir: Dir;
+		dir: SortDir;
 		page: number;
 	}
 
@@ -47,14 +49,13 @@
 	const params = $derived(page.url.searchParams);
 	const view = $derived.by<View>(() => {
 		const sort = params.get('sort');
-		const p = params.get('page');
 		return {
 			system: params.get('system') ?? '',
 			status: params.get('status') === 'not-on-igdb' ? 'not-on-igdb' : 'missing',
 			q: (params.get('q') ?? '').trim(),
 			sort: sort === 'system' || sort === 'year' ? sort : 'name',
-			dir: params.get('dir') === 'desc' ? 'desc' : 'asc',
-			page: p !== null && /^\d+$/.test(p) && Number(p) >= 1 ? Number(p) : 1
+			dir: parseDir(params.get('dir'), 'asc'),
+			page: pageParam(params, 'page', 'digits')
 		};
 	});
 	/** System or Title set; Show isn't counted for the empty text, since each status has its own unfiltered text. */

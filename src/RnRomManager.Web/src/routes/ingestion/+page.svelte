@@ -1,8 +1,8 @@
 <script lang="ts">
+	import { replaceUrl } from '#lib/urlState.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
@@ -76,7 +76,7 @@
 		const tab = page.url.searchParams.get('tab');
 		if (tab === null) return;
 		if (tab === 'failed' || tab === 'runs') openPanel = tab;
-		void goto(resolve('/ingestion'), { replace: true, reset: false });
+		void replaceUrl(resolve('/ingestion'));
 	});
 
 	function selectAll(set: SvelteSet<string>, keys: string[], next: boolean): void {
