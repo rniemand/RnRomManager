@@ -310,13 +310,13 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 
 File names without extension. System projects (`src/RnRomManager.Systems.*`) are omitted: one handler each, listed above.
 
-- `src/RnRomManager.Api/`: AppHost, AuditWriter, BackupScheduler, DatRefreshScheduler, JobShutdownService, MaintenanceGate, Problems, Program, SaveFoldersStarter, Scheduler, StartupRunner, StorageMigrationStarter, WakeSignal, ZipRepackJobFactory
+- `src/RnRomManager.Api/`: AppHost, AuditWriter, BackupScheduler, DatRefreshScheduler, Handle, JobShutdownService, MaintenanceExempt, MaintenanceGate, Problems, Program, SaveFoldersJobFactory, SaveFoldersStarter, Scheduler, StartupRunner, StorageMigrationJobFactory, StorageMigrationStarter, WakeSignal, ZipRepackJobFactory
 - `src/RnRomManager.Api/Auth/`: AuditActorExtensions, AuthSetup, Session
 - `src/RnRomManager.Api/Cli/`: CliDispatcher, HealthCheckCommand, ResetPasswordCommand
 - `src/RnRomManager.Api/Configuration/`: EffectiveSettings, LicenseInfo, OptionsRegistration
-- `src/RnRomManager.Api/Endpoints/`: AdminEndpoints, AsyncOnlyWriteStream, AuditEndpoints, AuthEndpoints, BiosInfo, BundleDownloadEndpoints, BundleFileEndpoints, BundleQueueEndpoints, CollectionEndpoints, DatEndpoints, DiscoveryEndpoints, DiscoveryLogoEndpoints, EmulatorEndpoints, FallbackEndpoints, HealthEndpoints, IngestEndpoints, IntegrityEndpoints, JobEndpoints, LibraryDownload, LibraryEndpoints, LibraryFiles, MameRomset, OperatorCoreManifest, PlayDisc, ReportEndpoints, ReviewEndpoints, SaveEndpoints, SaveUploads, TimelineEndpoints, UserEndpoints
-- `src/RnRomManager.Api/Http/`: HttpClients, ImageUrlDownloader
-- `src/RnRomManager.Api/Logging/`: LogArchive, LogBuffer, LogStream, MemoryLogTarget, NLogSetup
+- `src/RnRomManager.Api/Endpoints/`: AddGamesRequest, AdminEndpoints, AsyncOnlyWriteStream, AuditEndpoints, AuthEndpoints, BiosFile, BiosInfo, BiosInfoGroup, BiosLog, Budget, BundleDownloadEndpoints, BundleFileEndpoints, BundleQueueEndpoints, ChangePasswordRequest, CollectionEndpoints, CoreOutcome, CoverUrlRequest, CreateCollectionRequest, CreateUserRequest, DatEndpoints, Disc, DiscoveryEndpoints, DiscoveryLogoEndpoints, DiscResult, DismissDuplicateRequest, EmulatorEndpoints, ErrorCodes, FallbackEndpoints, FileStatus, HealthEndpoints, ImageUrlRequest, IngestDeleteRequest, IngestEndpoints, IngestFileRef, IngestRequest, IngestRestoreRef, IngestRestoreRequest, IntegrityEndpoints, IssueRequest, JobEndpoints, LibraryAttachment, LibraryDownload, LibraryEndpoints, LibraryFiles, LoginRequest, LogoUrlRequest, MameRomset, Member, MergeDuplicatesRequest, Need, OperatorCore, OperatorCoreFile, OperatorCoreLog, OperatorCoreManifest, OwningStream, Paging, PlayDisc, PlayDiscEntry, QueueRequest, ReportEndpoints, ResetPasswordRequest, ResolveItem, ResolveRequest, ReviewDeleteRequest, ReviewEndpoints, SaveEndpoints, SaveUploads, TicketStreamResult, TimelineEndpoints, UpdateUserRequest, UserEndpoints, ZipEntryInfo
+- `src/RnRomManager.Api/Http/`: BlockedAddressException, HttpClients, ImageUrlDownload, ImageUrlDownloader, ImageUrlPolicy, RequestLoggingHandler
+- `src/RnRomManager.Api/Logging/`: LogArchive, LogBuffer, LogEntry, LogStream, LogStreamOptions, MemoryLogTarget, NLogSetup, Subscription
 - `src/RnRomManager.Api/Security/`: SecurityHeaders
 - `src/RnRomManager.Core/`: AppInfo
 - `src/RnRomManager.Core/Audit/`: AuditActions, AuditActor, AuditEvent, AuditLog, AuditPaths, AuditQuery, IAuditLog

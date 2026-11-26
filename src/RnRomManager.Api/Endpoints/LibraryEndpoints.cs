@@ -494,9 +494,18 @@ public static class LibraryEndpoints
     /// file, so its issue is resolved directly under the job lock instead. Skipped, never queued, when another job holds
     /// the lock; the response is the game detail whatever happens here.
     /// </summary>
-    private static async Task StartGameCheckAsync(LibraryEditResult result, Guid id, HttpContext ctx, IGameRepository repository,
-        JobRunner runner, IntegrityJobFactory integrity, ILoggerFactory loggers, ISystemRegistry systems, JobLock jobLock,
-        IIntegrityIssueRepository issues, TimeProvider time)
+    private static async Task StartGameCheckAsync(
+        LibraryEditResult result,
+        Guid id,
+        HttpContext ctx,
+        IGameRepository repository,
+        JobRunner runner,
+        IntegrityJobFactory integrity,
+        ILoggerFactory loggers,
+        ISystemRegistry systems,
+        JobLock jobLock,
+        IIntegrityIssueRepository issues,
+        TimeProvider time)
     {
         if (result.Code is not null || !result.ReplacedDefaultCover)
             return;
@@ -579,7 +588,12 @@ public static class LibraryEndpoints
         : bytes.Length == 0 || ImageFormats.Detect(bytes) is null || ImageFormats.Read(bytes) is null ? "The URL didn't return a PNG or JPEG image."
         : null;
 
-    private static async Task<IResult> DetailAsync(Guid id, HttpContext ctx, IGameRepository repository, IRomRepository roms, IImageRepository images)
+    private static async Task<IResult> DetailAsync(
+        Guid id,
+        HttpContext ctx,
+        IGameRepository repository,
+        IRomRepository roms,
+        IImageRepository images)
     {
         if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
             return Problems.NotFound(ctx);
@@ -1054,8 +1068,18 @@ public static class LibraryEndpoints
         };
     }
 
-    private static object ToDetail(GameRow game, string systemName, string? browserCore, bool fileSets, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
-        IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes, IReadOnlyDictionary<long, DiscSet> discSets, bool igdbConfigured, GameActionsRow? actions) => new
+    private static object ToDetail(
+        GameRow game,
+        string systemName,
+        string? browserCore,
+        bool fileSets,
+        IReadOnlyList<RomRow> roms,
+        ILookup<long, RomFileRow> files,
+        IReadOnlyList<ImageRow> images,
+        IReadOnlySet<string> notes,
+        IReadOnlyDictionary<long, DiscSet> discSets,
+        bool igdbConfigured,
+        GameActionsRow? actions) => new
     {
         id = game.Id,
         system = game.SystemId,
@@ -1142,6 +1166,3 @@ public static class LibraryEndpoints
         }),
     };
 }
-
-/// <summary>U1 body: <c>{ "url": "…", "type": "BoxArt" | "Snap" }</c>.</summary>
-public sealed record ImageUrlRequest(string? Url, string? Type);

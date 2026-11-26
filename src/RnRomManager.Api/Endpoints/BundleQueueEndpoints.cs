@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using RnRomManager.Api.Http;
 using RnRomManager.Core.Bundles;
 
 namespace RnRomManager.Api.Endpoints;
@@ -13,8 +12,6 @@ public static class BundleQueueEndpoints
 {
     /// <summary>B4: the largest snapshot or batch-resolution body (2 MiB).</summary>
     public const int RequestLimit = 2 * 1024 * 1024;
-
-    public sealed record QueueRequest(string? Name, IReadOnlyList<BundleEntryInput?>? Entries, int? Revision);
 
     private static readonly JsonSerializerOptions RequestJson = new(JsonSerializerDefaults.Web);
 

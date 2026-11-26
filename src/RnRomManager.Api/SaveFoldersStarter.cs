@@ -4,16 +4,18 @@ using RnRomManager.Core.Library;
 
 namespace RnRomManager.Api;
 
-/// <summary>Release editing B19: a new save folder migration job, a fresh one per start.</summary>
-public delegate IJob SaveFoldersJobFactory();
-
 /// <summary>
 /// Release editing B19, as <see cref="StorageMigrationStarter"/>: once the app has started, starts <see cref="SaveFoldersJob"/>
 /// unless <see cref="SaveFoldersJob.MigratedSetting"/> is <c>"true"</c>. A busy job lock or a failed check is retried every
 /// 5 minutes until a run has started; a started run is never retried here (the job sets the setting itself).
 /// </summary>
-public sealed class SaveFoldersStarter(IHostApplicationLifetime lifetime, JobRunner runner, SaveFoldersJobFactory createJob,
-    ISettingsRepository settings, TimeProvider time, ILogger<SaveFoldersStarter> logger) : BackgroundService
+public sealed class SaveFoldersStarter(
+    IHostApplicationLifetime lifetime,
+    JobRunner runner,
+    SaveFoldersJobFactory createJob,
+    ISettingsRepository settings,
+    TimeProvider time,
+    ILogger<SaveFoldersStarter> logger) : BackgroundService
 {
     public static readonly TimeSpan RetryInterval = TimeSpan.FromMinutes(5);
 

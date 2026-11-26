@@ -5,16 +5,19 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api;
 
-/// <summary>A new storage migration job (S4); a fresh one per start, applying <paramref name="change"/> first (B7).</summary>
-public delegate IJob StorageMigrationJobFactory(RomStorageChange? change = null);
-
 /// <summary>
 /// S4, B11: once the app has started (so it never delays startup or readiness), starts the storage job when games still
 /// wait to be moved, in either direction. A busy job lock or a failed check is retried every 5 minutes until no games remain or a run has
 /// started; a started run is never retried here, whatever its outcome (Admins re-run it from Integrity).
 /// </summary>
-public sealed class StorageMigrationStarter(IHostApplicationLifetime lifetime, JobRunner runner, StorageMigrationJobFactory createJob,
-    IGameRepository games, ISystemRegistry systems, TimeProvider time, ILogger<StorageMigrationStarter> logger) : BackgroundService
+public sealed class StorageMigrationStarter(
+    IHostApplicationLifetime lifetime,
+    JobRunner runner,
+    StorageMigrationJobFactory createJob,
+    IGameRepository games,
+    ISystemRegistry systems,
+    TimeProvider time,
+    ILogger<StorageMigrationStarter> logger) : BackgroundService
 {
     public static readonly TimeSpan RetryInterval = TimeSpan.FromMinutes(5);
 

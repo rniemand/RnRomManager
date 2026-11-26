@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using RnRomManager.Api.Http;
 using RnRomManager.Core.Bundles;
 using RnRomManager.Core.Library;
 
@@ -11,10 +10,6 @@ namespace RnRomManager.Api.Endpoints;
 /// </summary>
 public static class BundleFileEndpoints
 {
-    public sealed record ResolveItem(string? GameId, string? ReleaseSha1, BundleMemberInput? Member);
-
-    public sealed record ResolveRequest(IReadOnlyList<ResolveItem?>? Items);
-
     public static RouteGroupBuilder MapBundleFileEndpoints(this RouteGroupBuilder api)
     {
         api.MapPost("/bundle-files/resolve", async (HttpContext ctx, IRomRepository roms) =>

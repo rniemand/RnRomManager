@@ -28,8 +28,6 @@ public static partial class DiscoveryLogoEndpoints
 
     private const string Route = "/discovery/{kind}/logo";
 
-    public sealed record LogoUrlRequest(string? Url);
-
     /// <summary>The route name of each kind.</summary>
     private static readonly IReadOnlyDictionary<string, LogoKind> Kinds = new Dictionary<string, LogoKind>(StringComparer.Ordinal)
     {
@@ -139,7 +137,11 @@ public static partial class DiscoveryLogoEndpoints
     private static string StoredKey(LogoKind kind, string key) => kind == LogoKind.Systems ? DiscoveryKey.ForSystem(key) : key;
 
     /// <summary>The current group's name or the registered system's display name; null when there is none.</summary>
-    private static async Task<string?> NameAsync(LogoKind kind, string key, IDiscoveryRepository discovery, ISystemRegistry systems,
+    private static async Task<string?> NameAsync(
+        LogoKind kind,
+        string key,
+        IDiscoveryRepository discovery,
+        ISystemRegistry systems,
         CancellationToken cancellationToken) => kind switch
     {
         LogoKind.Systems => systems.ById(key)?.DisplayName,
@@ -149,7 +151,13 @@ public static partial class DiscoveryLogoEndpoints
     };
 
     /// <summary>B14: the audit event; system events carry the system id so the Auditing System filter finds them.</summary>
-    private static AuditEvent Event(LogoKind kind, bool replaced, AuditActor actor, string? name, string key, string? suffix = null)
+    private static AuditEvent Event(
+        LogoKind kind,
+        bool replaced,
+        AuditActor actor,
+        string? name,
+        string key,
+        string? suffix = null)
     {
         var (action, details) = kind switch
         {

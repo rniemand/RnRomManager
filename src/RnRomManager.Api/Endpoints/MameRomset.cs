@@ -10,7 +10,12 @@ public static class MameRomset
     /// <summary>How many <c>romof</c> steps are followed: a clone's parent, then a BIOS.</summary>
     public const int MaxSteps = 2;
 
-    public static async Task<object> ResolveAsync(RomRow rom, DatSource source, DatStore? store, IRomRepository roms, CancellationToken ct)
+    public static async Task<object> ResolveAsync(
+        RomRow rom,
+        DatSource source,
+        DatStore? store,
+        IRomRepository roms,
+        CancellationToken ct)
     {
         var header = rom.Header is null ? null : JsonNode.Parse(rom.Header) as JsonObject;
         var setName = header?["setName"]?.GetValue<string>() ?? Path.GetFileNameWithoutExtension(rom.OriginalFileName);

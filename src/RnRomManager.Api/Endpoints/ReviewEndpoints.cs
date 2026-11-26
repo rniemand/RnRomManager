@@ -180,6 +180,3 @@ public static class ReviewEndpoints
         _ => Problems.Create(ctx, 500, result.Code, result.Code),
     };
 }
-
-/// <summary>Q4 body of <c>POST /api/review/delete</c>.</summary>
-public sealed record ReviewDeleteRequest(long[]? Ids);

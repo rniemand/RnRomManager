@@ -7,12 +7,6 @@ namespace RnRomManager.Api.Endpoints;
 /// <summary><c>/api/users*</c>, Admin only (spec §23, §9.1).</summary>
 public static class UserEndpoints
 {
-    public sealed record CreateUserRequest(string? Username, IReadOnlyList<string?>? Roles, string? Password);
-
-    public sealed record UpdateUserRequest(IReadOnlyList<string?>? Roles, bool? IsDisabled);
-
-    public sealed record ResetPasswordRequest(string? NewPassword);
-
     public static RouteGroupBuilder MapUserEndpoints(this RouteGroupBuilder api)
     {
         var users = api.MapGroup("/users").RequireAuthorization(AuthSetup.AdminOnly);

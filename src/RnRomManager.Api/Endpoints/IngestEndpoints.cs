@@ -141,16 +141,3 @@ public static class IngestEndpoints
         return api;
     }
 }
-
-/// <summary><c>POST /api/ingest/restore</c> body (D5).</summary>
-public sealed record IngestRestoreRequest(IReadOnlyList<IngestRestoreRef?>? Files);
-
-public sealed record IngestRestoreRef(string? System, string? Name);
-
-/// <summary><c>POST /api/ingest/delete</c> body (D2).</summary>
-public sealed record IngestDeleteRequest(IReadOnlyList<IngestDeleteRef?>? Files);
-
-/// <summary><c>POST /api/jobs/ingest</c> body (IN1): the pending files to ingest, by system id and top-level file name.</summary>
-public sealed record IngestRequest(IReadOnlyList<IngestFileRef?>? Files);
-
-public sealed record IngestFileRef(string? System, string? Name);

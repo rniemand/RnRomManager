@@ -1,20 +1,4 @@
-using RnRomManager.Core.Configuration;
-
 namespace RnRomManager.Api.Endpoints;
-
-/// <summary>One operator-supplied core file: its exact name, length and lowercase hex SHA-256.</summary>
-public sealed record OperatorCoreFile(string Name, long Length, string Sha256, string ContentType);
-
-/// <summary>
-/// B1: one EmulatorJS core the operator supplies (never bundled): its id, the name messages use, the option holding its
-/// folder, the problem code of a mismatch and the only files <c>/api/emulator/cores/{core}</c> serves.
-/// </summary>
-public sealed record OperatorCore(string Id, string DisplayName, Func<EmulatorOptions, string> PathOf, string MismatchCode,
-    IReadOnlyList<OperatorCoreFile> Files)
-{
-    /// <summary>The manifest entry with exactly this name (ordinal), or null.</summary>
-    public OperatorCoreFile? Find(string name) => Files.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.Ordinal));
-}
 
 /// <summary>
 /// B1/B2: every operator-supplied core, each file pinned to the EmulatorJS 4.2.3 build so a corrupt, other-version or

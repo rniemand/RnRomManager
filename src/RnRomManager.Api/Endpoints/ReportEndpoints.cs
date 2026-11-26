@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using RnRomManager.Api.Auth;
 using RnRomManager.Core.Audit;
-using RnRomManager.Core.Database;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Reports;
 using RnRomManager.Core.Systems;
@@ -421,7 +420,11 @@ public static partial class ReportEndpoints
     private static partial Regex GamesKeyPattern();
 
     /// <summary>The paged reports' shared rules: house paging, and an optional registered <c>system</c>.</summary>
-    private static Dictionary<string, string[]> Validate(string? system, int? page, int? pageSize, ISystemRegistry systems)
+    private static Dictionary<string, string[]> Validate(
+        string? system,
+        int? page,
+        int? pageSize,
+        ISystemRegistry systems)
     {
         var errors = Paging.Validate(page, pageSize);
         if (system is not null && systems.ById(system) is null)
@@ -446,9 +449,3 @@ public static partial class ReportEndpoints
         return Results.Ok(new { id = found.Id, currentIsOnly = found.CurrentIsOnly });
     }
 }
-
-/// <summary><c>POST /api/reports/duplicates/dismiss</c> (RP8): a title group's <c>baseTitle</c> or (D3) an IGDB group's <c>igdbId</c>.</summary>
-public sealed record DismissDuplicateRequest(string? System, string? BaseTitle, string? GamesKey, JsonElement? IgdbId = null);
-
-/// <summary><c>POST /api/reports/duplicates/merge</c> (RP8): every source is merged into the target, in order.</summary>
-public sealed record MergeDuplicatesRequest(Guid? TargetGameId, IReadOnlyList<Guid>? SourceGameIds);

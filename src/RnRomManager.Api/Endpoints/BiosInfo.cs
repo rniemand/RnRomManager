@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Storage;
 
 namespace RnRomManager.Api.Endpoints;
@@ -11,20 +10,12 @@ namespace RnRomManager.Api.Endpoints;
 /// </summary>
 public static class BiosInfo
 {
-    /// <summary>All: every file is needed. OneOf: at least one. Optional: none (play falls back or skips a feature).</summary>
-    public enum Need { All, OneOf, Optional }
-
-    public sealed record BiosFile(string Name, long MinBytes, long MaxBytes);
-
-    /// <param name="CoreSetting">The operator-core setting this system also needs, if any.</param>
-    public sealed record Group(string System, Need Need, BiosFile[] Files, string Note, string? CoreSetting = null);
-
     private const long KiB = 1024, MiB = 1024 * 1024;
     private static BiosFile Exact(string name, long bytes) => new(name, bytes, bytes);
     private static BiosFile AtLeast(string name, long bytes) => new(name, bytes, MiB * 16);
     private static BiosFile UpTo(string name, long bytes) => new(name, 1, bytes);
 
-    public static readonly Group[] Catalog =
+    public static readonly BiosInfoGroup[] Catalog =
     [
         new("ColecoVision", Need.All, [Exact("colecovision.rom", 8 * KiB)], "Gearcoleco needs it for every game."),
         new("Famicom Disk System", Need.All, [Exact("disksys.rom", 8 * KiB)], "FCEUmm needs it for .fds releases."),
@@ -90,8 +81,6 @@ public static class BiosInfo
         }
         return new { folder = root, setting = "Paths:Bios", env = "Paths__Bios", folderExists, groups, otherFiles = others };
     }
-
-    public sealed record FileStatus(string Name, long MinBytes, long MaxBytes, string Status, long? Size, string? Md5);
 
     private static FileStatus CheckFile(string root, bool folderExists, BiosFile file)
     {

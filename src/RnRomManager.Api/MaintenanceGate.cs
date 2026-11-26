@@ -2,19 +2,17 @@ using RnRomManager.Core.Backups;
 
 namespace RnRomManager.Api;
 
-/// <summary>B27.4: endpoint metadata for long-lived streams that don't hold a live restore back (they read files, not tables).</summary>
-public sealed class MaintenanceExempt
-{
-    public static readonly MaintenanceExempt Instance = new();
-}
-
 /// <summary>
 /// B27.4: the maintenance window behind a live restore. Its middleware (right after the security headers, before auth,
 /// since cookie validation reads <c>users</c>) answers every <c>/api</c> and <c>/health/ready</c> request but the owning
 /// one <c>503 Maintenance</c> while open, and counts the in-flight <c>/api</c> requests (not <see cref="MaintenanceExempt"/>
 /// ones) so <see cref="TryEnterAsync"/> can wait for them. Opening also holds the audit writer until it closes.
 /// </summary>
-public sealed class MaintenanceGate(IHttpContextAccessor accessor, AuditWriter audit, TimeProvider time, ILogger<MaintenanceGate> logger)
+public sealed class MaintenanceGate(
+    IHttpContextAccessor accessor,
+    AuditWriter audit,
+    TimeProvider time,
+    ILogger<MaintenanceGate> logger)
     : IMaintenanceWindow
 {
     /// <summary>How long in-flight requests get to finish before the restore is refused (<c>409 Busy</c>).</summary>
@@ -137,7 +135,7 @@ public sealed class MaintenanceGate(IHttpContextAccessor accessor, AuditWriter a
         return new Handle(this);
     }
 
-    private void Exit()
+    internal void Exit()
     {
         audit.Release();
         Close();
@@ -150,18 +148,6 @@ public sealed class MaintenanceGate(IHttpContextAccessor accessor, AuditWriter a
         {
             _open = false;
             _owner = null;
-        }
-    }
-
-    private sealed class Handle(MaintenanceGate gate) : IAsyncDisposable
-    {
-        private int _disposed;
-
-        public ValueTask DisposeAsync()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) == 0)
-                gate.Exit();
-            return ValueTask.CompletedTask;
         }
     }
 }

@@ -8,7 +8,11 @@ namespace RnRomManager.Api;
 /// Saving the settings wakes it to reschedule; missed runs aren't caught up; a run that finds a manual backup running
 /// is skipped (<c>Info</c>). Failures are logged at Error by <see cref="BackupService"/>.
 /// </summary>
-public sealed class BackupScheduler(BackupService backups, TimeZoneInfo zone, TimeProvider time, ILogger<BackupScheduler> logger)
+public sealed class BackupScheduler(
+    BackupService backups,
+    TimeZoneInfo zone,
+    TimeProvider time,
+    ILogger<BackupScheduler> logger)
     : BackgroundService
 {
     /// <summary>How long to wait before re-reading the settings after the database failed.</summary>

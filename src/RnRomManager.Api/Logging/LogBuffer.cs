@@ -2,9 +2,6 @@ using System.Threading.Channels;
 
 namespace RnRomManager.Api.Logging;
 
-/// <summary>One rendered log event for the live view (L1). Times are UTC.</summary>
-public sealed record LogEntry(long Id, DateTime Time, string Level, string Logger, string Message, string? Exception);
-
 /// <summary>
 /// The last <see cref="Capacity"/> log events in memory, fed by <see cref="MemoryLogTarget"/> (L1). Ids start at the
 /// creation time in Unix ms × 1000 and increase by one, so they keep increasing across restarts (an SSE client's
@@ -24,7 +21,12 @@ public sealed class LogBuffer(TimeProvider time, int capacity = LogBuffer.Defaul
 
     public int Capacity => capacity;
 
-    public LogEntry Add(DateTime timeUtc, string level, string logger, string message, string? exception)
+    public LogEntry Add(
+        DateTime timeUtc,
+        string level,
+        string logger,
+        string message,
+        string? exception)
     {
         lock (_lock)
         {
@@ -77,19 +79,10 @@ public sealed class LogBuffer(TimeProvider time, int capacity = LogBuffer.Defaul
         }
     }
 
-    private void Unsubscribe(Channel<LogEntry> channel)
+    internal void Unsubscribe(Channel<LogEntry> channel)
     {
         lock (_lock)
             _subscribers.Remove(channel);
         channel.Writer.TryComplete();
-    }
-
-    public sealed class Subscription(LogBuffer owner, Channel<LogEntry> channel, IReadOnlyList<LogEntry> backlog) : IDisposable
-    {
-        public IReadOnlyList<LogEntry> Backlog => backlog;
-
-        public ChannelReader<LogEntry> Events => channel.Reader;
-
-        public void Dispose() => owner.Unsubscribe(channel);
     }
 }

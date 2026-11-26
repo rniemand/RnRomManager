@@ -15,12 +15,6 @@ namespace RnRomManager.Api.Endpoints;
 /// </summary>
 public static class CollectionEndpoints
 {
-    public sealed record CreateCollectionRequest(string? Name, string? Notes);
-
-    public sealed record AddGamesRequest(IReadOnlyList<Guid>? GameIds);
-
-    public sealed record CoverUrlRequest(string? Url);
-
     public static RouteGroupBuilder MapCollectionEndpoints(this RouteGroupBuilder api)
     {
         var collections = api.MapGroup("/collections");
@@ -127,7 +121,11 @@ public static class CollectionEndpoints
     };
 
     /// <summary>A successful edit answers with the fresh detail (B4, B8, B11).</summary>
-    internal static async Task<IResult> DetailResultAsync(HttpContext ctx, CollectionResult result, CollectionService service, Guid id)
+    internal static async Task<IResult> DetailResultAsync(
+        HttpContext ctx,
+        CollectionResult result,
+        CollectionService service,
+        Guid id)
     {
         if (result.Error != CollectionResult.Failure.None)
             return ToResult(ctx, result, _ => Results.Empty);

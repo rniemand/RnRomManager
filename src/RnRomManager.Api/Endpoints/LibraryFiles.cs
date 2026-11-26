@@ -11,7 +11,11 @@ namespace RnRomManager.Api.Endpoints;
 /// Opens library ZIPs for streaming (spec §3.1): <c>FileShare.Read | FileShare.Delete</c>, so an atomic replace or a
 /// delete still works mid-download. A missing ZIP or entry is a <c>404</c> (the UI reloads the game, §11).
 /// </summary>
-public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader reader, ISystemRegistry systems, ILogger<LibraryFiles> logger)
+public sealed class LibraryFiles(
+    IOptions<PathsOptions> paths,
+    InfoJsonReader reader,
+    ISystemRegistry systems,
+    ILogger<LibraryFiles> logger)
 {
     public IResult? OpenZip(HttpContext ctx, GameRow game, out FileStream? stream)
     {
@@ -32,7 +36,12 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
     /// checked resolver (no links, regular file only). A missing or unsafe file, a pointer that isn't a plain name,
     /// and a name another game also claims in that folder (<paramref name="claims"/>) are a <c>404</c>.
     /// </summary>
-    public IResult? OpenExternal(HttpContext ctx, GameRow game, string externalFileName, IEnumerable<ExternalRomRow> claims, out FileStream? stream)
+    public IResult? OpenExternal(
+        HttpContext ctx,
+        GameRow game,
+        string externalFileName,
+        IEnumerable<ExternalRomRow> claims,
+        out FileStream? stream)
     {
         stream = null;
         var folder = game.ZipPath[..(game.ZipPath.LastIndexOf('/') + 1)];
@@ -73,7 +82,12 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
     /// The entry stream, capped at <paramref name="maxBytes"/>. It owns the ZIP (disposing the stream closes it), and the
     /// ZIP is also disposed with the response.
     /// </summary>
-    public IResult? OpenEntry(HttpContext ctx, GameRow game, string entry, long maxBytes, out Stream? stream)
+    public IResult? OpenEntry(
+        HttpContext ctx,
+        GameRow game,
+        string entry,
+        long maxBytes,
+        out Stream? stream)
     {
         stream = null;
         LibraryZip? zip = null;
@@ -95,7 +109,12 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
     /// GP3: the whole entry, buffered up to <paramref name="maxBytes"/> before responding, so a failure is never a
     /// <c>200</c> cut off mid-body (the central directory's length isn't trusted).
     /// </summary>
-    public IResult? ReadEntry(HttpContext ctx, GameRow game, string entry, long maxBytes, out byte[]? bytes)
+    public IResult? ReadEntry(
+        HttpContext ctx,
+        GameRow game,
+        string entry,
+        long maxBytes,
+        out byte[]? bytes)
     {
         bytes = null;
         try
@@ -117,7 +136,11 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
     /// B4: the release's note. Missing → <c>404</c>; over 64 KiB → <c>409 NoteTooLarge</c>; an unreadable ZIP →
     /// <c>409 TargetZipUnreadable</c>. Only the entry is read, so a newer-schema ZIP still works.
     /// </summary>
-    public IResult? ReadNote(HttpContext ctx, GameRow game, string romFileName, out byte[]? bytes)
+    public IResult? ReadNote(
+        HttpContext ctx,
+        GameRow game,
+        string romFileName,
+        out byte[]? bytes)
     {
         bytes = null;
         try
@@ -173,7 +196,11 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
     /// Z3: the file entry named exactly <paramref name="path"/>, capped at its central-directory length; the ZIP is
     /// disposed with the response. The name is only looked up in the archive, never used as a file system path.
     /// </summary>
-    public IResult? OpenRawEntry(HttpContext ctx, GameRow game, string path, out Stream? stream)
+    public IResult? OpenRawEntry(
+        HttpContext ctx,
+        GameRow game,
+        string path,
+        out Stream? stream)
     {
         stream = null;
         ZipArchive? archive = null;
@@ -283,6 +310,3 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         return Problems.Create(ctx, StatusCodes.Status500InternalServerError, "IoError", "The game's ZIP can't be read");
     }
 }
-
-/// <summary>One file entry of a library ZIP (Z2): sizes from the central directory, the DOS time read as UTC.</summary>
-public sealed record ZipEntryInfo(string Path, long SizeBytes, long CompressedSizeBytes, DateTime ModifiedUtc);

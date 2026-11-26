@@ -1,4 +1,3 @@
-using RnRomManager.Api.Http;
 using RnRomManager.Core.Bundles;
 using RnRomManager.Core.Library;
 
@@ -12,8 +11,6 @@ public static class BundleDownloadEndpoints
 {
     /// <summary>B7: ticket URLs and status answers are never cached.</summary>
     public const string NoStore = "private, no-store";
-
-    public sealed record IssueRequest(string? GameId, string? ReleaseSha1, BundleMemberInput? Member);
 
     internal static string FileUrl(string ticket) => $"/api/bundle-downloads/{ticket}/file";
 
@@ -62,21 +59,6 @@ public static class BundleDownloadEndpoints
     /// <summary>B7: a stream with no read or write progress for this long is cancelled and its ticket fails.</summary>
     public static readonly TimeSpan InactivityTimeout = TimeSpan.FromMinutes(2);
 
-    /// <summary>Failure codes a ticket can end with.</summary>
-    public static class ErrorCodes
-    {
-        /// <summary>The identity no longer resolves when the stream opens.</summary>
-        public const string Unavailable = "Unavailable";
-        /// <summary>The shared opener refused (missing or unsafe file, unreadable ZIP).</summary>
-        public const string OpenFailed = "OpenFailed";
-        /// <summary>The client went away mid-stream.</summary>
-        public const string Aborted = "Aborted";
-        /// <summary>No progress for <see cref="InactivityTimeout"/>.</summary>
-        public const string Stalled = "Stalled";
-        /// <summary>A read or write failed, or the file ended before its expected length.</summary>
-        public const string IoError = "IoError";
-    }
-
     public static RouteGroupBuilder MapBundleDownloadEndpoints(this RouteGroupBuilder api)
     {
         var downloads = api.MapGroup("/bundle-downloads");
@@ -92,8 +74,15 @@ public static class BundleDownloadEndpoints
     /// foreign ticket, 409 <c>BundleDownloadConsumed</c> once claimed, finished or expired. A claimed ticket always ends:
     /// <c>sent</c> only after the expected length is written and the response completes, otherwise <c>failed</c>.
     /// </summary>
-    public static async Task<IResult> FileAsync(string ticket, HttpContext ctx, BundleDownloadTickets tickets, IRomRepository roms,
-        IGameRepository games, LibraryFiles files, TimeProvider time, ILoggerFactory loggers)
+    public static async Task<IResult> FileAsync(
+        string ticket,
+        HttpContext ctx,
+        BundleDownloadTickets tickets,
+        IRomRepository roms,
+        IGameRepository games,
+        LibraryFiles files,
+        TimeProvider time,
+        ILoggerFactory loggers)
     {
         ctx.Response.Headers.CacheControl = NoStore;
         var claim = tickets.Claim(ticket, CollectionEndpoints.UserId(ctx));
@@ -137,7 +126,12 @@ public static class BundleDownloadEndpoints
     /// <paramref name="inactivity"/> (a <see cref="TimeoutException"/>) or <paramref name="aborted"/> fires. A source
     /// that ends early is an <see cref="IOException"/>; bytes past <paramref name="length"/> are never read.
     /// </summary>
-    public static async Task CopyAsync(Stream source, Stream target, long length, TimeSpan inactivity, TimeProvider time,
+    public static async Task CopyAsync(
+        Stream source,
+        Stream target,
+        long length,
+        TimeSpan inactivity,
+        TimeProvider time,
         CancellationToken aborted)
     {
         using var idle = new CancellationTokenSource(Timeout.InfiniteTimeSpan, time);
@@ -165,47 +159,6 @@ public static class BundleDownloadEndpoints
         finally
         {
             System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
-        }
-    }
-
-    /// <summary>The ticket's attachment response: full body, explicit length, completion-gated status.</summary>
-    private sealed class TicketStreamResult(string ticket, LibraryAttachment attachment, BundleDownloadTickets tickets, TimeProvider time,
-        ILogger logger) : IResult
-    {
-        public async Task ExecuteAsync(HttpContext ctx)
-        {
-            string? errorCode = ErrorCodes.IoError;
-            try
-            {
-                ctx.Response.StatusCode = StatusCodes.Status200OK;
-                ctx.Response.ContentType = "application/octet-stream";
-                ctx.Response.ContentLength = attachment.Length;
-                var disposition = new Microsoft.Net.Http.Headers.ContentDispositionHeaderValue("attachment");
-                disposition.SetHttpFileName(attachment.FileName);
-                ctx.Response.Headers.ContentDisposition = disposition.ToString();
-
-                await CopyAsync(attachment.Stream, ctx.Response.Body, attachment.Length, InactivityTimeout, time, ctx.RequestAborted);
-                await ctx.Response.CompleteAsync();
-                errorCode = ctx.RequestAborted.IsCancellationRequested ? ErrorCodes.Aborted : null;
-            }
-            catch (Exception ex)
-            {
-                errorCode = ex switch
-                {
-                    TimeoutException => ErrorCodes.Stalled,
-                    OperationCanceledException => ErrorCodes.Aborted,
-                    _ when ctx.RequestAborted.IsCancellationRequested => ErrorCodes.Aborted,
-                    _ => ErrorCodes.IoError,
-                };
-                logger.LogWarning(ex, "Bundle download {Ticket} ({FileName}) failed: {ErrorCode}", ticket, attachment.FileName, errorCode);
-                ctx.Abort();
-            }
-            finally
-            {
-                // B7: abort and dispose before the slot is released.
-                await attachment.DisposeAsync();
-                tickets.Finish(ticket, errorCode);
-            }
         }
     }
 
