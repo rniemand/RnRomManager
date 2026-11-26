@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SystemInfo } from './api/types';
+import type { SystemInfo } from '#lib/types/index.js';
 import { systemFilterOptions } from './systemFilter';
 
 const system = (id: string, displayName: string, shortName: string, romCount: number) =>

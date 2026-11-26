@@ -1,11 +1,12 @@
 <script lang="ts">
+	import DataTable from '#lib/components/common/DataTable.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
-	import BundleDownload from '#lib/components/BundleDownload.svelte';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import SavedBundleQueues from '#lib/components/SavedBundleQueues.svelte';
+	import BundleDownload from '#lib/components/bundles/BundleDownload.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import SavedBundleQueues from '#lib/components/bundles/SavedBundleQueues.svelte';
 	import { formatCount } from '#lib/format.js';
 	import { bundle, maxBundleEntries } from '#lib/stores/bundle.svelte.js';
 
@@ -30,22 +31,22 @@
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 	<h1 class="h3 mb-0 me-auto">Bundle Creator</h1>
-	<button
-		type="button"
-		class="btn btn-sm btn-outline-secondary"
+	<Button
+		variant="secondary"
+		outline
+		size="sm"
+		icon="retry"
 		disabled={!items.length || bundle.refreshing}
-		onclick={() => void bundle.refresh()}
+		onclick={() => void bundle.refresh()}>Refresh</Button
 	>
-		<Icon name="retry" /> Refresh
-	</button>
-	<button
-		type="button"
-		class="btn btn-sm btn-outline-danger"
+	<Button
+		variant="danger"
+		outline
+		size="sm"
+		icon="delete"
 		disabled={!items.length}
-		onclick={() => (clearOpen = true)}
+		onclick={() => (clearOpen = true)}>Clear</Button
 	>
-		<Icon name="delete" /> Clear
-	</button>
 </div>
 
 <p class="text-body-secondary small">
@@ -70,63 +71,54 @@
 	<div class="card">
 		<EmptyState message="The bundle is empty." icon="cart">
 			{#snippet action()}
-				<a class="btn btn-sm btn-primary" href={resolve('/')}>Browse the library</a>
+				<Button variant="primary" size="sm" href={resolve('/')}>Browse the library</Button>
 			{/snippet}
 		</EmptyState>
 	</div>
 {:else}
-	<div class="card">
-		<div class="table-responsive">
-			<table class="table table-sm table-striped table-hover align-middle mb-0">
-				<caption class="visually-hidden">Files in the bundle</caption>
-				<thead class="table-dark">
-					<tr>
-						<th scope="col" class="text-end">#</th>
-						<th scope="col">File</th>
-						<th scope="col">Game</th>
-						<th scope="col">Status</th>
-						<th scope="col"><span class="visually-hidden">Actions</span></th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each items as item, index (item.key)}
-						<tr>
-							<td class="text-end text-nowrap">{index + 1}</td>
-							<td class="text-truncate" style="max-width: 32rem" title={item.fileName}
-								>{item.fileName}</td
-							>
-							<td class="text-truncate" style="max-width: 20rem" title={item.gameTitle}>
-								{#if item.status === 'unavailable'}
-									{item.gameTitle}
-								{:else}
-									<a href={resolve('/games/[id]', { id: item.entry.gameId })}>{item.gameTitle}</a>
-								{/if}
-							</td>
-							<td class="text-nowrap">
-								{#if item.status === 'unavailable'}
-									<span class="badge text-bg-secondary">Unavailable</span>
-								{:else if item.status === 'available'}
-									<span class="badge text-bg-success">Available</span>
-								{:else}
-									<span class="text-body-secondary small">Checking…</span>
-								{/if}
-							</td>
-							<td class="text-end">
-								<button
-									type="button"
-									class="btn btn-sm btn-outline-danger"
-									aria-label="Remove {item.fileName} from the bundle"
-									onclick={() => bundle.remove(item.key)}
-								>
-									<Icon name="delete" />
-								</button>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	</div>
+	<DataTable {items} key={(item) => item.key} caption="Files in the bundle">
+		{#snippet head()}
+			<tr>
+				<th scope="col" class="text-end">#</th>
+				<th scope="col">File</th>
+				<th scope="col">Game</th>
+				<th scope="col">Status</th>
+				<th scope="col"><span class="visually-hidden">Actions</span></th>
+			</tr>
+		{/snippet}
+		{#snippet row(item, index)}
+			<tr>
+				<td class="text-end text-nowrap">{index + 1}</td>
+				<td class="text-truncate file-cell" title={item.fileName}>{item.fileName}</td>
+				<td class="text-truncate game-cell" title={item.gameTitle}>
+					{#if item.status === 'unavailable'}
+						{item.gameTitle}
+					{:else}
+						<a href={resolve('/games/[id]', { id: item.entry.gameId })}>{item.gameTitle}</a>
+					{/if}
+				</td>
+				<td class="text-nowrap">
+					{#if item.status === 'unavailable'}
+						<span class="badge text-bg-secondary">Unavailable</span>
+					{:else if item.status === 'available'}
+						<span class="badge text-bg-success">Available</span>
+					{:else}
+						<span class="text-body-secondary small">Checking…</span>
+					{/if}
+				</td>
+				<td class="text-end">
+					<Button
+						variant="danger"
+						outline
+						size="sm"
+						icon="delete"
+						aria-label="Remove {item.fileName} from the bundle"
+						onclick={() => bundle.remove(item.key)}
+					/>
+				</td>
+			</tr>
+		{/snippet}
+	</DataTable>
 {/if}
 
 <div class="mt-4"><BundleDownload /></div>
@@ -136,11 +128,19 @@
 <ConfirmModal
 	bind:open={clearOpen}
 	title="Clear the bundle?"
+	message="This removes all {formatCount(
+		items.length
+	)} files from the working cart. Saved queues are not affected."
 	confirmLabel="Clear"
 	confirmClass="btn-danger"
 	onconfirm={clearCart}
->
-	<p class="mb-0">
-		This removes all {formatCount(items.length)} files from the working cart. Saved queues are not affected.
-	</p>
-</ConfirmModal>
+/>
+
+<style>
+	.file-cell {
+		max-width: 32rem;
+	}
+	.game-cell {
+		max-width: 20rem;
+	}
+</style>

@@ -9,7 +9,11 @@ public interface IBackupStore
     /// Writes <c>manifest.json</c>, <c>schema.sql</c> and <c>data/&lt;table&gt;.jsonl</c> as a ZIP into
     /// <paramref name="destination"/> (left open), reading every table inside one consistent snapshot.
     /// </summary>
-    Task<BackupManifest> DumpAsync(Stream destination, Guid backupId, DateTimeOffset createdAt, CancellationToken cancellationToken);
+    Task<BackupManifest> DumpAsync(
+        Stream destination,
+        Guid backupId,
+        DateTimeOffset createdAt,
+        CancellationToken cancellationToken);
 
     /// <summary>Migration script names this app version knows (as journalled in <c>schema_versions</c>).</summary>
     IReadOnlySet<string> KnownMigrations { get; }

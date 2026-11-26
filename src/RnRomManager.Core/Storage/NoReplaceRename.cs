@@ -2,34 +2,6 @@ using System.Runtime.InteropServices;
 
 namespace RnRomManager.Core.Storage;
 
-/// <summary>How a <see cref="NoReplaceRename.Move"/> ended.</summary>
-public enum NoReplaceRenameStatus
-{
-    Renamed,
-
-    /// <summary>Something already has the destination name; it was left untouched.</summary>
-    DestinationExists,
-
-    /// <summary>Source and destination are on different volumes: only a copy can move the file. Nothing was changed.</summary>
-    CrossDevice,
-
-    /// <summary>The OS or this filesystem has no rename that refuses to replace (e.g. an NFS mount). Nothing was changed.</summary>
-    Unsupported,
-
-    /// <summary>The source, or the destination's folder, doesn't exist.</summary>
-    NotFound,
-
-    /// <summary>Any other failure (permissions, a sharing violation, IO). Nothing was renamed.</summary>
-    Failed,
-}
-
-/// <param name="NativeError">The Win32 error or errno; 0 on success.</param>
-/// <param name="Details">Why, for every status but <see cref="NoReplaceRenameStatus.Renamed"/>.</param>
-public readonly record struct NoReplaceRenameResult(NoReplaceRenameStatus Status, int NativeError = 0, string? Details = null)
-{
-    public bool Renamed => Status == NoReplaceRenameStatus.Renamed;
-}
-
 /// <summary>
 /// A rename within one filesystem that never replaces an existing entry and never falls back to a copy (spec W6):
 /// <c>MoveFileExW</c> without <c>MOVEFILE_REPLACE_EXISTING</c> or <c>MOVEFILE_COPY_ALLOWED</c> on Windows,
@@ -77,7 +49,10 @@ public static class NoReplaceRename
     /// Publishes a verified staging file under a free name. If the native no-replace rename is unavailable,
     /// a hard link claims the final name atomically. The staging alias is then removed on a best-effort basis.
     /// </summary>
-    internal static NoReplaceRenameResult PublishStaged(string staging, string destination, ExternalFileSnapshot expected,
+    internal static NoReplaceRenameResult PublishStaged(
+        string staging,
+        string destination,
+        ExternalFileSnapshot expected,
         Func<string, string, NoReplaceRenameResult>? rename = null) =>
         MoveVerified(staging, destination, expected, rename, requireSourceRemoval: false);
 
@@ -85,12 +60,19 @@ public static class NoReplaceRename
     /// Moves a verified file under a free name. The hard-link fallback reports success only when the original
     /// name is free. If removing it fails, the verified destination is kept for recovery.
     /// </summary>
-    internal static NoReplaceRenameResult MoveVerified(string source, string destination, ExternalFileSnapshot expected,
+    internal static NoReplaceRenameResult MoveVerified(
+        string source,
+        string destination,
+        ExternalFileSnapshot expected,
         Func<string, string, NoReplaceRenameResult>? rename = null) =>
         MoveVerified(source, destination, expected, rename, requireSourceRemoval: true);
 
-    private static NoReplaceRenameResult MoveVerified(string source, string destination, ExternalFileSnapshot expected,
-        Func<string, string, NoReplaceRenameResult>? rename, bool requireSourceRemoval)
+    private static NoReplaceRenameResult MoveVerified(
+        string source,
+        string destination,
+        ExternalFileSnapshot expected,
+        Func<string, string, NoReplaceRenameResult>? rename,
+        bool requireSourceRemoval)
     {
         var result = (rename ?? Move)(source, destination);
         if (result.Status != NoReplaceRenameStatus.Unsupported)
@@ -188,8 +170,12 @@ public static class NoReplaceRename
     };
 
     [DllImport("libc", SetLastError = true)]
-    private static extern int renameat2(int oldDirFd, [MarshalAs(UnmanagedType.LPUTF8Str)] string oldPath, int newDirFd,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string newPath, uint flags);
+    private static extern int renameat2(
+        int oldDirFd,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string oldPath,
+        int newDirFd,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string newPath,
+        uint flags);
 
     [DllImport("libc", SetLastError = true)]
     private static extern int link([MarshalAs(UnmanagedType.LPUTF8Str)] string oldPath,

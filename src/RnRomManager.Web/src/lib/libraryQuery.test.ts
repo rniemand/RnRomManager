@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-	facetsApiUrl,
-	gamesApiUrl,
-	hasFilters,
-	parseFilters,
-	toSearch,
-	type LibraryFilters
-} from './libraryQuery';
+import { facetsApiUrl, gamesApiUrl, hasFilters, parseFilters, toSearch } from './libraryQuery';
+import type { LibraryFilters } from '#lib/types/index.js';
 
 const parse = (search: string) => parseFilters(new URLSearchParams(search));
 

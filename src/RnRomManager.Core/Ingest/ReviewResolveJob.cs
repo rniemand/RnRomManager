@@ -8,7 +8,11 @@ namespace RnRomManager.Core.Ingest;
 /// and <see cref="Request"/> before <c>StartAsync</c> (the job is transient, one per request). Not cancellable: a
 /// resolution runs to its end. The summary carries the outcome; one <c>job_items</c> row per review row acted on.
 /// </summary>
-public sealed class ReviewResolveJob(ReviewResolver resolver, IJobItemRepository items, TimeProvider time, ILogger<ReviewResolveJob> logger) : IJob
+public sealed class ReviewResolveJob(
+    ReviewResolver resolver,
+    IJobItemRepository items,
+    TimeProvider time,
+    ILogger<ReviewResolveJob> logger) : IJob
 {
     public long ReviewId { get; set; }
 

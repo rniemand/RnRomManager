@@ -14,7 +14,6 @@ using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Storage;
-using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -240,15 +239,12 @@ public class IngestPipelineTests
     private Task<IngestItemResult?> IngestAsync(IngestFile file) =>
         _factory.Services.GetRequiredService<IngestPipeline>().ProcessAsync(file, Guid.NewGuid(), new CircuitBreaker(), CancellationToken.None);
 
-    private sealed record AuditRow(string Action, string? SystemId, Guid? GameId, int? UserId, string? Username, Guid? JobId, string? Path,
-        string? TargetPath, string? Details);
-
     /// <summary>AU4 rows written so far, oldest first (after the writer drained the queue).</summary>
-    private async Task<List<AuditRow>> AuditRowsAsync()
+    private async Task<List<IngestPipelineAuditRow>> AuditRowsAsync()
     {
         await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
         await using var db = Service<IDbConnectionFactory>().Create();
-        return (await db.QueryAsync<AuditRow>("""
+        return (await db.QueryAsync<IngestPipelineAuditRow>("""
             SELECT action AS Action, system_id AS SystemId, game_id AS GameId, user_id AS UserId, username AS Username, job_id AS JobId,
                    path AS Path, target_path AS TargetPath, details AS Details
             FROM audit_events WHERE action NOT IN ('SignedIn', 'SignInFailed', 'LockedOut', 'PasswordChanged') ORDER BY id
@@ -1148,7 +1144,11 @@ public class IngestPipelineTests
     [TestCase("md", "odd.md", 16777729, "TooLarge")]
     [TestCase("s32x", "odd.32x", 16383, "TooSmall")]
     [TestCase("s32x", "odd.32x", 4194305, "TooLarge")]
-    public async Task Sega_OutsideTheSizeLimits_Fails(string system, string name, int size, string reason)
+    public async Task Sega_OutsideTheSizeLimits_Fails(
+        string system,
+        string name,
+        int size,
+        string reason)
     {
         var result = await IngestAsync(Drop(system, name, GameGear(size, 151, header: false)));
 
@@ -1282,7 +1282,11 @@ public class IngestPipelineTests
             Does.Contain("Turbo Comet (USA, Europe).md: Ingested").And.Contain("README.md: Failed TooSmall"));
     }
 
-    private static byte[] Coleco(int size, int seed, byte first, byte second)
+    private static byte[] Coleco(
+        int size,
+        int seed,
+        byte first,
+        byte second)
     {
         var rom = Atari(size, seed);
         (rom[0], rom[1]) = (first, second);
@@ -1328,7 +1332,7 @@ public class IngestPipelineTests
         var result = await Service<IngestPipeline>().ProcessAsync(Drop("gb", "a.gb", TetrisJ), jobId, new CircuitBreaker(), CancellationToken.None);
 
         var row = (await AuditRowsAsync()).Single();
-        Assert.That(row, Is.EqualTo(new AuditRow(AuditActions.Ingested, "gb", result!.GameId, null, null, jobId, "ingest/gb/a.gb",
+        Assert.That(row, Is.EqualTo(new IngestPipelineAuditRow(AuditActions.Ingested, "gb", result!.GameId, null, null, jobId, "ingest/gb/a.gb",
             "roms/gb/T/Tetris.zip", "release Tetris (Japan).gb")));
     }
 
@@ -1656,7 +1660,7 @@ public class IngestPipelineTests
         Assert.That(File.Exists(moved), Is.True);
         var errorTxt = File.ReadAllText(moved + ".error.txt");
         Assert.That(errorTxt, Does.Contain("UnsupportedType").And.Contain($"job: {jobId}").And.Contain("time: "));
-        Assert.That((await AuditRowsAsync()).Single(), Is.EqualTo(new AuditRow(AuditActions.MovedToFailed, "gb", null, null, null, jobId,
+        Assert.That((await AuditRowsAsync()).Single(), Is.EqualTo(new IngestPipelineAuditRow(AuditActions.MovedToFailed, "gb", null, null, null, jobId,
             "ingest/gb/readme.txt", "ingest/gb/_failed/readme.txt", IngestFailures.UnsupportedType)));
     }
 

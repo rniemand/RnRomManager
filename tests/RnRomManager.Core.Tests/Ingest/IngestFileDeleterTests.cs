@@ -27,12 +27,9 @@ public class IngestFileDeleterTests
         _dir = new TempDir();
         _paths = new PathsOptions { Ingest = _dir.Combine("ingest") };
         Directory.CreateDirectory(Path.Combine(_paths.Ingest, "gb", "_failed"));
-        var gb = Substitute.For<ISystemHandler>();
-        gb.EmbedRomsInZip.Returns(true);
-        gb.Id.Returns("gb");
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         gb.Family.Returns("gameboy");
-        var zipRoms = Substitute.For<ISystemHandler>();
-        zipRoms.Id.Returns("zipx");
+        var zipRoms = TestHandlers.Fake("zipx");
         zipRoms.Family.Returns("zipx");
         zipRoms.RomExtensions.Returns([".dosz", ".zip"]);
         _systems = new SystemRegistry([gb, new ExternalTestHandler(), zipRoms]);

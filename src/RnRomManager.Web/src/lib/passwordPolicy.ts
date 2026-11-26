@@ -1,17 +1,11 @@
+import type { ChangePasswordForm, FieldErrors } from '#lib/types/index.js';
+
 /** Spec §9.1 password policy, mirrored client-side for instant feedback (the API checks it again). */
 
 export const minLength = 12;
 export const maxLength = 128;
 
 export const policyHint = `${minLength}–${maxLength} characters, and not the same as your username.`;
-
-export interface ChangePasswordForm {
-	currentPassword: string;
-	newPassword: string;
-	confirmPassword: string;
-}
-
-export type FieldErrors = Partial<Record<keyof ChangePasswordForm, string>>;
 
 /** Errors per field; empty when the form can be sent. */
 export function validateChangePassword(form: ChangePasswordForm, username: string): FieldErrors {

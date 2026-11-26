@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GameDetail, SaveItem } from './api/types';
+import type { GameDetail, SaveItem } from '#lib/types/index.js';
 import { descriptionError, fileError, maxSaveBytes, nameError, playableRom } from './saves';
 
 describe('field rules (B8)', () => {

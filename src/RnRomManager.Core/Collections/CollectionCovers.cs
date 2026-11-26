@@ -18,7 +18,11 @@ public sealed class CollectionCovers(IOptions<PathsOptions> paths, ILogger<Colle
     /// The caller updates the row, then calls <see cref="DeleteOtherFormat"/>.
     /// </summary>
     /// <returns><c>png</c> or <c>jpg</c>: the value for <c>cover_format</c>.</returns>
-    public async Task<string> WriteAsync(Guid id, ImageFormat format, byte[] bytes, CancellationToken cancellationToken)
+    public async Task<string> WriteAsync(
+        Guid id,
+        ImageFormat format,
+        byte[] bytes,
+        CancellationToken cancellationToken)
     {
         var extension = ImageFormats.Extension(format);
         var temp = Path.Combine(paths.Value.Collections, $"{id:D}.{Guid.NewGuid():N}.tmp");

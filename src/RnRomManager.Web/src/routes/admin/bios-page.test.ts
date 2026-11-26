@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { BiosInfo } from '#lib/api/types.js';
+import type { BiosInfo } from '#lib/types/index.js';
 import { formatSize } from '#lib/format.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 

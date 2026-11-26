@@ -25,9 +25,7 @@ public class LibraryZipCompressionTests
     public void SetUp()
     {
         _dir = new TempDir();
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns("gb");
+        var handler = TestHandlers.Fake("gb", embedRomsInZip: true);
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([handler]);
         _reader = new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(),

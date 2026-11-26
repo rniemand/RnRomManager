@@ -1,15 +1,20 @@
 <script lang="ts">
+	import Switch from '#lib/components/forms/Switch.svelte';
+	import NumberInput from '#lib/components/forms/NumberInput.svelte';
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import FormField from '#lib/components/forms/FormField.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import RestoreBackupModal from '#lib/components/modals/RestoreBackupModal.svelte';
 	import { onMount } from 'svelte';
 	import { api, resetClient } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { BackupFile, BackupRestoreResult, BackupStatus } from '#lib/api/types.js';
-	import AccordionItem from '#lib/components/AccordionItem.svelte';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import type { BackupFile, BackupRestoreResult, BackupStatus } from '#lib/types/index.js';
+	import AccordionItem from '#lib/components/layout/AccordionItem.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatCount, formatDateTime } from '#lib/format.js';
 	import { navigate } from '#lib/navigation.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -173,50 +178,40 @@
 		{#snippet header()}Schedule{/snippet}
 		<form novalidate onsubmit={save} aria-labelledby="backup-schedule">
 			{#if saveError}<ErrorAlert error={saveError} ondismiss={() => (saveError = null)} />{/if}
-			<div class="form-check form-switch mb-3">
-				<input
-					id="backup-enabled"
-					class="form-check-input"
-					type="checkbox"
-					role="switch"
-					bind:checked={form.enabled}
-				/>
-				<label class="form-check-label" for="backup-enabled">Daily backups enabled</label>
-			</div>
+			<Switch
+				id="backup-enabled"
+				label="Daily backups enabled"
+				wrapperClass="mb-3"
+				bind:checked={form.enabled}
+			/>
 			<div class="row g-3 mb-3">
 				<div class="col-12 col-sm-7">
-					<label class="form-label" for="backup-time"
-						>Daily at (server time, {status.timeZone})</label
-					>
-					<input
-						id="backup-time"
-						class="form-control"
-						class:is-invalid={errors.time}
-						type="time"
-						bind:value={form.time}
-					/>
+					<FormField label="Daily at (server time, {status.timeZone})" for="backup-time">
+						<TextInput
+							id="backup-time"
+							class={errors.time ? 'is-invalid' : undefined}
+							type="time"
+							bind:value={form.time}
+						/>
+					</FormField>
 					{#if errors.time}<div class="invalid-feedback">{errors.time}</div>{/if}
 				</div>
 				<div class="col-12 col-sm-5">
-					<label class="form-label" for="backup-retention">Backups to keep</label>
-					<input
-						id="backup-retention"
-						class="form-control"
-						class:is-invalid={errors.retention}
-						type="number"
-						min="1"
-						max="365"
-						step="1"
-						bind:value={form.retention}
-					/>
+					<FormField label="Backups to keep" for="backup-retention">
+						<NumberInput
+							id="backup-retention"
+							class={errors.retention ? 'is-invalid' : undefined}
+							min="1"
+							max="365"
+							step="1"
+							bind:value={form.retention}
+						/>
+					</FormField>
 					{#if errors.retention}<div class="invalid-feedback">{errors.retention}</div>{/if}
 				</div>
 			</div>
 			<div>
-				<button type="submit" class="btn btn-primary" disabled={saving}>
-					{#if saving}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-					Save
-				</button>
+				<Button type="submit" variant="primary" busy={saving}>Save</Button>
 			</div>
 		</form>
 	</AccordionItem>
@@ -241,19 +236,13 @@
 			</dd>
 		</dl>
 		<div>
-			<button
-				type="button"
-				class="btn btn-outline-primary"
-				disabled={backingUp || status.running}
-				onclick={backUpNow}
+			<Button
+				variant="primary"
+				outline
+				icon="download"
+				busy={backingUp || status.running}
+				onclick={backUpNow}>{backingUp || status.running ? 'Backing up…' : 'Back up now'}</Button
 			>
-				{#if backingUp || status.running}
-					<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-					Backing up…
-				{:else}
-					<Icon name="download" /> Back up now
-				{/if}
-			</button>
 		</div>
 	</AccordionItem>
 	<AccordionItem id="backups-list-body" headingId="backups-list" open flush>
@@ -279,11 +268,13 @@
 								<td class="text-nowrap">{formatDateTime(backup.createdAt)}</td>
 								<td class="text-end"><FileSize bytes={backup.sizeBytes} /></td>
 								<td class="text-end">
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-danger"
+									<Button
+										variant="danger"
+										outline
+										size="sm"
+										icon="restore"
 										aria-label="Restore {backup.fileName}"
-										onclick={() => askRestore(backup)}><Icon name="restore" /> Restore</button
+										onclick={() => askRestore(backup)}>Restore</Button
 									>
 								</td>
 							</tr>
@@ -295,32 +286,10 @@
 	</AccordionItem>
 {/if}
 
-<ConfirmModal
+<RestoreBackupModal
 	bind:open={restoreOpen}
-	title="Restore backup"
-	confirmLabel="Restore"
-	confirmClass="btn-danger"
+	backup={restoring}
 	busy={restoreBusy}
+	error={restoreError}
 	onconfirm={restore}
->
-	{#if restoring}
-		<p>
-			Restore <strong class="font-monospace">{restoring.fileName}</strong> from {formatDateTime(
-				restoring.createdAt
-			)}?
-		</p>
-		<ul>
-			<li>Every table in the database is replaced by the backup's.</li>
-			<li>A safety backup of the current database is taken first.</li>
-			<li>Everyone, including you, is signed out.</li>
-			<li>Run Integrity → Run quick afterwards: the library ZIPs may be newer than the backup.</li>
-		</ul>
-		{#if restoreError}
-			<div class="alert alert-danger mb-0" role="alert">
-				<strong>{restoreError.title}</strong>{#if restoreError.detail}<div>
-						{restoreError.detail}
-					</div>{/if}
-			</div>
-		{/if}
-	{/if}
-</ConfirmModal>
+/>

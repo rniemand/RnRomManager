@@ -24,9 +24,7 @@ public class RemovedFileRestorerTests
     {
         _dir = new TempDir();
         _paths = new PathsOptions { Ingest = _dir.Combine("ingest") };
-        var gb = Substitute.For<ISystemHandler>();
-        gb.EmbedRomsInZip.Returns(true);
-        gb.Id.Returns("gb");
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         gb.Family.Returns("gameboy");
         foreach (var system in new[] { "gb", "ext" })
             Directory.CreateDirectory(Path.Combine(_paths.Ingest, system, "_removed"));

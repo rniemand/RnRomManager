@@ -5,60 +5,6 @@ using RnRomManager.Core.Storage;
 namespace RnRomManager.Core.Library;
 
 /// <summary>
-/// What a write puts in the ZIP: the complete new <c>info.json</c>, plus content for the entries that are new or
-/// replaced (full entry names, e.g. <c>roms/Tetris (World).gb</c>). Every other entry the new <c>info.json</c> lists
-/// is copied from the existing ZIP; entries it no longer lists are dropped. The note of every listed ROM
-/// (<see cref="LibraryZip.NoteEntry"/>) is copied too unless it's in <paramref name="NewEntries"/> or
-/// <paramref name="RemovedEntries"/>; notes of ROMs no longer listed are dropped.
-/// <para>
-/// A ROM with an <c>externalFileName</c> has no entry: its bytes are a file next to the ZIP, so a
-/// <c>roms/</c> entry for it in <paramref name="NewEntries"/> is rejected like any unlisted entry.
-/// </para>
-/// </summary>
-/// <param name="ExternalFiles">
-/// The external ROM files this write placed or renamed, keyed by <c>externalFileName</c> (compared ignoring case),
-/// each with the snapshot its move returned. A checked write verifies exactly these, before and at publication;
-/// external files the write didn't touch are not looked at, so a game with a missing file can still be edited.
-/// </param>
-/// <param name="Saves">B3: null carries the existing <c>saves/</c> folder; set only by the save operations and merge.</param>
-public sealed record LibraryZipChanges(
-    InfoJsonGame Info,
-    IReadOnlyDictionary<string, Func<Stream>> NewEntries,
-    IReadOnlySet<string>? RemovedEntries = null,
-    IReadOnlyDictionary<string, ExternalFileSnapshot>? ExternalFiles = null,
-    SavesChange? Saves = null);
-
-/// <summary>
-/// B3: the new <c>saves.json</c> (<paramref name="Index"/>, null removes it and every save) and where each listed
-/// entry comes from: <paramref name="Added"/> (new bytes, keyed by entry name, each listed in the index), else the
-/// existing ZIP unless the entry is in <paramref name="Removed"/>. Unlisted <c>saves/</c> entries are dropped.
-/// </summary>
-public sealed record SavesChange(byte[]? Index, IReadOnlyDictionary<string, Func<Stream>> Added, IReadOnlySet<string> Removed);
-
-/// <summary>A written entry didn't match <c>info.json</c> (<c>VerifyFailed</c>, spec §6.1, §7.2 step 9).</summary>
-public sealed class LibraryZipVerifyException(string entryName, string problem, Exception? inner = null)
-    : Exception($"ZIP entry '{entryName}': {problem}", inner)
-{
-    public string EntryName { get; } = entryName;
-}
-
-/// <summary>Test seams of <see cref="LibraryZipWriter.WriteCheckedAsync"/>: points where a test swaps a file mid-write.</summary>
-public sealed class LibraryZipWriterHooks
-{
-    /// <summary>Runs once the temp ZIP is written and closed, before it is reopened for verification.</summary>
-    public Action? AfterTempClosed { get; init; }
-
-    /// <summary>Runs before each publication attempt (0 = the first), before that attempt's checks.</summary>
-    public Action<int>? BeforePublicationAttempt { get; init; }
-
-    /// <summary>Returns true to make that attempt's rename fail as a sharing violation would.</summary>
-    public Func<int, bool>? FailPublicationAttempt { get; init; }
-
-    /// <summary>Replaces the native no-replace rename for a new ZIP.</summary>
-    public Func<string, string, NoReplaceRenameResult>? Rename { get; init; }
-}
-
-/// <summary>
 /// Atomic library ZIP writes (spec §6.1): stream into <c>&lt;name&gt;.zip.tmp</c> next to the target, re-open it and
 /// verify <c>info.json</c> and every ROM's size + SHA1, then <c>File.Move(overwrite)</c> with 3 retries at 500 ms
 /// (§3.1). Any failure deletes the tmp file and leaves the original untouched.
@@ -87,7 +33,11 @@ public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compr
     /// entry larger than <paramref name="fastAbove"/>, <see cref="CompressionLevel.Optimal"/> for everything else
     /// (<c>info.json</c>, images, notes, smaller ROMs).
     /// </summary>
-    public static CompressionLevel CompressionFor(string entryName, long sizeBytes, long fastAbove, ZipCompression compression) => compression switch
+    public static CompressionLevel CompressionFor(
+        string entryName,
+        long sizeBytes,
+        long fastAbove,
+        ZipCompression compression) => compression switch
     {
         ZipCompression.Store => CompressionLevel.NoCompression,
         ZipCompression.High => CompressionLevel.SmallestSize,
@@ -103,7 +53,11 @@ public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compr
     /// Disposed by the writer once verified; disposing it again is harmless.</param>
     /// <exception cref="LibraryZipVerifyException">An entry (copied or new) failed verification.</exception>
     /// <exception cref="IOException">Write or move failed (<c>IoError</c>).</exception>
-    public async Task WriteAsync(string target, LibraryZip? existing, LibraryZipChanges changes, CancellationToken ct = default)
+    public async Task WriteAsync(
+        string target,
+        LibraryZip? existing,
+        LibraryZipChanges changes,
+        CancellationToken ct = default)
     {
         var (entries, notes, saves) = Plan(existing, changes);
         var tmp = target + ".tmp";
@@ -153,8 +107,13 @@ public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compr
     /// </returns>
     /// <exception cref="LibraryZipVerifyException">An entry or a touched external file failed verification (<c>VerifyFailed</c>).</exception>
     /// <exception cref="IOException">An unsafe or occupied path, or a failed write or rename (<c>IoError</c>).</exception>
-    public async Task<ExternalFileSnapshot> WriteCheckedAsync(string libraryRoot, string target, LibraryZip? existing, LibraryZipChanges changes,
-        CancellationToken ct = default, LibraryZipWriterHooks? hooks = null)
+    public async Task<ExternalFileSnapshot> WriteCheckedAsync(
+        string libraryRoot,
+        string target,
+        LibraryZip? existing,
+        LibraryZipChanges changes,
+        CancellationToken ct = default,
+        LibraryZipWriterHooks? hooks = null)
     {
         var (entries, notes, saves) = Plan(existing, changes);
         target = Path.GetFullPath(target);
@@ -219,12 +178,9 @@ public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compr
         }
     }
 
-    /// <summary>One <c>saves/</c> entry to write: its declared size, new bytes (verified by <paramref name="Sha1"/>) or null to copy it.</summary>
-    private sealed record SaveEntryPlan(string Name, long Size, Func<Stream>? New = null, string? Sha1 = null);
-
     private static (Dictionary<string, long> Entries, List<string> Notes, List<SaveEntryPlan> Saves) Plan(LibraryZip? existing, LibraryZipChanges changes)
     {
-        if (existing is not null && existing.InfoJson?.Kind is not InfoJsonReadResult.Outcome.Ok)
+        if (existing is not null && existing.InfoJson?.Kind is not InfoJsonReadResultOutcome.Ok)
             throw new InvalidOperationException($"Existing ZIP '{existing.Path}' has no valid current info.json; it can't be written from.");
 
         // B12: the reader refuses a bigger info.json, which would leave the game unreadable.
@@ -343,7 +299,11 @@ public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compr
     /// Gives the staged ZIP a whole-second mtime after the old one's when a sync couldn't tell them apart otherwise
     /// (same size, mtime not later).
     /// </summary>
-    private static ExternalFileSnapshot Outdate(string libraryRoot, string tmp, ExternalFileSnapshot staged, ExternalFileSnapshot old)
+    private static ExternalFileSnapshot Outdate(
+        string libraryRoot,
+        string tmp,
+        ExternalFileSnapshot staged,
+        ExternalFileSnapshot old)
     {
         var oldSecond = MirrorEntry.WholeSeconds(old.LastWriteTimeUtc);
         if (staged.Length != old.Length || MirrorEntry.WholeSeconds(staged.LastWriteTimeUtc) > oldSecond)
@@ -358,8 +318,15 @@ public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compr
         return check.Snapshot;
     }
 
-    private static async Task PublishAsync(string libraryRoot, string tmp, string target, string folder, ExternalFileSnapshot staged,
-        ExternalFileSnapshot? replacing, List<(string Name, ExternalFileSnapshot Snapshot, long SizeBytes)> externalFiles, LibraryZipWriterHooks? hooks,
+    private static async Task PublishAsync(
+        string libraryRoot,
+        string tmp,
+        string target,
+        string folder,
+        ExternalFileSnapshot staged,
+        ExternalFileSnapshot? replacing,
+        List<(string Name, ExternalFileSnapshot Snapshot, long SizeBytes)> externalFiles,
+        LibraryZipWriterHooks? hooks,
         CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
@@ -403,8 +370,15 @@ public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compr
     }
 
     private static async Task WriteTmpAsync(
-        FileStream file, LibraryZip? existing, LibraryZipChanges changes, Dictionary<string, long> entries, List<string> notes,
-        List<SaveEntryPlan> saves, long fastAbove, ZipCompression compression, CancellationToken ct)
+        FileStream file,
+        LibraryZip? existing,
+        LibraryZipChanges changes,
+        Dictionary<string, long> entries,
+        List<string> notes,
+        List<SaveEntryPlan> saves,
+        long fastAbove,
+        ZipCompression compression,
+        CancellationToken ct)
     {
         await using var archive = new ZipArchive(file, ZipArchiveMode.Create, leaveOpen: true);
 
@@ -441,7 +415,12 @@ public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compr
         }
     }
 
-    private static async Task CopyEntryAsync(ZipArchive archive, string name, Stream source, CompressionLevel level, CancellationToken ct)
+    private static async Task CopyEntryAsync(
+        ZipArchive archive,
+        string name,
+        Stream source,
+        CompressionLevel level,
+        CancellationToken ct)
     {
         await using (source)
         await using (var destination = archive.CreateEntry(name, level).Open())
@@ -462,9 +441,13 @@ public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compr
     /// <c>info.json</c> reads back valid, and every ROM stored in the ZIP has its recorded size and SHA1. B3: every
     /// planned <c>saves/</c> entry exists with its size; only newly written ones are hashed.
     /// </summary>
-    private static async Task VerifyAsync(LibraryZip zip, InfoJsonGame expected, List<SaveEntryPlan> saves, CancellationToken ct)
+    private static async Task VerifyAsync(
+        LibraryZip zip,
+        InfoJsonGame expected,
+        List<SaveEntryPlan> saves,
+        CancellationToken ct)
     {
-        if (zip.InfoJson?.Kind is not InfoJsonReadResult.Outcome.Ok)
+        if (zip.InfoJson?.Kind is not InfoJsonReadResultOutcome.Ok)
             throw new LibraryZipVerifyException(LibraryZip.InfoJsonEntry, zip.InfoJson?.Rule ?? "missing");
 
         foreach (var rom in expected.Roms.Where(r => r.ExternalFileName is null))

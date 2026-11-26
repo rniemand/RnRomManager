@@ -52,7 +52,12 @@ public class DiscoveryEndpointsTests
 
     private static string Key(string normalized) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
 
-    private async Task<Guid> AddGameAsync(string title, string system, string[] publishers, string[]? genres = null, string[]? developers = null)
+    private async Task<Guid> AddGameAsync(
+        string title,
+        string system,
+        string[] publishers,
+        string[]? genres = null,
+        string[]? developers = null)
     {
         var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with
         {

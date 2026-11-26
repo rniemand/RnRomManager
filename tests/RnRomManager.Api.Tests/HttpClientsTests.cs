@@ -116,29 +116,6 @@ public class HttpClientsTests
         Assert.That(await read.WaitAsync(TimeSpan.FromSeconds(10)), Is.EqualTo(body));
     }
 
-    /// <summary>Headers at once; the body waits for <paramref name="gate"/> and fails if the request was cancelled meanwhile.</summary>
-    private sealed class SlowBodyHandler(Task gate, byte[] body) : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new SlowContent(gate, body, cancellationToken) });
-    }
-
-    private sealed class SlowContent(Task gate, byte[] body, CancellationToken request) : HttpContent
-    {
-        protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
-        {
-            await gate;
-            request.ThrowIfCancellationRequested();
-            await stream.WriteAsync(body);
-        }
-
-        protected override bool TryComputeLength(out long length)
-        {
-            length = 0;
-            return false;
-        }
-    }
-
     /// <summary>Spec T8: a TitleDb system's media goes through the titledb CDN client, never the libretro one.</summary>
     [Test]
     public async Task MediaService_TitleDbFetch_UsesItsNamedClient()

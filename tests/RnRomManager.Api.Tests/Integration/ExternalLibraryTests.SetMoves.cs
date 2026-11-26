@@ -25,7 +25,11 @@ public partial class ExternalLibraryTests
         return gameId;
     }
 
-    private Task<LibraryEditResult> MoveToNewGameAsync(Guid gameId, long romId, string title, LibraryEditor? editor = null) =>
+    private Task<LibraryEditResult> MoveToNewGameAsync(
+        Guid gameId,
+        long romId,
+        string title,
+        LibraryEditor? editor = null) =>
         (editor ?? EditorWith()).MoveReleaseAsync(gameId, romId, null, title, Editor, default);
 
     [Test]

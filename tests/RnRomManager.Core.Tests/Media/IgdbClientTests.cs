@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -13,37 +12,12 @@ namespace RnRomManager.Core.Tests.Media;
 /// <summary>IGDB suggestions S3–S6 against a fake handler: no test reaches the network.</summary>
 public class IgdbClientTests
 {
-    private const string TokenJson = """{"access_token":"tok-1","expires_in":5000000,"token_type":"bearer"}""";
+    internal const string TokenJson = """{"access_token":"tok-1","expires_in":5000000,"token_type":"bearer"}""";
 
-    private sealed class FakeIgdb : HttpMessageHandler
-    {
-        public Func<HttpRequestMessage, string, Task<HttpResponseMessage>> Token { get; set; } = (_, _) => Task.FromResult(Json(TokenJson));
-        public Func<HttpRequestMessage, string, Task<HttpResponseMessage>> Games { get; set; } = (_, _) => Task.FromResult(Json("[]"));
-        public Func<HttpRequestMessage, Task<HttpResponseMessage>> Images { get; set; } = _ => Task.FromResult(Status(HttpStatusCode.NotFound));
-        public ConcurrentQueue<(HttpRequestMessage Request, string Body)> Requests { get; } = new();
-
-        public IEnumerable<(HttpRequestMessage Request, string Body)> TokenRequests => Requests.Where(r => r.Request.RequestUri!.Host == "id.twitch.tv");
-        public IEnumerable<(HttpRequestMessage Request, string Body)> GameRequests => Requests.Where(r => r.Request.RequestUri!.Host == "api.igdb.com");
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
-            Requests.Enqueue((request, body));
-            return request.RequestUri!.Host switch
-            {
-                "id.twitch.tv" => await Token(request, body),
-                "api.igdb.com" => await Games(request, body),
-                "images.igdb.com" => await Images(request),
-                _ => throw new InvalidOperationException($"Unexpected host {request.RequestUri}"),
-            };
-        }
-    }
-
-    private static HttpResponseMessage Json(string json, HttpStatusCode status = HttpStatusCode.OK) =>
+    internal static HttpResponseMessage Json(string json, HttpStatusCode status = HttpStatusCode.OK) =>
         new(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 
-    private static HttpResponseMessage Status(HttpStatusCode status) => new(status) { Content = new StringContent("") };
+    internal static HttpResponseMessage Status(HttpStatusCode status) => new(status) { Content = new StringContent("") };
 
     private FakeIgdb _igdb = null!;
     private FakeTimeProvider _time = null!;
@@ -255,7 +229,11 @@ public class IgdbClientTests
     [TestCase(3000, 4000, 810, 1080)]
     [TestCase(3840, 2160, 1920, 1080)]
     [TestCase(4000, 1000, 1920, 480)]
-    public void StoredSize_FitsInto1080p_NeverUp(int width, int height, int storedWidth, int storedHeight) =>
+    public void StoredSize_FitsInto1080p_NeverUp(
+        int width,
+        int height,
+        int storedWidth,
+        int storedHeight) =>
         Assert.That(IgdbClient.StoredSize(width, height), Is.EqualTo(((int?)storedWidth, (int?)storedHeight)));
 
     [Test]

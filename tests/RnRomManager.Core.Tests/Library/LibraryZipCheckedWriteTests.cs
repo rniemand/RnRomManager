@@ -28,9 +28,7 @@ public class LibraryZipCheckedWriteTests
         _folder = Path.Combine(_root, "ext", "O");
         Directory.CreateDirectory(_folder);
         _target = Path.Combine(_folder, "Orbit.zip");
-        var gb = Substitute.For<ISystemHandler>();
-        gb.EmbedRomsInZip.Returns(true);
-        gb.Id.Returns("gb");
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         ISystemHandler[] handlers = [gb, new ExternalTestHandler(), new ExternalSetTestHandler()];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
@@ -49,7 +47,11 @@ public class LibraryZipCheckedWriteTests
 
     private static byte[] Bytes(int seed, int length = 64) => [.. Enumerable.Range(0, length).Select(i => (byte)(seed * 31 + i))];
 
-    private static InfoJsonRom Rom(string fileName, byte[] bytes, string? pointer, bool isPrimary = true) => new()
+    private static InfoJsonRom Rom(
+        string fileName,
+        byte[] bytes,
+        string? pointer,
+        bool isPrimary = true) => new()
     {
         FileName = fileName,
         ExternalFileName = pointer,

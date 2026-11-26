@@ -6,17 +6,29 @@ namespace RnRomManager.Core.Integrity;
 public interface IIntegrityIssueRepository
 {
     /// <summary>Open issues of these types on one ZIP entry.</summary>
-    Task<IReadOnlyList<OpenIssue>> ListOpenAsync(string zipPath, string entryName, IReadOnlyCollection<string> types, CancellationToken cancellationToken);
+    Task<IReadOnlyList<OpenIssue>> ListOpenAsync(
+        string zipPath,
+        string entryName,
+        IReadOnlyCollection<string> types,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// I6: candidate open issues of these types on one external ROM file, keyed by its <c>externalFileName</c>. The
     /// database compares with its collation, so a candidate may belong to an accent-distinct file; match it exactly.
     /// </summary>
-    Task<IReadOnlyList<ExternalOpenIssue>> ListOpenExternalAsync(string zipPath, string externalFileName, IReadOnlyCollection<string> types,
+    Task<IReadOnlyList<ExternalOpenIssue>> ListOpenExternalAsync(
+        string zipPath,
+        string externalFileName,
+        IReadOnlyCollection<string> types,
         CancellationToken cancellationToken);
 
     /// <summary>A page of issues, newest first; null filters aren't applied (§23 <c>/api/integrity/issues</c>).</summary>
-    Task<Page<IntegrityIssue>> ListAsync(string? status, string? type, int page, int pageSize, CancellationToken cancellationToken);
+    Task<Page<IntegrityIssue>> ListAsync(
+        string? status,
+        string? type,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
 
     /// <summary>Every <c>Open</c> issue.</summary>
     Task<IReadOnlyList<IntegrityIssue>> ListAllOpenAsync(CancellationToken cancellationToken);
@@ -24,14 +36,24 @@ public interface IIntegrityIssueRepository
     Task<long> InsertAsync(IntegrityIssue issue, CancellationToken cancellationToken);
 
     /// <summary>An open issue seen again: <c>last_seen_job_id</c> plus the latest severity, details and game.</summary>
-    Task TouchAsync(long id, Guid jobId, string severity, string? details, Guid? gameId, CancellationToken cancellationToken);
+    Task TouchAsync(
+        long id,
+        Guid jobId,
+        string severity,
+        string? details,
+        Guid? gameId,
+        CancellationToken cancellationToken);
 
     Task ResolveAsync(IReadOnlyCollection<long> ids, DateTime resolvedAt, CancellationToken cancellationToken);
 
     /// <summary>
     /// G4: resolves the open issues of one type on a ZIP itself (no entry name, as <c>DefaultBoxArt</c>); returns how many.
     /// </summary>
-    Task<int> ResolveOpenAsync(string zipPath, string type, DateTime resolvedAt, CancellationToken cancellationToken);
+    Task<int> ResolveOpenAsync(
+        string zipPath,
+        string type,
+        DateTime resolvedAt,
+        CancellationToken cancellationToken);
 
     /// <summary>Retention (§12.2): deletes non-<c>Open</c> issues resolved (or, if never resolved, detected) before <paramref name="cutoff"/>.</summary>
     Task<int> PurgeAsync(DateTime cutoff, CancellationToken cancellationToken);

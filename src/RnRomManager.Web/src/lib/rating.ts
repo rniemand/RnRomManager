@@ -1,12 +1,6 @@
 import { api } from './api/client';
 import { isApiError } from './api/errors';
-import type { GameDetail } from './api/types';
-
-export interface RatingChange {
-	/** 1–5; null clears it. Absent = unchanged. */
-	rating?: number | null;
-	favourite?: boolean;
-}
+import type { GameDetail, RatingChange } from '#lib/types/index.js';
 
 /** The job lock is global and never waits, so a rating can collide with someone else's (spec B22). */
 export const ratingRetryDelayMs = 1000;

@@ -1,59 +1,18 @@
 import { api } from './api/client';
 import { isApiError } from './api/errors';
-import type { BundleDownloadTicket, BundleEntry, BundleTicketStatus } from './api/types';
-import { entryKey, type BundleIdentity } from './stores/bundle.svelte';
+import type {
+	BundleDownloadTicket,
+	BundleEntry,
+	BundleTicketStatus,
+	RunItem,
+	RunView,
+	DownloadDeps
+} from '#lib/types/index.js';
+import { entryKey } from './stores/bundle.svelte';
+import type { RunItemState, PauseReason, RunStatus } from '#lib/enums/index.js';
 
 /** B7: how often the page asks for the current ticket's state. */
 export const pollIntervalMs = 500;
-
-/**
- * Where one file of a run stands. `waiting` hasn't been sent yet; `pending`/`sending` mirror the server's ticket;
- * `sent`, `failed` and `expired` are terminal server states; `unknown` means the server lost the ticket (B8).
- */
-export type RunItemState =
-	'waiting' | 'issuing' | 'pending' | 'sending' | 'sent' | 'failed' | 'expired' | 'unknown';
-
-export interface RunItem {
-	key: string;
-	entry: BundleEntry;
-	state: RunItemState;
-	/** The server's failure code (`Unavailable`, `OpenFailed`, `Aborted`, `Stalled`, `IoError`) for `failed`. */
-	errorCode: string | null;
-	/** The current ticket while one is open, so polling resumes on it after a lost status response (B8). */
-	ticket: string | null;
-}
-
-/**
- * Why a run waits for the user:
- * - `blocked`: a ticket expired before the browser fetched it (automatic downloads are likely blocked);
- * - `network`: a status or issue request got no answer; retry resumes on the same ticket;
- * - `signIn`: the session ended (401);
- * - `busy`: another download of this account is still running (another tab);
- * - `full`: the server has too many downloads in flight;
- * - `unknown`: the server lost the current ticket (restart); the user retries or skips that file.
- */
-export type PauseReason = 'blocked' | 'network' | 'signIn' | 'busy' | 'full' | 'unknown';
-
-/** `idle` before the first run; `ended` after sign-out or leaving the page. */
-export type RunStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'finished' | 'ended';
-
-export interface RunView {
-	status: RunStatus;
-	pause: PauseReason | null;
-	stopRequested: boolean;
-	/** See {@link BundleDownloadRun.canRetry}. */
-	canRetry: boolean;
-	items: RunItem[];
-}
-
-/** What the runner needs from the outside world, so tests can fake the server, the clock and the click. */
-export interface DownloadDeps {
-	issue(identity: BundleIdentity): Promise<BundleDownloadTicket>;
-	status(ticket: string): Promise<BundleTicketStatus>;
-	/** Hands one same-origin URL to the browser's Downloads flow. */
-	start(url: string): void;
-	wait(ms: number): Promise<void>;
-}
 
 /** Starts a native download of a same-origin URL, as a click on a hidden link would. */
 export function clickDownload(url: string, doc: Document = document): void {

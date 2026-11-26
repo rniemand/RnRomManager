@@ -14,7 +14,11 @@ public class ScheduleCalculatorTests
                 TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1, 1, 1, 3, 0, 0), 10, 5, DayOfWeek.Sunday)),
         ]);
 
-    private static DateTimeOffset Utc(int month, int day, int hour, int minute = 0) => new(2026, month, day, hour, minute, 0, TimeSpan.Zero);
+    private static DateTimeOffset Utc(
+        int month,
+        int day,
+        int hour,
+        int minute = 0) => new(2026, month, day, hour, minute, 0, TimeSpan.Zero);
 
     [Test]
     public void LaterToday_ElseTomorrow()

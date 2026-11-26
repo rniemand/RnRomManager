@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using RnRomManager.Api.Http;
 using RnRomManager.Core.Bundles;
 
 namespace RnRomManager.Api.Endpoints;
@@ -14,8 +13,6 @@ public static class BundleQueueEndpoints
     /// <summary>B4: the largest snapshot or batch-resolution body (2 MiB).</summary>
     public const int RequestLimit = 2 * 1024 * 1024;
 
-    public sealed record QueueRequest(string? Name, IReadOnlyList<BundleEntryInput?>? Entries, int? Revision);
-
     private static readonly JsonSerializerOptions RequestJson = new(JsonSerializerDefaults.Web);
 
     public static RouteGroupBuilder MapBundleQueueEndpoints(this RouteGroupBuilder api)
@@ -24,7 +21,7 @@ public static class BundleQueueEndpoints
 
         queues.MapGet("", async (HttpContext ctx, IBundleQueueRepository repository) =>
         {
-            var list = await repository.ListAsync(CollectionEndpoints.UserId(ctx), ctx.RequestAborted);
+            var list = await repository.ListAsync(EndpointUser.RequiredId(ctx), ctx.RequestAborted);
             return Results.Ok(list.Select(q => new { id = q.Id, name = q.Name, revision = q.Revision, itemCount = q.ItemCount }));
         });
 
@@ -37,13 +34,13 @@ public static class BundleQueueEndpoints
             if (errors is not null)
                 return Problems.Validation(ctx, errors);
 
-            var write = await repository.CreateAsync(CollectionEndpoints.UserId(ctx), Guid.NewGuid(), name!, entries!,
+            var write = await repository.CreateAsync(EndpointUser.RequiredId(ctx), Guid.NewGuid(), name!, entries!,
                 time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
             return WriteResult(ctx, write, q => Results.Created($"/api/bundle-queues/{q.Id}", ToDto(q)));
         }).WithMetadata(new RequestSizeLimitAttribute(RequestLimit));
 
         queues.MapGet("/{id:guid}", async (Guid id, HttpContext ctx, IBundleQueueRepository repository) =>
-            await repository.GetAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is { } queue
+            await repository.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is { } queue
                 ? Results.Ok(ToDto(queue))
                 : Problems.NotFound(ctx));
 
@@ -61,7 +58,7 @@ public static class BundleQueueEndpoints
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
-            var write = await repository.ReplaceAsync(id, CollectionEndpoints.UserId(ctx), name!, entries!, revision,
+            var write = await repository.ReplaceAsync(id, EndpointUser.RequiredId(ctx), name!, entries!, revision,
                 time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
             return WriteResult(ctx, write, q => Results.Ok(ToDto(q)));
         }).WithMetadata(new RequestSizeLimitAttribute(RequestLimit));
@@ -71,8 +68,8 @@ public static class BundleQueueEndpoints
         {
             if (!int.TryParse(revision, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var expected)
                 || expected <= 0)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["revision"] = ["The queue's current revision is required."] });
-            var status = await repository.DeleteAsync(id, CollectionEndpoints.UserId(ctx), expected, ctx.RequestAborted);
+                return Problems.Validation(ctx, "revision", "The queue's current revision is required.");
+            var status = await repository.DeleteAsync(id, EndpointUser.RequiredId(ctx), expected, ctx.RequestAborted);
             return WriteResult(ctx, new BundleQueueWrite(status), _ => Results.NoContent());
         });
 
@@ -160,6 +157,6 @@ public static class BundleQueueEndpoints
         catch (JsonException)
         {
         }
-        return (null, Problems.Validation(ctx, new Dictionary<string, string[]> { [""] = ["A valid JSON object is required."] }));
+        return (null, Problems.Validation(ctx, "", "A valid JSON object is required."));
     }
 }

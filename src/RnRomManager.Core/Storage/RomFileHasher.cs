@@ -3,10 +3,6 @@ using System.Security.Cryptography;
 
 namespace RnRomManager.Core.Storage;
 
-/// <summary>What one streamed read of a ROM file found. Hashes are lowercase hex.</summary>
-/// <param name="Header">The first <c>min(size, <see cref="RomFileHasher.HeaderBytes"/>)</c> bytes, for <c>ReadHeader</c>.</param>
-public sealed record RomFileHashes(long SizeBytes, string Crc32, string Md5, string Sha1, byte[] Header);
-
 /// <summary>
 /// Hashes a ROM too large to hold in memory (spec I2): one pass computes CRC32, MD5 and SHA1 and keeps only the
 /// start of the file for the system's header reader.
@@ -24,7 +20,10 @@ public static class RomFileHasher
     /// null when the stream holds more than <paramref name="maxBytes"/> (a file that grew past the cap while it was
     /// read); reading stops there.
     /// </returns>
-    public static async Task<RomFileHashes?> HashAsync(Stream stream, long maxBytes, CancellationToken cancellationToken,
+    public static async Task<RomFileHashes?> HashAsync(
+        Stream stream,
+        long maxBytes,
+        CancellationToken cancellationToken,
         Action<long>? onProgress = null)
     {
         using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);

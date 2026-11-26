@@ -1,20 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetClient } from '../api/client';
-import { ApiError } from '../api/errors';
-import type { CurrentJob } from '../api/types';
-import { iconClass } from '../components/icons';
+import { resetClient } from '#lib/api/client.js';
+import { ApiError } from '#lib/api/errors.js';
+import type { CurrentJob } from '#lib/types/index.js';
+import { iconClass } from '#lib/icons/icons.js';
 import { auth } from './auth.svelte';
 import { idlePollIntervalMs, jobs, pollIntervalMs } from './jobs.svelte';
 import { toasts, toastDurationMs } from './toasts.svelte';
 import { reviewJobs, summaryError } from './reviewJobs.svelte';
 import { render, screen } from '@testing-library/svelte';
-import ToastHost from '../components/ToastHost.svelte';
+import ToastHost from '#lib/components/layout/ToastHost.svelte';
 
 const app = vi.hoisted(() => ({ goto: vi.fn(), url: new URL('http://localhost/review/7') }));
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => app.goto(...args) }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 vi.mock('$app/state', () => ({
 	page: {
 		get url() {

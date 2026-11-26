@@ -8,9 +8,9 @@ import {
 	normalize,
 	ruleError,
 	toSave,
-	validate,
-	type Bindings
+	validate
 } from './hotkeys';
+import type { Bindings } from '#lib/types/index.js';
 
 // Parity: the same cases as tests/RnRomManager.Core.Tests/Users/HotkeysTests.cs.
 

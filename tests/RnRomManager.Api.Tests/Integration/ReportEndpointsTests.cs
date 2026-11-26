@@ -7,7 +7,6 @@ using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
-using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -343,7 +342,11 @@ public class ReportEndpointsTests
     }
 
     /// <summary>Mirrors a game whose ROMs carry external pointers; no file is written, so every sidecar is missing.</summary>
-    private async Task<Guid> MirrorExternal(string system, string title, long zipBytes, params int[] romSizes)
+    private async Task<Guid> MirrorExternal(
+        string system,
+        string title,
+        long zipBytes,
+        params int[] romSizes)
     {
         var roms = romSizes.Select((size, i) => TestLibrary.Rom($"{title} [v{i}].nsp", [.. Enumerable.Repeat((byte)(title.Length + i), size)], isPrimary: i == 0)
             with { ExternalFileName = $"{title}.{title} [v{i}].nsp" }).ToArray();

@@ -1,22 +1,12 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
-import { api } from '../api/client';
-import { ApiError } from '../api/errors';
-import type { Job, ReviewResolveSummary } from '../api/types';
-import { nextReviewItem } from '../review';
+import { api } from '#lib/api/client.js';
+import { ApiError } from '#lib/api/errors.js';
+import type { Job, ReviewResolveSummary, ReviewJob } from '#lib/types/index.js';
+import { nextReviewItem } from '#lib/review.js';
 import { pollIntervalMs } from './jobs.svelte';
 import { toasts } from './toasts.svelte';
-
-/** A Review resolution started from an item page (B7). `done` is the success text shown on the item's page. */
-export interface ReviewJob {
-	jobId: string;
-	reviewId: number;
-	fileName: string;
-	done: string;
-	/** Review QoL B10: started by Use and Next. */
-	next?: true;
-}
 
 // The codes the resolve endpoint answered 409 for before it ran as a job.
 const conflicts = new Set([

@@ -8,7 +8,7 @@ namespace RnRomManager.Systems.Sega;
 /// </summary>
 public sealed class MasterSystemHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.mastersystem.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(MasterSystemHandler), "boxart.mastersystem.png");
 
     public string Id => "sms";
     public string DisplayName => "Master System";

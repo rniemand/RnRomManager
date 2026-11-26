@@ -19,17 +19,39 @@ namespace RnRomManager.Core.Ingest;
 /// Review actions (§7.5); shares the ingest writer and the global job lock. Resolve runs inside a
 /// <see cref="ReviewResolveJob"/>, whose runner holds the lock (B2); Dismiss and Delete take it themselves.
 /// </summary>
-public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository reviews, IGameRepository games, IRomRepository roms, DbSync dbSync,
-    IngestPipeline pipeline, DatCache dats, ISystemRegistry systems, ArchiveExtractor extractor, ReviewSets sets,
-    IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, TimeProvider time, ILogger<ReviewResolver> logger)
+public sealed class ReviewResolver(
+    JobLock jobLock,
+    IIngestReviewRepository reviews,
+    IGameRepository games,
+    IRomRepository roms,
+    DbSync dbSync,
+    IngestPipeline pipeline,
+    DatCache dats,
+    ISystemRegistry systems,
+    ArchiveExtractor extractor,
+    ReviewSets sets,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    AuditPaths auditPaths,
+    TimeProvider time,
+    ILogger<ReviewResolver> logger)
 {
+    private ReviewSourceDeleter SourceDeleter => field ??= new(jobLock, reviews, systems, paths, audit, auditPaths, logger);
+
+    private ReviewExternalPreparation ExternalPreparation =>
+        field ??= new(reviews, games, roms, dbSync, pipeline, systems, extractor, paths, time, logger);
+
     /// <summary>
     /// B2: resolves inside a job. The caller (the job runner) holds the lock; nothing here is cancellable. The result's
     /// <see cref="ReviewResolutionResult.Items"/> are the rows acted on: the item, or its set's members in set order
     /// (B14); empty when it no longer exists or isn't Pending.
     /// </summary>
     /// <param name="actor">The job's actor (AU3); <see cref="AuditActor.UserId"/> is required.</param>
-    public async Task<ReviewResolutionResult> ResolveInJobAsync(long id, ReviewResolutionRequest request, AuditActor actor, JobProgress? progress)
+    public async Task<ReviewResolutionResult> ResolveInJobAsync(
+        long id,
+        ReviewResolutionRequest request,
+        AuditActor actor,
+        JobProgress? progress)
     {
         var item = await reviews.GetAsync(id, CancellationToken.None).ConfigureAwait(false);
         if (item is not { Status: "Pending" })
@@ -87,279 +109,33 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     /// Hard delete (D2–D4): removes the source file from the ingest folder (the whole archive for an archive entry) and
     /// every pending review row of that source. A source that's already gone still removes the rows.
     /// </summary>
-    public async Task<ReviewResolutionResult> DeleteSourceAsync(long id, AuditActor actor, CancellationToken ct)
-    {
-        using var held = jobLock.TryAcquire("Resolving review items");
-        if (held is null)
-            return new("JobRunning");
-        return await DeleteHeldAsync(id, actor, ct).ConfigureAwait(false);
-    }
+    public Task<ReviewResolutionResult> DeleteSourceAsync(long id, AuditActor actor, CancellationToken ct) =>
+        SourceDeleter.DeleteSourceAsync(id, actor, ct);
 
     /// <summary>
     /// Q4: <see cref="DeleteSourceAsync"/> for each id in order under one lock acquisition. An id that no longer exists or
     /// isn't Pending (e.g. removed with its archive earlier in the batch) is skipped. Null when a job holds the lock (nothing deleted).
     /// </summary>
-    public async Task<ReviewBatchDeleteResult?> DeleteSourcesAsync(IReadOnlyList<long> ids, AuditActor actor, CancellationToken ct)
-    {
-        using var held = jobLock.TryAcquire("Resolving review items");
-        if (held is null)
-            return null;
-        int deleted = 0, skipped = 0;
-        var failed = new List<ReviewBatchDeleteFailure>();
-        foreach (var id in ids)
-        {
-            var result = await DeleteHeldAsync(id, actor, ct).ConfigureAwait(false);
-            if (result.Code is null) deleted++;
-            else if (result.Code == "NotFound") skipped++;
-            else failed.Add(new(id, result.Code));
-        }
-        return new(deleted, skipped, failed);
-    }
+    public Task<ReviewBatchDeleteResult?> DeleteSourcesAsync(IReadOnlyList<long> ids, AuditActor actor, CancellationToken ct) =>
+        SourceDeleter.DeleteSourcesAsync(ids, actor, ct);
 
-    private async Task<ReviewResolutionResult> DeleteHeldAsync(long id, AuditActor actor, CancellationToken ct)
-    {
-        var item = await reviews.GetAsync(id, ct).ConfigureAwait(false);
-        if (item is not { Status: "Pending" })
-            return new("NotFound");
-        if (IsExternal(item))
-            return await DeleteExternalSourceAsync(id, item, actor).ConfigureAwait(false);
-        var source = SafePath.Resolve(paths.Value.Ingest, Path.GetRelativePath(paths.Value.Ingest, item.ArchivePath ?? item.SourcePath));
-        // AU4: File.Delete succeeds on a missing file, so only a file that existed gets a ReviewDeleted row.
-        var existed = File.Exists(source);
-        try
-        {
-            File.Delete(source); // no error when the file is already gone
-        }
-        catch (DirectoryNotFoundException)
-        {
-            // Gone along with its folder: the goal is reached.
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogWarning(ex, "Deleting review source '{Path}' (review item {ReviewId}) failed", source, id);
-            return new("DeleteFailed");
-        }
-        if (existed)
-            audit.Record(new AuditEvent(AuditActions.ReviewDeleted, actor, item.SystemId, Path: auditPaths.Of(source)));
-        var removed = await reviews.DeletePendingBySourceAsync(item.SourcePath, item.ArchivePath, ct).ConfigureAwait(false);
-        logger.LogInformation("User {UserId} deleted review item {ReviewId}: removed '{Path}' and {Rows} pending review row(s)",
-            actor.UserId, id, source, removed);
-        return new();
-    }
-
-    /// <summary>
-    /// T9 for an external system, before any action-specific check: a loose source is used as it was classified; an
-    /// archived item is re-extracted through one checked handle on its archive, whose snapshot is kept for I5.
-    /// </summary>
-    /// <returns>The file to resolve and its snapshot, or the failure code (the Pending row is kept).</returns>
-    private (IngestFile? File, ExternalFileSnapshot? Snapshot, string? Code) PrepareExternal(long id, ReviewItem item, IngestFile file,
-        string source, ExternalFileSnapshot snapshot, string work, ISystemHandler system)
-    {
-        file = file with { FullPath = source };
-        if (item.ArchivePath is null)
-            return (file, snapshot, null);
-
-        var opened = ExternalRomPath.OpenRead(paths.Value.Ingest, source, FileShare.Read | FileShare.Delete, snapshot);
-        if (opened.Status == ExternalPathStatus.Changed)
-            return (null, null, "VerifyFailed");
-        if (opened.Status != ExternalPathStatus.Found)
-            return (null, null, "IoError");
-        var workDir = ExternalRomPath.CreateDirectory(paths.Value.Cache, work);
-        IReadOnlyList<ExtractedEntry> entries;
-        using (var stream = opened.Stream!)
-        {
-            if (workDir.Status != ExternalPathStatus.Found)
-                return (null, null, "IoError");
-            var family = systems.ByFamily(system.Family);
-            try
-            {
-                entries = extractor.Extract(stream, Path.GetFileName(source), workDir.Path,
-                    ext => family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes);
-            }
-            catch (ArchiveOutputException ex)
-            {
-                logger.LogError(ex, "Review {Id}: extracting {Archive} failed", id, source);
-                return (null, null, "IoError");
-            }
-            // The entries only count if the handle and the path still show the archive that was checked.
-            var current = ExternalRomPath.ClassifyFile(paths.Value.Ingest, source);
-            if (current.Status is not (ExternalPathStatus.Found or ExternalPathStatus.Missing))
-                return (null, null, "IoError");
-            if (current.Snapshot != snapshot || ExternalRomPath.SnapshotOf(stream) != snapshot)
-                return (null, null, "VerifyFailed");
-        }
-        var entry = entries.FirstOrDefault(e => e.EntryPath == item.ArchiveEntry);
-        if (entry is null)
-            return (null, null, "VerifyFailed");
-        var copy = ExternalRomPath.ClassifyFile(paths.Value.Cache, entry.ExtractedPath);
-        if (copy.Status != ExternalPathStatus.Found)
-            return (null, null, "IoError");
-        return (file with { FullPath = copy.Path, ArchivePath = source, ArchiveEntry = item.ArchiveEntry, ArchiveSnapshot = snapshot }, copy.Snapshot, null);
-    }
-
-    /// <summary>
-    /// T9 retry of an archived external item whose release may already be in the library (a mirror or resolution
-    /// update failed after the ZIP was written, and the archive is still there). The library is synced first, then
-    /// the SHA1's owner decides: the same archive with a verified file → <c>Resolved</c> with that game, writing
-    /// nothing; another source or an embedded owner → <c>Duplicate</c>; an owner that can't be verified →
-    /// <c>VerifyFailed</c>. Every refusal keeps the Pending row.
-    /// </summary>
-    /// <returns>null when the SHA1 has no owner: resolve as usual.</returns>
-    private async Task<ReviewResolutionResult?> RecoverCommittedAsync(long id, ReviewItem item, IngestFile copy, ExternalFileSnapshot snapshot, int userId)
-    {
-        if (await Sha1Async(paths.Value.Cache, copy.FullPath, snapshot).ConfigureAwait(false) != item.Sha1)
-            return new("VerifyFailed");
-        RomRow? owner;
-        try
-        {
-            await dbSync.SyncAllAsync(CancellationToken.None).ConfigureAwait(false);
-            owner = await roms.GetBySha1Async(item.Sha1, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (System.Data.Common.DbException ex)
-        {
-            logger.LogError(ex, "Review {Id}: the library sync before the retry failed", id);
-            return new("DbWriteFailed");
-        }
-        if (owner is null)
-            return null;
-        // S3a, B5: an owner row decides by its own layout (a legacy system's embedded ROM is an embedded owner, whatever the setting).
-        if (systems.ById(owner.SystemId) is not { } ownerSystem || !RomStorage.MayHoldExternalFiles(ownerSystem) || owner.ExternalFileName is null)
-            return new("Duplicate");
-
-        var game = await games.GetAsync(owner.GameId, CancellationToken.None).ConfigureAwait(false);
-        if (game is null)
-            return new("VerifyFailed");
-        var target = pipeline.OpenTargetChecked(game.ZipPath, owner.GameId, owner.SystemId);
-        if (target.Code is not null)
-        {
-            logger.LogWarning("Review {Id}: the owner {Zip} of sha1 {Sha1} can't be verified: {Details}", id, game.ZipPath, item.Sha1, target.Details);
-            return new("VerifyFailed");
-        }
-        using (target.Zip)
-        {
-            var rom = target.Game!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == item.Sha1);
-            if (rom?.ExternalFileName is null)
-                return new("VerifyFailed");
-            if (!string.Equals(rom.Metadata.SourcePath, copy.SourcePath, StringComparison.Ordinal))
-                return new("Duplicate");
-            var folder = Path.GetDirectoryName(SafePath.Resolve(paths.Value.Roms, game.ZipPath))!;
-            var sidecar = ExternalRomPath.ClassifyFile(paths.Value.Roms, Path.Combine(folder, rom.ExternalFileName));
-            if (sidecar.Status != ExternalPathStatus.Found || sidecar.Snapshot!.Length != rom.Metadata.SizeBytes
-                || await Sha1Async(paths.Value.Roms, sidecar.Path, sidecar.Snapshot).ConfigureAwait(false) != item.Sha1)
-                return new("VerifyFailed");
-        }
-
-        try
-        {
-            await reviews.SetResolutionAsync(id, "Resolved", owner.GameId, userId, time.GetUtcNow().UtcDateTime, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogError(ex, "Review {Id}: marking it Resolved failed", id);
-            return new("DbWriteFailed");
-        }
-        logger.LogInformation("Review {Id}: its release was already in {Zip}; resolved without writing", id, game.ZipPath);
-        return new(GameId: owner.GameId);
-    }
-
-    /// <returns>The SHA1 of the file <paramref name="snapshot"/> describes; null when it can't be read as that file.</returns>
-    private static async Task<string?> Sha1Async(string root, string path, ExternalFileSnapshot snapshot)
-    {
-        var opened = ExternalRomPath.OpenRead(root, path, FileShare.Read | FileShare.Delete, snapshot);
-        if (opened.Status != ExternalPathStatus.Found)
-            return null;
-        using var stream = opened.Stream!;
-        var hashed = await RomFileHasher.HashAsync(stream, long.MaxValue, CancellationToken.None).ConfigureAwait(false);
-        return ExternalRomPath.SnapshotOf(stream) == snapshot ? hashed?.Sha1 : null;
-    }
-
-    /// <summary>
-    /// T9: the prepared file is re-hashed streamed (its SHA1 must still be the item's) and moved next to its ZIP
-    /// (I4). Nothing is read into memory, and every failure keeps the Pending row.
-    /// </summary>
-    private async Task<ReviewResolutionResult> ResolveExternalAsync(long id, ReviewItem item, IngestFile file, ExternalFileSnapshot snapshot,
-        ISystemHandler system, string action, string filename, string title, IReadOnlyList<string> regions, IReadOnlyList<string> languages,
-        string? revision, IReadOnlyList<string> flags, InfoJsonIdentification identification, DatMetadata metadata, Guid? target,
-        AuditActor actor, int userId, JobProgress? progress, JsonObject? header)
-    {
-        var now = time.GetUtcNow();
-        var rom = new InfoJsonRom
-        {
-            FileName = filename, OriginalFileName = item.OriginalFileName, BaseTitle = title,
-            Regions = regions, Languages = languages, Revision = revision, Flags = flags, IsPrimary = false,
-                Version = ReleaseVersion.For(flags, item.OriginalFileName),
-            Identification = identification, Header = header,
-            Metadata = new InfoJsonRomMetadata(item.SizeBytes, item.Crc32, item.Md5, item.Sha1, now, now, file.SourcePath),
-        };
-        var result = await pipeline.StoreReleaseAsync(file, system, rom, metadata, null, target,
-            gameId => reviews.SetResolutionAsync(id, "Resolved", gameId, userId, time.GetUtcNow().UtcDateTime, CancellationToken.None),
-            actor, action, CancellationToken.None, snapshot, progress).ConfigureAwait(false);
-        return result.Outcome == IngestOutcome.Ingested ? new(GameId: result.GameId) : new(result.Reason);
-    }
-
-    /// <summary>
-    /// B14 steps 2 and 4: the set is stored as one release named by the action; every member's row is marked Resolved in
-    /// one transaction once the mirror is written. A failure after the moves is <c>DbWriteFailed</c>, with the rows Pending.
-    /// </summary>
-    private async Task<ReviewResolutionResult> ResolveSetAsync(IReadOnlyList<(IngestFile File, ReviewItem Row)> set, ISystemHandler system,
-        string action, string title, IReadOnlyList<string> regions, IReadOnlyList<string> languages, string? revision, IReadOnlyList<string> flags,
-        InfoJsonIdentification identification, DatMetadata metadata, Guid? target, AuditActor actor, int userId, JobProgress? progress)
-    {
-        var rom = new InfoJsonRom
-        {
-            FileName = "", OriginalFileName = "", BaseTitle = title, Regions = regions, Languages = languages, Revision = revision, Flags = flags,
-            IsPrimary = false, Identification = identification, Metadata = null!, // the pipeline fills names and metadata from the members
-        };
-        var ids = set.Select(m => m.Row.Id).ToList();
-        var result = await pipeline.StoreSetReleaseAsync([.. set.Select(m => (m.File, m.Row.Sha1))], system, rom, metadata, target,
-            gameId => reviews.SetResolutionAsync(ids, "Resolved", gameId, userId, time.GetUtcNow().UtcDateTime, CancellationToken.None),
-            actor, action, progress ?? new JobProgress()).ConfigureAwait(false);
-        return result.Outcome == IngestOutcome.Ingested ? new(GameId: result.GameId) : new(result.Reason);
-    }
-
-    private bool IsExternal(ReviewItem item) => systems.ById(item.SystemId) is { EmbedRomsInZip: false };
-
-    /// <summary>
-    /// I4 for an external system's source (the container for an archive entry): only a confirmed absence counts as
-    /// gone. An unsafe path (a link on the way, a directory or special file) or an IO failure is <c>DeleteFailed</c>,
-    /// with the file and its Pending rows kept. Once the file is deleted the rows are cleared even if the request ends.
-    /// </summary>
-    private async Task<ReviewResolutionResult> DeleteExternalSourceAsync(long id, ReviewItem item, AuditActor actor)
-    {
-        var check = ExternalRomPath.ClassifyFile(paths.Value.Ingest, item.ArchivePath ?? item.SourcePath);
-        if (check.Status is not (ExternalPathStatus.Found or ExternalPathStatus.Missing))
-        {
-            logger.LogWarning("Review item {ReviewId}: its source {Path} can't be deleted safely: {Details}", id, check.Path, check.Details);
-            return new("DeleteFailed");
-        }
-        if (check.Status == ExternalPathStatus.Found)
-        {
-            try
-            {
-                File.Delete(check.Path);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                logger.LogWarning(ex, "Deleting review source '{Path}' (review item {ReviewId}) failed", check.Path, id);
-                return new("DeleteFailed");
-            }
-            audit.Record(new AuditEvent(AuditActions.ReviewDeleted, actor, item.SystemId, Path: auditPaths.Of(check.Path)));
-        }
-        var removed = await reviews.DeletePendingBySourceAsync(item.SourcePath, item.ArchivePath, CancellationToken.None).ConfigureAwait(false);
-        logger.LogInformation("User {UserId} deleted review item {ReviewId}: removed '{Path}' ({Status}) and {Rows} pending review row(s)",
-            actor.UserId, id, check.Path, check.Status, removed);
-        return new();
-    }
+    internal static bool IsExternal(ReviewItem item, ISystemRegistry systems) => systems.ById(item.SystemId) is { EmbedRomsInZip: false };
 
     /// <summary>Resolve (<paramref name="request"/> set) or Dismiss of a Pending <paramref name="item"/>; the caller holds the lock.</summary>
     /// <param name="set">B14: the item's set, found under the lock; the whole set is resolved as one release.</param>
-    private async Task<ReviewResolutionResult> ActCoreAsync(long id, ReviewItem item, ReviewResolutionRequest? request, AuditActor actor,
-        CancellationToken ct, JobProgress? progress, IReadOnlyList<(IngestFile File, ReviewItem Row)>? set = null)
+    private async Task<ReviewResolutionResult> ActCoreAsync(
+        long id,
+        ReviewItem item,
+        ReviewResolutionRequest? request,
+        AuditActor actor,
+        CancellationToken ct,
+        JobProgress? progress,
+        IReadOnlyList<(IngestFile File, ReviewItem Row)>? set = null)
     {
         var userId = actor.UserId!.Value; // review actions always have a user: the signed-in one, or the job's requester
         if (!IsDismissible(item, systems, set is not null) && (request is null || set is null))
             return new(SetFileNotResolvable);
-        var external = IsExternal(item);
+        var external = IsExternal(item, systems);
         string source;
         ExternalFileSnapshot? sourceSnapshot = null;
         if (external)
@@ -407,11 +183,11 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             ExternalFileSnapshot? preparedSnapshot = null;
             if (external)
             {
-                (var prepared, preparedSnapshot, var refused) = PrepareExternal(id, item, file, source, sourceSnapshot!, work, system);
+                (var prepared, preparedSnapshot, var refused) = ExternalPreparation.PrepareExternal(id, item, file, source, sourceSnapshot!, work, system);
                 if (refused is not null)
                     return new(refused);
                 file = prepared!;
-                if (item.ArchivePath is not null && await RecoverCommittedAsync(id, item, file, preparedSnapshot!, userId).ConfigureAwait(false) is { } recovered)
+                if (item.ArchivePath is not null && await ExternalPreparation.RecoverCommittedAsync(id, item, file, preparedSnapshot!, userId).ConfigureAwait(false) is { } recovered)
                     return recovered;
             }
             Guid? target = null;
@@ -608,10 +384,10 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     return ReviewResolutionResult.Invalid("targetGameId", "Target must belong to the same system.");
             }
             if (set is not null)
-                return await ResolveSetAsync(set, system, request.Action!, title, regions, languages, revision, flags, identification, metadata,
+                return await ExternalPreparation.ResolveSetAsync(set, system, request.Action!, title, regions, languages, revision, flags, identification, metadata,
                     target, actor, userId, progress).ConfigureAwait(false);
             if (external)
-                return await ResolveExternalAsync(id, item, file, preparedSnapshot!, system, request.Action!, filename, title, regions,
+                return await ExternalPreparation.ResolveExternalAsync(id, item, file, preparedSnapshot!, system, request.Action!, filename, title, regions,
                     languages, revision, flags, identification, metadata, target, actor, userId, progress,
                     keepHeader && item.Header is not null ? JsonNode.Parse(item.Header) as JsonObject : null).ConfigureAwait(false);
             if (item.ArchivePath is not null)
@@ -677,8 +453,3 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
 
     private static IReadOnlyList<string> Strings(JsonNode? array) => array?.AsArray().Select(n => n!.GetValue<string>()).ToList() ?? [];
 }
-
-/// <summary>Q4: the outcome of a batch review delete.</summary>
-public sealed record ReviewBatchDeleteResult(int Deleted, int Skipped, IReadOnlyList<ReviewBatchDeleteFailure> Failed);
-
-public sealed record ReviewBatchDeleteFailure(long Id, string Code);

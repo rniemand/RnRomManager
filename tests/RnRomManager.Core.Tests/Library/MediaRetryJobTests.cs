@@ -43,9 +43,7 @@ public partial class MediaRetryJobTests
         _dir = new TempDir();
         _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _jobId = Guid.NewGuid();
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns("gb");
+        var handler = TestHandlers.Fake("gb", embedRomsInZip: true);
         handler.DatName.Returns("Nintendo - Game Boy");
         handler.DefaultBoxArtPng.Returns(DefaultArt);
         _systems = Substitute.For<ISystemRegistry>();
@@ -85,7 +83,12 @@ public partial class MediaRetryJobTests
     };
 
     /// <summary>Writes a one-ROM game ZIP with the given images; <paramref name="datGameName"/> null = a Manual release.</summary>
-    private async Task<GameRow> Add(string title, string? datGameName, bool defaultBoxArt = true, bool boxArt = true, bool snap = false,
+    private async Task<GameRow> Add(
+        string title,
+        string? datGameName,
+        bool defaultBoxArt = true,
+        bool boxArt = true,
+        bool snap = false,
         IdentificationMethod method = IdentificationMethod.Dat)
     {
         var rom = RomBytes(++_seed);
@@ -127,7 +130,11 @@ public partial class MediaRetryJobTests
     }
 
     /// <summary>The job's <c>summary</c> as stored (§10.2: <c>{updated, notFound, skipped, error}</c>).</summary>
-    private static string Summary(int updated = 0, int notFound = 0, int skipped = 0, int error = 0) =>
+    private static string Summary(
+        int updated = 0,
+        int notFound = 0,
+        int skipped = 0,
+        int error = 0) =>
         JsonSerializer.Serialize(new { updated, notFound, skipped, error });
 
     [Test]

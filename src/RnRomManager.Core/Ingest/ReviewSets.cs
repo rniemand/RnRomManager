@@ -6,7 +6,11 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Core.Ingest;
 
 /// <summary>B12, CloneCD B5, D8: finds the unmatched cue, TOC, CloneCD or MDS set a Review item belongs to, as ingest would plan it today.</summary>
-public class ReviewSets(IngestFileScanner scanner, IIngestReviewRepository reviews, ISystemRegistry systems, IOptions<PathsOptions> paths,
+public class ReviewSets(
+    IngestFileScanner scanner,
+    IIngestReviewRepository reviews,
+    ISystemRegistry systems,
+    IOptions<PathsOptions> paths,
     ILogger<ReviewSets> logger)
 {
     /// <returns>

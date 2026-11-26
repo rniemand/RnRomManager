@@ -1,12 +1,12 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { api } from '#lib/api/client.js';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatCount, formatSize } from '#lib/format.js';
 	import { systemColour } from '#lib/systemColours.js';
 	import { squarify } from '#lib/treemap.js';
@@ -52,33 +52,13 @@
 	const base = resolve('/reports/library-size');
 
 	const system = $derived(page.url.searchParams.get('system'));
-	let library = $state<LibrarySize | null>(null);
-	let detail = $state<SystemSize | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 
-	$effect(() => {
-		const id = system;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		library = null;
-		detail = null;
-		const done = (e: unknown) => {
-			if (!controller.signal.aborted) error = e;
-		};
-		if (id)
-			api
-				.get<SystemSize>(`/api/reports/library-size/${encodeURIComponent(id)}`, {
-					signal: controller.signal
-				})
-				.then((d) => (detail = d), done);
-		else
-			api
-				.get<LibrarySize>('/api/reports/library-size', { signal: controller.signal })
-				.then((l) => (library = l), done);
-		return () => controller.abort();
-	});
+	const report = useAbortableGet<LibrarySize | SystemSize>(() =>
+		system ? `/api/reports/library-size/${encodeURIComponent(system)}` : '/api/reports/library-size'
+	);
+	const error = $derived(report.error);
+	const library = $derived(system ? null : (report.result as LibrarySize | null));
+	const detail = $derived(system ? (report.result as SystemSize | null) : null);
 
 	const systemHref = (id: string) => `${base}?system=${encodeURIComponent(id)}`;
 	const gameHref = (id: string) => resolve('/games/[id]', { id });
@@ -155,7 +135,7 @@
 </nav>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !library && !detail}
 	<Loading />
 {:else if count === 0}
@@ -220,11 +200,15 @@
 								<td>
 									<div class="d-flex align-items-center gap-2">
 										<a href={systemHref(s.system)}>{s.systemName}</a>
-										<a
-											class="btn btn-sm btn-outline-secondary ms-auto"
+										<Button
+											variant="secondary"
+											outline
+											size="sm"
+											class="ms-auto"
+											icon="library"
 											href="{resolve('/')}?system={encodeURIComponent(s.system)}"
-											aria-label="Open {s.systemName} in Library"><Icon name="library" /></a
-										>
+											aria-label="Open {s.systemName} in Library"
+										/>
 									</div>
 								</td>
 								<td class="text-end">{formatCount(s.gameCount)}</td>
@@ -250,4 +234,15 @@
 		</div>
 	</div>
 {/if}
+
 <!-- eslint-enable svelte/no-navigation-without-resolve -->
+
+<style>
+	/* B22: rows that follow their link on click; a stronger hover than table-hover, in both themes. */
+	.clickable-rows {
+		--bs-table-hover-bg: rgba(var(--bs-emphasis-color-rgb), 0.15);
+	}
+	.clickable-rows > tbody > tr {
+		cursor: pointer;
+	}
+</style>

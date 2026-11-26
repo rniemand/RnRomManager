@@ -24,7 +24,7 @@ public class BackupServiceTests
     private IBackupStore _store = null!;
     private FakeTimeProvider _time = null!;
     private BackupOptions _options = null!;
-    private InMemorySettings _settings = null!;
+    private BackupServiceInMemorySettings _settings = null!;
     private BackupService _service = null!;
     private JobLock _jobLock = null!;
     private IMaintenanceWindow _maintenance = null!;
@@ -52,7 +52,7 @@ public class BackupServiceTests
             });
         _time = new FakeTimeProvider(T0);
         _options = new BackupOptions();
-        _settings = new InMemorySettings();
+        _settings = new BackupServiceInMemorySettings();
         _store.KnownMigrations.Returns(new HashSet<string> { Known });
         _jobLock = new JobLock();
         _windowClosed = 0;
@@ -508,20 +508,5 @@ public class BackupServiceTests
         _database.Received(1).Migrate();
         await _users.Received(1).RotateAllSecurityStampsAsync(CancellationToken.None);
         _audit.Received(1).Record(Arg.Any<AuditEvent>());
-    }
-
-    private sealed class InMemorySettings : ISettingsRepository
-    {
-        public Dictionary<string, string> Values { get; } = new(StringComparer.Ordinal);
-
-        public Task<IReadOnlyDictionary<string, string>> GetAsync(IReadOnlyCollection<string> names, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyDictionary<string, string>>(Values.Where(v => names.Contains(v.Key)).ToDictionary());
-
-        public Task SetAsync(IReadOnlyDictionary<string, string> values, CancellationToken cancellationToken)
-        {
-            foreach (var (name, value) in values)
-                Values[name] = value;
-            return Task.CompletedTask;
-        }
     }
 }

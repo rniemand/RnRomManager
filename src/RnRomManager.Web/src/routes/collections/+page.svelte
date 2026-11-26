@@ -1,12 +1,21 @@
 <script lang="ts">
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
-	import PageTitle from '#lib/components/PageTitle.svelte';
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import { debounced } from '#lib/debounce.js';
+	import { pageParam, replaceUrl } from '#lib/urlState.js';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { CollectionListItem, Page, SystemInfo } from '#lib/api/types.js';
+	import type {
+		CollectionListItem,
+		Page,
+		SystemInfo,
+		DiscoveryState,
+		SystemsState
+	} from '#lib/types/index.js';
 	import { collectionsApi, collectionsSearch } from '#lib/collections.js';
 	import {
 		collectionsTab,
@@ -23,21 +32,19 @@
 		saveCollectionsTab,
 		systemsSearch,
 		systemsState,
-		tabSearch,
-		type DiscoveryState,
-		type SystemsState
+		tabSearch
 	} from '#lib/discovery.js';
-	import CollectionModal from '#lib/components/CollectionModal.svelte';
-	import DiscoveryGames from '#lib/components/DiscoveryGames.svelte';
-	import DiscoveryGroups from '#lib/components/DiscoveryGroups.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
-	import SystemGames from '#lib/components/SystemGames.svelte';
-	import SystemList from '#lib/components/SystemList.svelte';
-	import LogoModal from '#lib/components/LogoModal.svelte';
+	import CollectionModal from '#lib/components/modals/CollectionModal.svelte';
+	import DiscoveryGames from '#lib/components/discovery/DiscoveryGames.svelte';
+	import DiscoveryGroups from '#lib/components/discovery/DiscoveryGroups.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
+	import SystemGames from '#lib/components/systems/SystemGames.svelte';
+	import SystemList from '#lib/components/systems/SystemList.svelte';
+	import LogoModal from '#lib/components/modals/LogoModal.svelte';
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 
 	/**
@@ -53,17 +60,13 @@
 	let pageSize = $state(readPageSize(sizeKey));
 	let filter = $state('');
 	let creating = $state(false);
-	let filterTimer: ReturnType<typeof setTimeout> | undefined;
-	onDestroy(() => clearTimeout(filterTimer));
+	onDestroy(() => onFilterInput.cancel());
 
 	const q = $derived(page.url.searchParams.get('q')?.trim() ?? '');
-	const pageNumber = $derived(
-		Math.max(1, Math.floor(Number(page.url.searchParams.get('page'))) || 1)
-	);
+	const pageNumber = $derived(pageParam(page.url.searchParams));
 
 	function go(next: { q: string; page: number }): void {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${collectionsSearch(next)}`, { replace: true, reset: false });
+		void replaceUrl(`/collections${collectionsSearch(next)}`);
 	}
 
 	const discovery = $derived(discoveryState(page.url));
@@ -77,8 +80,7 @@
 	function goDiscovery(next: DiscoveryState, remember = false): void {
 		const search = discoverySearch(next);
 		if (remember) saveCollectionsTab(next.kind, listSearch(search));
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${search}`, { replace: true, reset: false });
+		void replaceUrl(`/collections${search}`);
 	}
 
 	/**
@@ -94,8 +96,7 @@
 			saveCollectionsTab(current, '');
 			return;
 		}
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${search}`, { replace: true, reset: false });
+		void replaceUrl(`/collections${search}`);
 	});
 
 	/**
@@ -142,8 +143,7 @@
 	function goSystems(next: SystemsState, remember = false): void {
 		const search = systemsSearch(next);
 		if (remember) saveCollectionsTab('systems', listSearch(search));
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${search}`, { replace: true, reset: false });
+		void replaceUrl(`/collections${search}`);
 	}
 
 	$effect(() => {
@@ -163,12 +163,9 @@
 		return () => (stale = true);
 	});
 
-	function onFilterInput(): void {
-		clearTimeout(filterTimer);
-		filterTimer = setTimeout(() => {
-			if (filter.trim() !== q) go({ q: filter.trim(), page: 1 });
-		}, 300);
-	}
+	const onFilterInput = debounced(() => {
+		if (filter.trim() !== q) go({ q: filter.trim(), page: 1 });
+	}, 300);
 
 	function setPageSize(size: number): void {
 		pageSize = size;
@@ -209,37 +206,31 @@
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 	<PageTitle icon="collections" text="Collections" class="mb-0" />
 	{#if tab === 'collections'}
-		<button type="button" class="btn btn-primary ms-auto" onclick={() => (creating = true)}>
-			<Icon name="add" /> New collection
-		</button>
+		<Button variant="primary" class="ms-auto" icon="add" onclick={() => (creating = true)}
+			>New collection</Button
+		>
 	{/if}
 </div>
 
 <nav class="mb-3" aria-label="Collections views">
-	<ul class="nav nav-tabs" use:scrollActiveTab>
-		{#each collectionsTabs as item (item.tab)}
-			<li class="nav-item">
-				<a
-					class="nav-link"
-					class:active={tab === item.tab}
-					aria-current={tab === item.tab ? 'page' : undefined}
-					href="{resolve('/collections')}{tabSearch(item.tab)}">{item.label}</a
-				>
-			</li>
-		{/each}
-	</ul>
+	<NavTabs
+		tabs={collectionsTabs.map((item) => ({
+			id: item.tab,
+			label: item.label,
+			href: `${resolve('/collections')}${tabSearch(item.tab)}`
+		}))}
+		active={tab}
+	/>
 </nav>
 
 {#if tab === 'collections'}
 	<form class="row g-2 mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
 		<div class="col-12 col-md-6 col-lg-4">
 			<label class="visually-hidden" for="collection-filter">Filter collections</label>
-			<input
+			<SearchInput
 				id="collection-filter"
-				type="search"
-				class="form-control"
 				placeholder="Filter by name"
-				maxlength="255"
+				maxlength={255}
 				bind:value={filter}
 				oninput={onFilterInput}
 			/>
@@ -256,9 +247,9 @@
 		{:else}
 			<EmptyState message="You have no collections yet." icon="collections">
 				{#snippet action()}
-					<button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
-						<Icon name="add" /> New collection
-					</button>
+					<Button variant="primary" icon="add" onclick={() => (creating = true)}
+						>New collection</Button
+					>
 				{/snippet}
 			</EmptyState>
 		{/if}
@@ -400,9 +391,8 @@
 			{:else}
 				<EmptyState message="This system isn't supported.">
 					{#snippet action()}
-						<a
-							class="btn btn-outline-primary"
-							href="{resolve('/collections')}{tabSearch('systems')}">Back to all systems</a
+						<Button variant="primary" outline href="{resolve('/collections')}{tabSearch('systems')}"
+							>Back to all systems</Button
 						>
 					{/snippet}
 				</EmptyState>

@@ -14,7 +14,10 @@ public sealed class IntegrityIssueRepository(IDbConnectionFactory connections) :
         """;
 
     public async Task<IReadOnlyList<OpenIssue>> ListOpenAsync(
-        string zipPath, string entryName, IReadOnlyCollection<string> types, CancellationToken cancellationToken)
+        string zipPath,
+        string entryName,
+        IReadOnlyCollection<string> types,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         return (await connection.QueryAsync<OpenIssue>(new CommandDefinition("""
@@ -25,7 +28,10 @@ public sealed class IntegrityIssueRepository(IDbConnectionFactory connections) :
     }
 
     public async Task<IReadOnlyList<ExternalOpenIssue>> ListOpenExternalAsync(
-        string zipPath, string externalFileName, IReadOnlyCollection<string> types, CancellationToken cancellationToken)
+        string zipPath,
+        string externalFileName,
+        IReadOnlyCollection<string> types,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         return (await connection.QueryAsync<ExternalOpenIssue>(new CommandDefinition("""
@@ -35,16 +41,20 @@ public sealed class IntegrityIssueRepository(IDbConnectionFactory connections) :
             """, new { zipPath, externalFileName, types }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public async Task<Page<IntegrityIssue>> ListAsync(string? status, string? type, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<Page<IntegrityIssue>> ListAsync(
+        string? status,
+        string? type,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         const string where = "WHERE (@status IS NULL OR status = @status) AND (@type IS NULL OR type = @type)";
         var args = new { status, type, pageSize, offset = (long)(page - 1) * pageSize };
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM integrity_issues {where}", args, cancellationToken: cancellationToken));
-        var items = await connection.QueryAsync<IntegrityIssue>(new CommandDefinition(
-            $"{Select} {where} ORDER BY detected_at DESC, id DESC LIMIT @pageSize OFFSET @offset", args, cancellationToken: cancellationToken));
-        return new Page<IntegrityIssue>(items.AsList(), page, pageSize, total);
+        return await connection.QueryPageAsync<IntegrityIssue>(
+            $"SELECT COUNT(*) FROM integrity_issues {where}",
+            $"{Select} {where} ORDER BY detected_at DESC, id DESC LIMIT @pageSize OFFSET @offset",
+            args, page, pageSize, cancellationToken);
     }
 
     public async Task<IReadOnlyList<IntegrityIssue>> ListAllOpenAsync(CancellationToken cancellationToken)
@@ -66,7 +76,13 @@ public sealed class IntegrityIssueRepository(IDbConnectionFactory connections) :
             """, issue, cancellationToken: cancellationToken));
     }
 
-    public async Task TouchAsync(long id, Guid jobId, string severity, string? details, Guid? gameId, CancellationToken cancellationToken)
+    public async Task TouchAsync(
+        long id,
+        Guid jobId,
+        string severity,
+        string? details,
+        Guid? gameId,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         await connection.ExecuteAsync(new CommandDefinition("""
@@ -86,7 +102,11 @@ public sealed class IntegrityIssueRepository(IDbConnectionFactory connections) :
             new { ids, resolvedAt }, cancellationToken: cancellationToken));
     }
 
-    public async Task<int> ResolveOpenAsync(string zipPath, string type, DateTime resolvedAt, CancellationToken cancellationToken)
+    public async Task<int> ResolveOpenAsync(
+        string zipPath,
+        string type,
+        DateTime resolvedAt,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         return await connection.ExecuteAsync(new CommandDefinition(

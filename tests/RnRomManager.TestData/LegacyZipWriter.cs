@@ -14,7 +14,11 @@ public static class LegacyZipWriter
 
     /// <param name="extra">More entries by name, e.g. <c>images/…</c> or <c>notes/…</c>.</param>
     /// <param name="roms">Each ROM's bytes, in the order of <paramref name="game"/>'s ROMs.</param>
-    public static void Write(string path, InfoJsonGame game, IReadOnlyDictionary<string, byte[]>? extra, params byte[][] roms)
+    public static void Write(
+        string path,
+        InfoJsonGame game,
+        IReadOnlyDictionary<string, byte[]>? extra,
+        params byte[][] roms)
     {
         if (roms.Length != game.Roms.Count)
             throw new ArgumentException("One byte array per ROM.", nameof(roms));

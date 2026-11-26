@@ -15,21 +15,17 @@ namespace RnRomManager.Data.Repositories;
 public sealed class DiscoveryRepository(IDbConnectionFactory connections, IGameRepository games, TimeProvider time)
     : IDiscoveryRepository
 {
-    private sealed record EntryRow(string Key, byte[] Norm, byte[] Trimmed, Guid GameId);
-
-    private sealed record Group(DiscoveryGroup Info, byte[] Norm, Guid[] GameIds);
-
-    private sealed class Index(List<Group> groups)
-    {
-        public List<Group> Groups { get; } = groups;
-        public Dictionary<string, Group> ByKey { get; } = groups.ToDictionary(g => g.Info.Key, StringComparer.Ordinal);
-    }
-
     private readonly Lock _lock = new();
     private readonly Dictionary<DiscoveryKind, (Task<Index> Build, DateTimeOffset StartedAt)> _indexes = [];
 
     public async Task<Page<DiscoveryGroup>> ListGroupsAsync(
-        DiscoveryKind kind, int page, int pageSize, string? q, DiscoveryGroupSort sort, bool descending, CancellationToken cancellationToken)
+        DiscoveryKind kind,
+        int page,
+        int pageSize,
+        string? q,
+        DiscoveryGroupSort sort,
+        bool descending,
+        CancellationToken cancellationToken)
     {
         var groups = (await IndexAsync(kind, cancellationToken)).Groups.Select(g => g.Info).ToList();
         if (!string.IsNullOrWhiteSpace(q))
@@ -56,7 +52,11 @@ public sealed class DiscoveryRepository(IDbConnectionFactory connections, IGameR
     }
 
     public async Task<Page<GameListItem>?> ListGamesAsync(
-        DiscoveryKind kind, string key, int page, int pageSize, CancellationToken cancellationToken)
+        DiscoveryKind kind,
+        string key,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         if (!(await IndexAsync(kind, cancellationToken)).ByKey.TryGetValue(key, out var group))
             return null;
@@ -125,7 +125,7 @@ public sealed class DiscoveryRepository(IDbConnectionFactory connections, IGameR
             // Binary comparisons of MariaDB's bytes, as MIN() and ORDER BY on them would do.
             var label = g.Select(e => e.Trimmed).Min(ByteOrder.Instance)!;
             var ids = g.Select(e => e.GameId).Distinct().OrderBy(id => rank.GetValueOrDefault(id, int.MaxValue)).ThenBy(id => id).ToArray();
-            return new Group(new DiscoveryGroup(g.Key, DisplayName(label), ids.Length), g.First().Norm, ids);
+            return new DiscoveryRepositoryGroup(new DiscoveryGroup(g.Key, DisplayName(label), ids.Length), g.First().Norm, ids);
         }).ToList();
         groups.Sort((a, b) => ByteOrder.Instance.Compare(a.Norm, b.Norm));
         return new Index(groups);
@@ -139,12 +139,5 @@ public sealed class DiscoveryRepository(IDbConnectionFactory connections, IGameR
         return runes.Count <= DiscoveryGroup.MaxNameLength
             ? name
             : string.Concat(runes.Take(DiscoveryGroup.MaxNameLength - 1).Select(r => r.ToString())) + "…";
-    }
-
-    private sealed class ByteOrder : IComparer<byte[]>
-    {
-        public static readonly ByteOrder Instance = new();
-
-        public int Compare(byte[]? x, byte[]? y) => x.AsSpan().SequenceCompareTo(y);
     }
 }

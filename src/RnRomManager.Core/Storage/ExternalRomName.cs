@@ -6,41 +6,6 @@ using RnRomManager.Core.Naming;
 namespace RnRomManager.Core.Storage;
 
 /// <summary>
-/// The names taken in one library folder while a write allocates into it (spec E2), compared ignoring case: the
-/// files and folders on disk, the external files the mirror says games in that folder own (on disk or not, so a
-/// missing file's name isn't handed to another game), the names the opened destination ZIP lists, and everything
-/// this write has allocated so far.
-/// </summary>
-public sealed class ExternalNameReservations
-{
-    private readonly HashSet<string> _taken;
-
-    public ExternalNameReservations(IEnumerable<string> taken) => _taken = new HashSet<string>(taken, StringComparer.OrdinalIgnoreCase);
-
-    /// <param name="folder">The folder on disk; a missing one has no entries.</param>
-    /// <param name="folderPath">The same folder relative to <c>Paths:Roms</c> with <c>/</c> separators, e.g. <c>switch/L</c>.</param>
-    /// <param name="claims">Mirrored external ROMs (<c>IRomRepository.ListExternalAsync</c>); those of other folders are ignored.</param>
-    /// <param name="listedByDestination">The <c>externalFileName</c>s of the opened destination ZIP, when the mirror may lag behind it.</param>
-    public static ExternalNameReservations ForFolder(string folder, string folderPath, IEnumerable<ExternalRomRow> claims,
-        IEnumerable<string>? listedByDestination = null)
-    {
-        var onDisk = Directory.Exists(folder) ? Directory.EnumerateFileSystemEntries(folder).Select(e => Path.GetFileName(e)!) : [];
-        var prefix = folderPath.TrimEnd('/') + "/";
-        var claimed = claims
-            .Where(c => c.ZipPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && c.ZipPath.IndexOf('/', prefix.Length) < 0)
-            .Select(c => c.ExternalFileName);
-        return new ExternalNameReservations([.. onDisk, .. claimed, .. listedByDestination ?? []]);
-    }
-
-    public bool IsTaken(string name) => _taken.Contains(name);
-
-    public void Reserve(string name) => _taken.Add(name);
-
-    /// <summary>Frees a name this write is about to vacate, e.g. the current name of a file it renames.</summary>
-    public void Release(string name) => _taken.Remove(name);
-}
-
-/// <summary>
 /// Names of external ROM files and of the ZIPs of external games (spec E1, E2), built in one place so ingest, edits
 /// and the integrity location check agree. Every name is one path component with a byte budget: a final name is at
 /// most <see cref="MaxNameBytes"/> UTF-8 bytes, so its staging name (<see cref="StagingSuffix"/> appended) still fits
@@ -155,8 +120,15 @@ public static class ExternalRomName
     /// <param name="ownGameId">The game being renamed, whose own row is not a clash; null for a new game.</param>
     /// <param name="ownZipPath">That game's current ZIP path, whose file on disk is not a clash.</param>
     /// <returns>The path relative to <paramref name="romsRoot"/>, <c>/</c> separators: <c>&lt;system&gt;/&lt;bucket&gt;/&lt;name&gt;</c>.</returns>
-    public static async Task<string> AllocateZipPathAsync(string romsRoot, string systemId, string title, IReadOnlyList<ExternalRomRow> claims,
-        IGameRepository games, CancellationToken cancellationToken, Guid? ownGameId = null, string? ownZipPath = null)
+    public static async Task<string> AllocateZipPathAsync(
+        string romsRoot,
+        string systemId,
+        string title,
+        IReadOnlyList<ExternalRomRow> claims,
+        IGameRepository games,
+        CancellationToken cancellationToken,
+        Guid? ownGameId = null,
+        string? ownZipPath = null)
     {
         var folders = new Dictionary<string, (ExternalNameReservations Names, List<string> ZipPaths)>(StringComparer.Ordinal);
         for (var n = 1; ; n++)
@@ -318,7 +290,11 @@ public static class ExternalRomName
     public static string? AllocateSidePath(string folder, string fileName, string? companionSuffix = null) =>
         AllocateSibling(folder, fileName, companionSuffix, int.MaxValue);
 
-    private static string? AllocateSibling(string folder, string name, string? companionSuffix, int maxScalars)
+    private static string? AllocateSibling(
+        string folder,
+        string name,
+        string? companionSuffix,
+        int maxScalars)
     {
         var extension = Path.GetExtension(name);
         var stem = name[..^extension.Length];
@@ -385,14 +361,4 @@ public static class ExternalRomName
         }
         return value[..length];
     }
-}
-
-/// <summary>B10: the outcome of <see cref="ExternalRomName.AllocateExact"/>.</summary>
-public enum ExactNameStatus
-{
-    Allocated,
-    /// <summary>The name or its staging name is already used in the folder (on disk, by a claim or by the destination ZIP).</summary>
-    Taken,
-    /// <summary>Over <see cref="ExternalRomName.MaxNameBytes"/> UTF-8 bytes; it is never cut.</summary>
-    TooLong,
 }

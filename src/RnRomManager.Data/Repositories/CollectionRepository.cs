@@ -41,7 +41,11 @@ public sealed class CollectionRepository(IDbConnectionFactory connections) : ICo
     }
 
     public async Task<Page<Collection>> ListAsync(
-        int userId, IReadOnlyList<string> words, int page, int pageSize, CancellationToken cancellationToken)
+        int userId,
+        IReadOnlyList<string> words,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         var where = "WHERE c.user_id = @userId";
         var args = new DynamicParameters(new { userId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) });
@@ -53,11 +57,10 @@ public sealed class CollectionRepository(IDbConnectionFactory connections) : ICo
         }
 
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM collections c {where}", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<Collection>(new CommandDefinition(
-            $"{Select} {where} ORDER BY c.name, c.id LIMIT @pageSize OFFSET @offset", args, cancellationToken: cancellationToken));
-        return new Page<Collection>(rows.AsList(), page, pageSize, total);
+        return await connection.QueryPageAsync<Collection>(
+            $"SELECT COUNT(*) FROM collections c {where}",
+            $"{Select} {where} ORDER BY c.name, c.id LIMIT @pageSize OFFSET @offset",
+            args, page, pageSize, cancellationToken);
     }
 
     public async Task<bool> UpdateAsync(Collection collection, CancellationToken cancellationToken)
@@ -85,7 +88,11 @@ public sealed class CollectionRepository(IDbConnectionFactory connections) : ICo
             "DELETE FROM collections WHERE id = @id AND user_id = @userId", new { id, userId }, cancellationToken: cancellationToken)) > 0;
     }
 
-    public async Task<int> AddGamesAsync(Guid collectionId, IReadOnlyCollection<Guid> gameIds, DateTime addedAt, CancellationToken cancellationToken)
+    public async Task<int> AddGamesAsync(
+        Guid collectionId,
+        IReadOnlyCollection<Guid> gameIds,
+        DateTime addedAt,
+        CancellationToken cancellationToken)
     {
         if (gameIds.Count == 0) return 0;
         await using var connection = connections.Create();

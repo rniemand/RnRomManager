@@ -5,10 +5,6 @@ import { formatDateTime } from '#lib/format.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs, pollIntervalMs } from '#lib/stores/jobs.svelte.js';
 
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
-
 const { default: JobsPage } = await import('./+page.svelte');
 
 const job = (id: string, status = 'Completed') => ({

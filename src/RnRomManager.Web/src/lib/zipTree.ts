@@ -1,21 +1,4 @@
-import type { ZipEntry } from './api/types';
-
-/** A folder of a library ZIP (Z4): `path` is `''` for the root, else `a/b` (no trailing slash). */
-export interface ZipFolder {
-	name: string;
-	path: string;
-	folders: ZipFolder[];
-	files: { name: string; entry: ZipEntry }[];
-}
-
-export interface ZipTree {
-	root: ZipFolder;
-	/** Every folder by path, the root included. */
-	folders: Map<string, ZipFolder>;
-	fileCount: number;
-	totalSize: number;
-	totalCompressed: number;
-}
+import type { ZipEntry, ZipFolder, ZipTree } from '#lib/types/index.js';
 
 const ordinal = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 

@@ -4,8 +4,13 @@ namespace RnRomManager.Core.Tests.Library;
 
 public class SearchMatchTests
 {
-    private static SearchMatch? Find(string[] words, string title = "Tetris", string[]? developers = null,
-        string[]? publishers = null, string[]? genres = null, AddOnName[]? addOns = null) =>
+    private static SearchMatch? Find(
+        string[] words,
+        string title = "Tetris",
+        string[]? developers = null,
+        string[]? publishers = null,
+        string[]? genres = null,
+        AddOnName[]? addOns = null) =>
         SearchMatch.Find(words, title, title, developers ?? [], publishers ?? [], genres ?? [], addOns ?? []);
 
     [Test]

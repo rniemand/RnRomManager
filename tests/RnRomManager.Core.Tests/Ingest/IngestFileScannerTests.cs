@@ -18,9 +18,7 @@ public class IngestFileScannerTests
         _dir = new TempDir();
         var handlers = new[] { "gb", "nes" }.Select(id =>
         {
-            var h = Substitute.For<ISystemHandler>();
-            h.EmbedRomsInZip.Returns(true);
-            h.Id.Returns(id);
+            var h = TestHandlers.Fake(id, embedRomsInZip: true);
             return h;
         });
         _scanner = new IngestFileScanner(Options.Create(new PathsOptions { Ingest = _dir.Combine("ingest") }),

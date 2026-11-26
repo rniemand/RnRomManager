@@ -2,14 +2,6 @@ using RnRomManager.Core.Dats;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>Arcade I2: one file of a set ZIP. <see cref="Crc32"/> is 8 lower-case hex digits.</summary>
-public sealed record MameEntry(string Name, string Crc32);
-
-/// <summary>Arcade I3: whether a set ZIP holds a DAT set.</summary>
-/// <param name="Missing">The missing required ROMs' names, in DAT order; empty when complete.</param>
-/// <param name="SelfContained">The ZIP also holds the parent's (merged) ROMs and, if the set has BIOS-choice ROMs, one of them.</param>
-public sealed record MameMatch(bool Complete, IReadOnlyList<string> Missing, bool SelfContained);
-
 public static class MameMatcher
 {
     /// <summary>

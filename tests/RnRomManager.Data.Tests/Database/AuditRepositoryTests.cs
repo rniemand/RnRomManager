@@ -23,24 +23,10 @@ public class AuditRepositoryTests
         _audit = new AuditRepository(_factory);
     }
 
-    private sealed class Row
-    {
-        public DateTime OccurredAt { get; init; }
-        public string Action { get; init; } = "";
-        public string? SystemId { get; init; }
-        public Guid? GameId { get; init; }
-        public int? UserId { get; init; }
-        public string? Username { get; init; }
-        public Guid? JobId { get; init; }
-        public string? Path { get; init; }
-        public string? TargetPath { get; init; }
-        public string? Details { get; init; }
-    }
-
-    private async Task<List<Row>> Rows()
+    private async Task<List<AuditRepositoryRow>> Rows()
     {
         await using var connection = _factory.Create();
-        return (await connection.QueryAsync<Row>("""
+        return (await connection.QueryAsync<AuditRepositoryRow>("""
             SELECT occurred_at AS OccurredAt, action AS Action, system_id AS SystemId, game_id AS GameId, user_id AS UserId,
                    username AS Username, job_id AS JobId, path AS Path, target_path AS TargetPath, details AS Details
             FROM audit_events ORDER BY id
@@ -58,7 +44,7 @@ public class AuditRepositoryTests
 
         var rows = await Rows();
 
-        Assert.That(rows[0], Is.EqualTo(new Row
+        Assert.That(rows[0], Is.EqualTo(new AuditRepositoryRow
         {
             OccurredAt = T0.AddTicks(12_340), Action = "ReleaseMoved", SystemId = "gb", GameId = game, UserId = 7, Username = "boss",
             JobId = job, Path = "roms/gb/T/Tetris.zip", TargetPath = "roms/gb/T/Tetris DX.zip", Details = "Tetris (World).gb",

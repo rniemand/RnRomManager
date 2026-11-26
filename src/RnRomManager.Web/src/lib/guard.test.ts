@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Me } from './api/types';
+import type { Me } from '#lib/types/index.js';
 import { guard, safeReturnUrl } from './guard';
 
 const user: Me = { id: 2, username: 'plain', roles: [], mustChangePassword: false };

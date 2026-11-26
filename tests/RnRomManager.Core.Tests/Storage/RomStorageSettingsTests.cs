@@ -23,8 +23,7 @@ public class RomStorageSettingsTests
         _repo.GetAsync(Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
             .Returns(call => (IReadOnlyDictionary<string, string>)_stored
                 .Where(v => call.Arg<IReadOnlyCollection<string>>().Contains(v.Key)).ToDictionary());
-        var gb = Substitute.For<ISystemHandler>();
-        gb.Id.Returns("gb");
+        var gb = TestHandlers.Fake("gb");
         var registry = new SystemRegistry([gb, new LegacyExternalTestHandler()]);
         _settings = new RomStorageSettings(_repo, () => registry, NullLogger<RomStorageSettings>.Instance);
     }

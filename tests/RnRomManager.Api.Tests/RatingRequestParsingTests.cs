@@ -8,14 +8,18 @@ namespace RnRomManager.Api.Tests;
 public class RatingRequestParsingTests
 {
     private static (GamePatch Patch, Dictionary<string, string[]> Errors) Parse(string json) =>
-        LibraryEndpoints.ParseRating(JsonDocument.Parse(json).RootElement);
+        LibraryRequestParsing.ParseRating(JsonDocument.Parse(json).RootElement);
 
     [TestCase("""{"rating":4}""", true, 4, null)]
     [TestCase("""{"rating":null}""", true, null, null)]
     [TestCase("""{"favourite":true}""", false, null, true)]
     [TestCase("""{"rating":1,"favourite":false}""", true, 1, false)]
     [TestCase("""{"rating":5,"title":"ignored"}""", true, 5, null)]
-    public void ValidBodies(string json, bool setRating, int? rating, bool? favourite)
+    public void ValidBodies(
+        string json,
+        bool setRating,
+        int? rating,
+        bool? favourite)
     {
         var (patch, errors) = Parse(json);
 

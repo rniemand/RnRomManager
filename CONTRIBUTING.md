@@ -19,3 +19,7 @@ Every non-trivial class gets unit tests (NUnit `Assert.That`, NSubstitute). File
 
 ## Doc rule
 The PR that implements or changes a behaviour updates the doc(s) it belongs to (the MVP spec's §19 maps behaviours to docs). A change to a system's storage, formats, DAT or browser play updates the README supported-systems table. Spec changes go into the spec and its Decisions section.
+
+## Style rule
+
+Follow `docs/style-guide.md` for every code change; the `CodeStyleTests` guard enforces its structural rules.

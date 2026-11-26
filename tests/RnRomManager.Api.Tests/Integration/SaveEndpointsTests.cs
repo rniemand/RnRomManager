@@ -55,9 +55,7 @@ public partial class SaveEndpointsTests
     [TearDown]
     public void TearDown() => _user.Dispose();
 
-    private sealed record TestGame(Guid Id, string Zip);
-
-    private async Task<TestGame> WriteGame(string title, params string[] fileNames)
+    private async Task<SaveEndpointsTestGame> WriteGame(string title, params string[] fileNames)
     {
         var seeds = fileNames.Select(_ => ++_seed).ToArray();
         var game = TestLibrary.Game(title, [.. fileNames.Select((f, i) => TestLibrary.Rom(f, TestLibrary.RomBytes(seeds[i]), isPrimary: i == 0))]);
@@ -72,7 +70,12 @@ public partial class SaveEndpointsTests
     private async Task<long> RomId(Guid gameId, string fileName) =>
         (await Service<IRomRepository>().ListByGameAsync(gameId, default)).Single(r => r.FileName == fileName).Id;
 
-    private async Task<GameSave> AddSave(TestGame game, string fileName, string name, byte[] bytes, string extension = ".state")
+    private async Task<GameSave> AddSave(
+        SaveEndpointsTestGame game,
+        string fileName,
+        string name,
+        byte[] bytes,
+        string extension = ".state")
     {
         var path = Path.Combine(_factory.Root, $"upload-{Guid.NewGuid():N}.tmp");
         File.WriteAllBytes(path, bytes);
@@ -292,7 +295,7 @@ public partial class SaveEndpointsTests
 
     // --- User Management S2/S3: private saves ---
 
-    private async Task<GameSave> AddSaveAs(TestGame game, string username, string name)
+    private async Task<GameSave> AddSaveAs(SaveEndpointsTestGame game, string username, string name)
     {
         var path = Path.Combine(_factory.Root, $"upload-{Guid.NewGuid():N}.tmp");
         File.WriteAllBytes(path, [5]);

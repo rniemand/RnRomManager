@@ -1,14 +1,17 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { Job, JobItem, Page } from '#lib/api/types.js';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import type { Job, JobItem, Page } from '#lib/types/index.js';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import {
 		formatSummaryValue,
@@ -130,9 +133,9 @@
 				>
 					{#if live}
 						<colgroup>
-							<col style="width: 11rem" />
-							<col style="width: 11rem" />
-							<col style="width: 8rem" />
+							<col class="col-11" />
+							<col class="col-11" />
+							<col class="col-8" />
 							<col />
 						</colgroup>
 					{/if}
@@ -197,26 +200,20 @@
 			{/if}
 			{#each summary.tables as t (t.key)}
 				<h3 class="h6">{t.title}</h3>
-				<div class="card mb-4">
-					<div class="table-responsive">
-						<table class="table table-sm table-striped table-hover align-middle mb-0">
-							<thead class="table-dark">
-								<tr>
-									<th scope="col">{t.columns[0]}</th>
-									<th scope="col">{t.columns[1]}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each t.rows as [name, value] (name)}
-									<tr>
-										<td>{name}</td>
-										<td>{value}</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				</div>
+				<DataTable items={t.rows} key={([name]) => name} class="mb-4">
+					{#snippet head()}
+						<tr>
+							<th scope="col">{t.columns[0]}</th>
+							<th scope="col">{t.columns[1]}</th>
+						</tr>
+					{/snippet}
+					{#snippet row([name, value])}
+						<tr>
+							<td>{name}</td>
+							<td>{value}</td>
+						</tr>
+					{/snippet}
+				</DataTable>
 			{/each}
 		{/if}
 
@@ -225,15 +222,10 @@
 			<div class="row g-2 mb-2">
 				<div class="col-12 col-sm-6 col-md-3">
 					<label class="form-label" for="outcome">Outcome</label>
-					<select
-						id="outcome"
-						class="form-select"
-						bind:value={outcome}
-						onchange={() => (itemPage = 1)}
+					<Select id="outcome" bind:value={outcome} onchange={() => (itemPage = 1)}
+						><option value="">All outcomes</option>
+						{#each outcomes as o (o)}<option value={o}>{o}</option>{/each}</Select
 					>
-						<option value="">All outcomes</option>
-						{#each outcomes as o (o)}<option value={o}>{o}</option>{/each}
-					</select>
 				</div>
 			</div>
 
@@ -279,18 +271,20 @@
 						class="d-flex justify-content-center align-items-center gap-3"
 						aria-label="Item pages"
 					>
-						<button
-							type="button"
-							class="btn btn-sm btn-outline-secondary"
+						<Button
+							variant="secondary"
+							outline
+							size="sm"
 							disabled={itemPage <= 1}
-							onclick={() => itemPage--}>Previous</button
+							onclick={() => itemPage--}>Previous</Button
 						>
 						<span>Page {itemPage} of {pages}</span>
-						<button
-							type="button"
-							class="btn btn-sm btn-outline-secondary"
+						<Button
+							variant="secondary"
+							outline
+							size="sm"
 							disabled={itemPage >= pages}
-							onclick={() => itemPage++}>Next</button
+							onclick={() => itemPage++}>Next</Button
 						>
 					</nav>
 				{/if}
@@ -298,3 +292,12 @@
 		{/if}
 	{/if}
 </AdminOnly>
+
+<style>
+	.col-11 {
+		width: 11rem;
+	}
+	.col-8 {
+		width: 8rem;
+	}
+</style>

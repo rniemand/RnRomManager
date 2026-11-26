@@ -20,8 +20,12 @@ public partial class DiscoveryRepositoryTests
     private GameRepository Games => new(_factory);
 
     /// <summary>Mirrors a real game (release, cover) so the page goes through the normal <see cref="GameListItem"/> projection.</summary>
-    private async Task<InfoJsonGame> MirrorAsync(string title, string system = "gb", string? displayTitle = null,
-        string[]? publishers = null, string[]? genres = null)
+    private async Task<InfoJsonGame> MirrorAsync(
+        string title,
+        string system = "gb",
+        string? displayTitle = null,
+        string[]? publishers = null,
+        string[]? genres = null)
     {
         var game = Game(title, Rom($"{title} {system}.gb", RomBytes(++_seed))) with
         {
@@ -40,7 +44,11 @@ public partial class DiscoveryRepositoryTests
         await Mirror.ReplaceAsync(new MirrorEntry(game, $"{game.System}/{Bucket.For(name)}/{name}", 100, When.UtcDateTime), default);
     }
 
-    private Task<Page<GameListItem>?> SelectAsync(DiscoveryKind kind, string key, int page = 1, int pageSize = 48) =>
+    private Task<Page<GameListItem>?> SelectAsync(
+        DiscoveryKind kind,
+        string key,
+        int page = 1,
+        int pageSize = 48) =>
         _repository.ListGamesAsync(kind, key, page, pageSize, default);
 
     private async Task<List<string>?> SelectedTitlesAsync(DiscoveryKind kind, string key) =>

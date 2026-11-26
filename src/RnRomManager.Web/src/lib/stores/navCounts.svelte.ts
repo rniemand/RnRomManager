@@ -1,5 +1,5 @@
-import { api } from '../api/client';
-import type { Page, RemovedSystem } from '../api/types';
+import { api } from '#lib/api/client.js';
+import type { Page, RemovedSystem } from '#lib/types/index.js';
 import { auth } from './auth.svelte';
 
 /**

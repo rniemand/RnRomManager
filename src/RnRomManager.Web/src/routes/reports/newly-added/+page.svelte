@@ -1,15 +1,16 @@
 <script lang="ts">
+	import { replaceUrl } from '#lib/urlState.js';
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
-	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { SystemInfo } from '#lib/api/types.js';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import type { SystemInfo } from '#lib/types/index.js';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatDateTime } from '#lib/format.js';
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 
 	/**
 	 * Release editing B14: the 10 newest games per system, one tab per system (Report Polish L4–L5). The tab is URL state
@@ -23,11 +24,11 @@
 		}[];
 	}
 
-	let result = $state<NewlyAdded | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 	let systems = $state<SystemInfo[]>([]);
 
+	const report = useAbortableGet<NewlyAdded>(() => '/api/reports/newly-added');
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 	const requested = $derived(page.url.searchParams.get('system') ?? '');
 	const selected = $derived(
 		result?.systems.find((g) => g.system === requested) ?? result?.systems[0] ?? null
@@ -42,55 +43,33 @@
 	});
 
 	function choose(next: string): void {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
-		void goto(`${resolve('/reports/newly-added')}?system=${encodeURIComponent(next)}`, {
-			replace: true,
-			reset: false
-		});
+		void replaceUrl(`${resolve('/reports/newly-added')}?system=${encodeURIComponent(next)}`);
 	}
-
-	$effect(() => {
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api.get<NewlyAdded>('/api/reports/newly-added', { signal: controller.signal }).then(
-			(r) => (result = r),
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
-	});
 </script>
 
 <svelte:head><title>Newly Added · RnRomManager</title></svelte:head>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !result}
 	<Loading />
 {:else if !selected}
 	<div class="card"><EmptyState message="No games yet." /></div>
 {:else}
-	<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
-		{#each result.systems as group (group.system)}
-			<li class="nav-item" role="presentation">
-				<button
-					type="button"
-					class="nav-link"
-					class:active={group.system === selected.system}
-					id="newly-added-{group.system}"
-					role="tab"
-					aria-selected={group.system === selected.system}
-					aria-controls="newly-added-panel"
-					title={group.systemName}
-					onclick={() => choose(group.system)}
-					><SystemBadge system={group.system} name={shortName(group.system)} /></button
-				>
-			</li>
-		{/each}
-	</ul>
+	<NavTabs
+		tabs={result.systems.map((group) => ({
+			id: group.system,
+			label: group.systemName,
+			tabId: `newly-added-${group.system}`,
+			controls: 'newly-added-panel',
+			title: group.systemName
+		}))}
+		active={selected.system}
+		onselect={choose}
+		class="mb-3"
+	>
+		{#snippet content(tab)}<SystemBadge system={tab.id} name={shortName(tab.id)} />{/snippet}
+	</NavTabs>
 	<div
 		class="card"
 		id="newly-added-panel"

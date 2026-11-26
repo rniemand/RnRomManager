@@ -3,12 +3,6 @@ using System.Text.Json;
 
 namespace RnRomManager.Core.Users;
 
-/// <summary>A global hotkey action (B21). <see cref="Role"/> null = every signed-in user.</summary>
-public sealed record HotkeyAction(string Id, string Name, IReadOnlyList<string> Defaults, bool Editable, string? Role)
-{
-    public bool AllowedFor(IReadOnlySet<string> roles) => Role is null || roles.Contains(Role);
-}
-
 /// <summary>
 /// B21–B23: the hotkey actions, their defaults and the binding rules. Mirrored by <c>src/lib/hotkeys.ts</c> in the SPA;
 /// keep both in step. A binding's canonical form is <c>Ctrl+Alt+Shift+Meta+&lt;Key&gt;</c> (modifiers in that order),

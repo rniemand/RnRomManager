@@ -128,7 +128,7 @@ public static class AppHost
         builder.Services.AddSingleton(Endpoints.OperatorCoreManifest.Pinned);
         // Only the image upload (I5) reads forms; match its request limit.
         builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(
-            options => options.MultipartBodyLengthLimit = Endpoints.LibraryEndpoints.UploadRequestLimit);
+            options => options.MultipartBodyLengthLimit = Endpoints.LibraryImageEndpoints.UploadRequestLimit);
         // Parsed when first resolved (startup step 5), after config validation.
         builder.Services.AddSingleton(sp =>
             new MySqlConnectionFactory(sp.GetRequiredService<IOptions<ConnectionStringsOptions>>().Value.Default));

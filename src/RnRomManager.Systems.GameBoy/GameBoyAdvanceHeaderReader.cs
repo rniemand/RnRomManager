@@ -36,7 +36,7 @@ public static class GameBoyAdvanceHeaderReader
         if (rom.Length < HeaderEnd)
             return null;
 
-        var title = ReadTitle(rom.Slice(0xA0, 12));
+        var title = HeaderText.ReadAscii(rom.Slice(0xA0, 12), trimStart: true);
         var gameCode = ReadCode(rom.Slice(0xAC, 4));
         var makerCode = ReadCode(rom.Slice(0xB0, 2));
         var logoValid = rom.Slice(LogoOffset, NintendoLogo.Length).SequenceEqual(NintendoLogo);
@@ -69,15 +69,6 @@ public static class GameBoyAdvanceHeaderReader
         for (var i = 0xA0; i <= 0xBC; i++)
             chk -= rom[i];
         return (byte)(chk - 0x19);
-    }
-
-    /// <summary>ASCII up to the first NUL, non-printable → <c>?</c>, trimmed; null when nothing is left (the GB rule).</summary>
-    private static string? ReadTitle(ReadOnlySpan<byte> area)
-    {
-        var end = area.IndexOf((byte)0);
-        var chars = (end < 0 ? area : area[..end]).ToArray().Select(b => b is >= 0x20 and <= 0x7E ? (char)b : '?').ToArray();
-        var title = new string(chars).Trim();
-        return title.Length > 0 ? title : null;
     }
 
     private static string? ReadCode(ReadOnlySpan<byte> area) =>

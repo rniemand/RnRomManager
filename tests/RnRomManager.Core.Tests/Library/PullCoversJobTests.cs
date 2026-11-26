@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Integrity;
@@ -42,9 +41,7 @@ public class PullCoversJobTests
     public void SetUp()
     {
         _dir = new TempDir();
-        _gb = Substitute.For<ISystemHandler>();
-        _gb.EmbedRomsInZip.Returns(true);
-        _gb.Id.Returns("gb");
+        _gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns([_gb]);
         _systems.ById("gb").Returns(_gb);
@@ -67,7 +64,11 @@ public class PullCoversJobTests
     private PullCoversJob Job() => new(_games, _igdb, _mirror, _reader, _systems, _items, _issues,
         Options.Create(new PathsOptions { Roms = _dir.Path }), _audit, new FakeTimeProvider(Now), NullLogger<PullCoversJob>.Instance);
 
-    private static InfoJsonImage Image(string name, byte[] bytes, bool cover, bool isDefault = false) => new()
+    private static InfoJsonImage Image(
+        string name,
+        byte[] bytes,
+        bool cover,
+        bool isDefault = false) => new()
     {
         FileName = name,
         Type = ImageType.BoxArt,
@@ -84,7 +85,11 @@ public class PullCoversJobTests
     private async Task<GameRow> Add(string title, int? igdbId, params (InfoJsonImage Image, byte[] Bytes)[] images) =>
         await Add(title, igdbId, g => g, images);
 
-    private async Task<GameRow> Add(string title, int? igdbId, Func<InfoJsonGame, InfoJsonGame> edit, params (InfoJsonImage Image, byte[] Bytes)[] images)
+    private async Task<GameRow> Add(
+        string title,
+        int? igdbId,
+        Func<InfoJsonGame, InfoJsonGame> edit,
+        params (InfoJsonImage Image, byte[] Bytes)[] images)
     {
         var rom = RomBytes(++_seed);
         var info = Rom($"{title}.gb", rom);
@@ -116,7 +121,12 @@ public class PullCoversJobTests
         return JsonSerializer.Serialize(await Job().RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None));
     }
 
-    private static string Summary(int pulled = 0, int noCover = 0, int imageLimit = 0, int skipped = 0, int error = 0) =>
+    private static string Summary(
+        int pulled = 0,
+        int noCover = 0,
+        int imageLimit = 0,
+        int skipped = 0,
+        int error = 0) =>
         JsonSerializer.Serialize(new { pulled, noCover, imageLimit, skipped, error });
 
     [Test]
@@ -215,8 +225,7 @@ public class PullCoversJobTests
         _igdb.DownloadCoverAsync("c6", Arg.Any<CancellationToken>()).Returns(new IgdbCoverDownload(null, 404, "IGDB returned HTTP 404."));
         _igdb.DownloadCoverAsync("c7", Arg.Any<CancellationToken>()).Returns(new IgdbCoverDownload([1, 2, 3], 200, null));
         // Only the first game asked about is pending: a legacy system whose embedded games wait to be moved out.
-        var legacy = Substitute.For<ISystemHandler>();
-        legacy.Id.Returns("gb");
+        var legacy = TestHandlers.Fake("gb");
         legacy.LegacyEmbeddedRoms.Returns(true);
         _systems.ById("gb").Returns(legacy, _gb);
 

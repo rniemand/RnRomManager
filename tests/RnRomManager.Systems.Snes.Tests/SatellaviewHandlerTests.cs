@@ -1,6 +1,6 @@
-using System.Buffers.Binary;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Systems.Snes.Tests;
 
@@ -28,15 +28,15 @@ public class SatellaviewHandlerTests
         var pack = new byte[128 * 1024];
         new Random(3).NextBytes(pack);
 
-        Assert.That(Handler.ReadHeader(pack), Is.Null);
-        Assert.That(Handler.ReadHeader([]), Is.Null);
+        HandlerAsserts.AssertNoHeader(Handler, pack);
+        HandlerAsserts.AssertNoHeader(Handler, []);
     }
 
     [Test]
     public void NormalizeForHashing_KeepsTheBytes()
     {
         byte[] pack = [1, 2, 3];
-        Assert.That(Handler.NormalizeForHashing(pack).ToArray(), Is.EqualTo(pack));
+        HandlerAsserts.AssertNormalizeIsIdentity(Handler, pack);
     }
 
     [Test]
@@ -44,8 +44,7 @@ public class SatellaviewHandlerTests
     {
         var png = Handler.DefaultBoxArtPng.Span;
 
-        Assert.That(png[..8].ToArray(), Is.EqualTo(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }), "PNG signature");
-        Assert.That((BinaryPrimitives.ReadInt32BigEndian(png[16..]), BinaryPrimitives.ReadInt32BigEndian(png[20..])), Is.EqualTo((512, 512)));
+        HandlerAsserts.AssertBoxArtPng(Handler, 512);
         Assert.That(png.ToArray(), Is.Not.EqualTo(new SnesHandler().DefaultBoxArtPng.ToArray()));
     }
 }

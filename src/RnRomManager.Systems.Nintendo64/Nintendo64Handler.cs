@@ -8,7 +8,7 @@ namespace RnRomManager.Systems.Nintendo64;
 /// </summary>
 public sealed class Nintendo64Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => LoadResource("boxart.n64.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(Nintendo64Handler), "boxart.n64.png");
 
     public string Id => Nintendo64HeaderReader.Nintendo64Id;
     public string DisplayName => "Nintendo 64";
@@ -39,13 +39,4 @@ public sealed class Nintendo64Handler : ISystemHandler
 
     public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) =>
         Nintendo64ByteOrder.ToBigEndian(rom.ToArray());
-
-    private static byte[] LoadResource(string name)
-    {
-        using var stream = typeof(Nintendo64Handler).Assembly.GetManifestResourceStream($"RnRomManager.Systems.Nintendo64.Resources.{name}")
-            ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");
-        using var copy = new MemoryStream();
-        stream.CopyTo(copy);
-        return copy.ToArray();
-    }
 }

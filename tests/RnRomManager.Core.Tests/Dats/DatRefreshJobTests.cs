@@ -47,9 +47,7 @@ public partial class DatRefreshJobTests
 
     private static ISystemHandler Handler(string id, string datName)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id, embedRomsInZip: true);
         handler.DatName.Returns(datName);
         handler.DatFolder.Returns(DatKind.NoIntro);
         handler.MetadatKinds.Returns(DatKind.Metadat);
@@ -115,8 +113,7 @@ public partial class DatRefreshJobTests
     [Test]
     public async Task ANoneHandler_DownloadsNothing_AndTheRefreshSucceeds()
     {
-        var none = Substitute.For<ISystemHandler>();
-        none.Id.Returns("dos");
+        var none = TestHandlers.Fake("dos");
         none.DatName.Returns("DOS");
         none.DatSource.Returns(DatSource.None);
         ISystemHandler[] handlers = [.. _systems.All, none];
@@ -247,20 +244,6 @@ public partial class DatRefreshJobTests
 
         await Assert.ThrowsAsync<TimeoutException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
         AssertStillV1();
-    }
-
-    /// <summary>A body that never sends a byte, like a connection dropped without a reset.</summary>
-    private sealed class StalledStream(TaskCompletionSource reading) : MemoryStream
-    {
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            reading.TrySetResult();
-            await Task.Delay(Timeout.Infinite, cancellationToken);
-            return 0;
-        }
-
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
-            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
     }
 
     [Test]

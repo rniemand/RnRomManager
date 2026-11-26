@@ -42,7 +42,11 @@ public partial class SaveEndpointsTests
     private Task<HttpResponseMessage> Upload(Guid gameId, MultipartFormDataContent form) =>
         _user.SendContentAsync(HttpMethod.Post, $"/api/games/{gameId}/saves", form);
 
-    private static MultipartFormDataContent AddForm(long romId, byte[] bytes, string fileName = "save.state", string name = "Before boss") =>
+    private static MultipartFormDataContent AddForm(
+        long romId,
+        byte[] bytes,
+        string fileName = "save.state",
+        string name = "Before boss") =>
         Form(Field("romId", romId.ToString()), Field("kind", "state"), Field("name", name), FilePart(bytes, fileName));
 
     [Test]
@@ -95,28 +99,6 @@ public partial class SaveEndpointsTests
         Assert.That(endpoints.Select(e => e.Metadata.GetMetadata<IRequestSizeLimitMetadata>()?.MaxRequestBodySize),
             Is.All.EqualTo(SaveEndpoints.UploadRequestLimit));
         Assert.That(SaveEndpoints.UploadRequestLimit, Is.EqualTo(256L * 1024 * 1024 + 64 * 1024));
-    }
-
-    /// <summary>A body that claims a length without holding it in memory: zeros, produced as read.</summary>
-    private sealed class ZeroStream(long length) : Stream
-    {
-        private long _position;
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => length;
-        public override long Position { get => _position; set => throw new NotSupportedException(); }
-        public override void Flush() { }
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            var n = (int)Math.Min(count, length - _position);
-            Array.Clear(buffer, offset, n);
-            _position += n;
-            return n;
-        }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     [Test]

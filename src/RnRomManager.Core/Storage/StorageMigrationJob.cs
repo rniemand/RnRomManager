@@ -20,9 +20,19 @@ namespace RnRomManager.Core.Storage;
 /// free on the library volume and its largest ROM free on the cache volume. One job item per
 /// game; cancel and shutdown stop between games.
 /// </summary>
-public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepository roms, ILibraryMirror mirror, InfoJsonReader reader,
-    ISystemRegistry systems, IJobItemRepository items, IOptions<PathsOptions> paths, IAuditLog audit, IFreeSpace freeSpace, TimeProvider time,
-    IRomStorageSettings romStorage, ILogger<StorageMigrationJob> logger) : IJob
+public sealed partial class StorageMigrationJob(
+    IGameRepository games,
+    IRomRepository roms,
+    ILibraryMirror mirror,
+    InfoJsonReader reader,
+    ISystemRegistry systems,
+    IJobItemRepository items,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    IFreeSpace freeSpace,
+    TimeProvider time,
+    IRomStorageSettings romStorage,
+    ILogger<StorageMigrationJob> logger) : IJob
 {
     /// <summary>S6: room kept free on the library volume on top of the game's ROMs and its ZIP.</summary>
     public const long SpaceMarginBytes = 64L * 1024 * 1024;
@@ -76,7 +86,7 @@ public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepos
             if (cancellationToken.IsCancellationRequested)
                 break;
             context.Progress.SetCurrentItem(row.ZipPath);
-            Outcome outcome;
+            StorageMigrationJobOutcome outcome;
             try
             {
                 // Not cancellable once a game starts: its files and ZIP are never left half-moved.
@@ -126,10 +136,7 @@ public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepos
         return new { migrated, error };
     }
 
-    /// <param name="Action">The audit action of a move; null for a success that only re-mirrored (B8).</param>
-    private sealed record Outcome(string? Code = null, string? Details = null, int Roms = 0, long Bytes = 0, bool Skipped = false, string? Action = null);
-
-    private async Task<Outcome> MigrateAsync(GameRow row)
+    private async Task<StorageMigrationJobOutcome> MigrateAsync(GameRow row)
     {
         var ct = CancellationToken.None;
         var library = paths.Value.Roms;
@@ -239,7 +246,7 @@ public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepos
             DeleteQuietly(work.Path);
         }
 
-        Outcome Fail(Outcome failure)
+        StorageMigrationJobOutcome Fail(StorageMigrationJobOutcome failure)
         {
             // Nothing was published: only files this run created and still holds are removed.
             foreach (var (path, snapshot) in created)
@@ -286,7 +293,7 @@ public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepos
     }
 
     /// <summary>Streams one ROM entry to <paramref name="tmp"/>, hashing it, and checks size and SHA-1 against <c>info.json</c>.</summary>
-    private static async Task<Outcome?> CopyOutAsync(LibraryZip zip, InfoJsonRom rom, string tmp)
+    private static async Task<StorageMigrationJobOutcome?> CopyOutAsync(LibraryZip zip, InfoJsonRom rom, string tmp)
     {
         var entry = LibraryZip.RomEntry(rom.FileName);
         if (zip.EntryLength(entry) is not { } length || length != rom.Metadata.SizeBytes)

@@ -24,7 +24,11 @@ public class MissingIgdbIdsQueryTests
         _reports = new ReportRepository(_factory);
     }
 
-    private async Task<Guid> Add(string title, string system = "gb", int? year = 1990, int? igdbId = null)
+    private async Task<Guid> Add(
+        string title,
+        string system = "gb",
+        int? year = 1990,
+        int? igdbId = null)
     {
         var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with { System = system, ReleaseYear = year, IgdbId = igdbId };
         var name = FileNameSanitizer.Sanitize(title) + ".zip";
@@ -33,8 +37,14 @@ public class MissingIgdbIdsQueryTests
         return game.GameId;
     }
 
-    private Task<Core.Database.Page<MissingIgdbItem>> List(string? system = null, MissingIgdbStatus status = MissingIgdbStatus.Missing,
-        string? q = null, MissingMetadataSort sort = MissingMetadataSort.Name, bool descending = false, int page = 1, int pageSize = 50) =>
+    private Task<Core.Database.Page<MissingIgdbItem>> List(
+        string? system = null,
+        MissingIgdbStatus status = MissingIgdbStatus.Missing,
+        string? q = null,
+        MissingMetadataSort sort = MissingMetadataSort.Name,
+        bool descending = false,
+        int page = 1,
+        int pageSize = 50) =>
         _reports.ListMissingIgdbIdsAsync(system, status, q, sort, descending, page, pageSize, default);
 
     [Test]

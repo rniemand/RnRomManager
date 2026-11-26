@@ -1,0 +1,701 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
+import { resetClient } from '#lib/api/client.js';
+import { auth } from '#lib/stores/auth.svelte.js';
+import type { Role } from '#lib/enums/index.js';
+
+const goto = vi.fn();
+vi.mock('$app/navigation', () => ({
+	goto: (...args: unknown[]) => goto(...args),
+	afterNavigate: () => {}
+}));
+vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/') } }));
+
+// jsdom has no layout/transitions for Bootstrap's Modal; record show/hide instead.
+const shown = { count: 0, hidden: 0, options: [] as unknown[], calls: [] as string[] };
+vi.mock('#lib/bootstrap.js', () => ({
+	Modal: class {
+		constructor(_element: Element, config: unknown) {
+			shown.options.push(config);
+		}
+		show() {
+			shown.count++;
+		}
+		hide() {
+			shown.hidden++;
+		}
+		dispose() {
+			shown.calls.push('dispose');
+		}
+	}
+}));
+vi.mock('#lib/modal.js', () => ({ releaseModal: () => shown.calls.push('releaseModal') }));
+
+const { default: GlobalSearch } = await import('./GlobalSearch.svelte');
+const { default: Navbar } = await import('#lib/components/layout/Navbar.svelte');
+
+const item = (id: string, displayTitle: string, extra = {}) => ({
+	id,
+	system: 'gb',
+	systemName: 'Game Boy',
+	systemShortName: 'GB',
+	primarySizeBytes: null as number | null,
+	displayTitle,
+	releaseYear: null as number | null,
+	regions: [],
+	romCount: 1,
+	boxArtUrl: null as string | null,
+	rating: null as number | null,
+	favourite: false,
+	matchedOn: null as { field: string; value: string } | null,
+	...extra
+});
+
+describe('GlobalSearch', () => {
+	let requested: string[];
+	let aborted: string[];
+	let items: unknown[];
+	let collections: unknown[];
+	let fail: boolean;
+	let failCollections: boolean;
+
+	beforeEach(() => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		resetClient();
+		goto.mockClear();
+		shown.count = 0;
+		shown.hidden = 0;
+		requested = [];
+		aborted = [];
+		fail = false;
+		failCollections = false;
+		collections = [];
+		items = [
+			item('g1', 'Tetris', { releaseYear: 1989, boxArtUrl: '/api/games/g1/images/1', rating: 4 }),
+			item('g2', 'Tetris 2', { favourite: true })
+		];
+		auth.set({ id: 1, username: 'plain', roles: [], mustChangePassword: false });
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			requested.push(url);
+			init?.signal?.addEventListener('abort', () => aborted.push(url));
+			const isCollections = url.startsWith('/api/collections');
+			const failed = isCollections ? failCollections : fail;
+			const list = isCollections ? collections : items;
+			const body = failed
+				? { code: 'HttpError', title: isCollections ? 'Collections are down' : 'Search is down' }
+				: { items: list, page: 1, pageSize: 10, total: list.length };
+			return Promise.resolve(new Response(JSON.stringify(body), { status: failed ? 500 : 200 }));
+		});
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+		auth.set(null);
+		document.body.innerHTML = '';
+	});
+
+	const input = () => screen.getByRole('combobox', { hidden: true }) as HTMLInputElement;
+	const press = (init: KeyboardEventInit, target: EventTarget = window) => {
+		const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+		target.dispatchEvent(event);
+		return event;
+	};
+	async function type(value: string): Promise<void> {
+		await fireEvent.input(input(), { target: { value } });
+	}
+	async function typeAndWait(value: string): Promise<void> {
+		await type(value);
+		await vi.advanceTimersByTimeAsync(250);
+		await vi.waitFor(() =>
+			expect(screen.queryAllByRole('option', { hidden: true })).not.toEqual([])
+		);
+	}
+
+	it.each([
+		['Ctrl+Space', { ctrlKey: true, code: 'Space', key: ' ' }],
+		['Ctrl+K', { ctrlKey: true, key: 'k' }],
+		['Meta+K', { metaKey: true, key: 'k' }]
+	])('%s opens it and focuses the input, also from inside another input', async (_, init) => {
+		const other = document.body.appendChild(document.createElement('input'));
+		other.focus();
+		render(GlobalSearch, { open: false });
+
+		const event = press(init, other);
+
+		expect(event.defaultPrevented).toBe(true);
+		await vi.waitFor(() => expect(shown.count).toBe(1));
+		await vi.waitFor(() => expect(document.activeElement).toBe(input()));
+	});
+
+	it('shows a matched-on line only for a non-title match', async () => {
+		items = [
+			item('g1', 'Tetris'),
+			item('g3', 'Pinball', { matchedOn: { field: 'publisher', value: 'Nintendo' } })
+		];
+		render(GlobalSearch, { open: true });
+
+		await typeAndWait('nintendo');
+
+		const options = screen.getAllByRole('option', { hidden: true });
+		expect(options[1].textContent).toContain('Publisher: Nintendo');
+		expect(options[0].textContent).not.toMatch(/Developer:|Publisher:|Genre:/);
+	});
+
+	describe('DLC and update matches (DLC B13)', () => {
+		beforeEach(() => {
+			items = [
+				item('g1', 'Orbit', { matchedOn: { field: 'dlc', value: 'Orbit - Star Pack' } }),
+				item('g2', 'Comet', { matchedOn: { field: 'update', value: 'Comet - Patch' } }),
+				item('g3', 'Pinball', { matchedOn: { field: 'developer', value: 'Star Co' } })
+			];
+		});
+
+		it('labels them DLC: and Update:', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('star');
+
+			const options = screen.getAllByRole('option', { hidden: true });
+			expect(options[0].textContent).toContain('DLC: Orbit - Star Pack');
+			expect(options[1].textContent).toContain('Update: Comet - Patch');
+		});
+
+		it('Enter opens the DLC or Updates tab; a developer match opens the plain page', async () => {
+			for (const [down, url] of [
+				[0, '/games/g1?tab=dlc'],
+				[1, '/games/g2?tab=updates'],
+				[2, '/games/g3']
+			] as const) {
+				const { unmount } = render(GlobalSearch, { open: true });
+				await typeAndWait('star');
+				for (let i = 0; i < down; i++) await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+				await fireEvent.keyDown(input(), { key: 'Enter' });
+				expect(goto).toHaveBeenLastCalledWith(url);
+				unmount();
+			}
+		});
+
+		it('a click on a DLC match opens the DLC tab', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('star');
+			await fireEvent.click(screen.getAllByRole('option', { hidden: true })[0]);
+			expect(goto).toHaveBeenLastCalledWith('/games/g1?tab=dlc');
+		});
+	});
+
+	it('uses a static backdrop with Escape enabled (M1)', () => {
+		render(GlobalSearch);
+		expect(shown.options.at(-1)).toEqual({ backdrop: 'static', keyboard: true });
+	});
+
+	it('releases <body> before disposing on unmount (G1)', () => {
+		const { unmount } = render(GlobalSearch, { open: true });
+		shown.calls.length = 0;
+		unmount();
+		expect(shown.calls).toEqual(['releaseModal', 'dispose']);
+	});
+
+	it('a shortcut while open just refocuses the input', async () => {
+		render(GlobalSearch, { open: true });
+		await vi.waitFor(() => expect(shown.count).toBe(1));
+		input().blur();
+
+		press({ ctrlKey: true, key: 'k' });
+
+		expect(document.activeElement).toBe(input());
+		expect(shown.count).toBe(1);
+	});
+
+	it('shortcuts do nothing while another modal is open', () => {
+		const other = document.body.appendChild(document.createElement('div'));
+		other.className = 'modal show';
+		render(GlobalSearch, { open: false });
+
+		const event = press({ ctrlKey: true, key: 'k' });
+
+		expect(event.defaultPrevented).toBe(false);
+		expect(shown.count).toBe(0);
+	});
+
+	it('shortcuts are off and the navbar button is hidden while the password must be changed', () => {
+		const me = { id: 1, username: 'plain', roles: [] as Role[], mustChangePassword: true };
+		auth.set(me);
+		render(GlobalSearch, { open: false });
+		render(Navbar, { me, reviewCount: null, onlogout: () => {}, onsearch: () => {} });
+
+		expect(press({ ctrlKey: true, key: 'k' }).defaultPrevented).toBe(false);
+		expect(shown.count).toBe(0);
+		expect(screen.queryByRole('button', { name: /Search/ })).toBeNull();
+	});
+
+	it('the navbar Search button asks to open it', async () => {
+		const onsearch = vi.fn();
+		render(Navbar, {
+			me: { id: 1, username: 'plain', roles: [], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {},
+			onsearch
+		});
+
+		// Release editing B30: two Search buttons (phone and desktop); either opens it.
+		await fireEvent.click(screen.getAllByRole('button', { name: /Search/ })[0]);
+
+		expect(onsearch).toHaveBeenCalledOnce();
+	});
+
+	it('under 2 characters shows the hint and sends nothing', async () => {
+		render(GlobalSearch, { open: true });
+
+		await type(' t ');
+		await vi.advanceTimersByTimeAsync(500);
+
+		expect(screen.getByText('Type at least 2 characters')).toBeTruthy();
+		expect(requested).toEqual([]);
+	});
+
+	it('debounces 250 ms, asks for 5 collections and the top 20 games by relevance, aborts the older requests (B27, S2)', async () => {
+		render(GlobalSearch, { open: true });
+
+		await type('tet');
+		await vi.advanceTimersByTimeAsync(100);
+		expect(requested).toEqual([]);
+		await vi.advanceTimersByTimeAsync(150);
+		await type('tetris');
+		await vi.advanceTimersByTimeAsync(250);
+
+		expect(requested).toEqual([
+			'/api/games?q=tet&sort=relevance&pageSize=20',
+			'/api/collections?q=tet&pageSize=5',
+			'/api/games?q=tetris&sort=relevance&pageSize=20',
+			'/api/collections?q=tetris&pageSize=5'
+		]);
+		expect(aborted).toContain('/api/games?q=tet&sort=relevance&pageSize=20');
+		expect(aborted).toContain('/api/collections?q=tet&pageSize=5');
+	});
+
+	it('the dialog is extra large and scrollable (S1)', () => {
+		render(GlobalSearch, { open: true });
+
+		const dialog = document.querySelector('.global-search .modal-dialog')!;
+		expect(dialog.className).toBe('modal-dialog modal-xl modal-dialog-scrollable');
+	});
+
+	it('a game row is a five-cell grid: thumbnail, title, badge, meta, rating; meta and rating from md (S2)', async () => {
+		items = [
+			item('g1', 'Tetris', {
+				releaseYear: 1989,
+				regions: ['USA', 'Europe'],
+				primarySizeBytes: 32768,
+				boxArtUrl: '/api/games/g1/images/1'
+			}),
+			item('g2', 'Tetris 2')
+		];
+		render(GlobalSearch, { open: true });
+		await typeAndWait('tetris');
+
+		const [first, second] = screen.getAllByRole('option', { hidden: true });
+		expect(first.className).toContain('d-grid');
+		expect(first.classList.contains('game-row')).toBe(true);
+		const cells = [...first.children];
+		expect(cells).toHaveLength(5);
+		expect(cells[0].querySelector('img')!.className).toContain('object-fit-contain');
+		expect(cells[1].textContent!.trim()).toBe('Tetris');
+		expect(cells[2].className).toContain('badge');
+		expect(cells[2].textContent!.trim()).toBe('GB');
+		// The active (first) row isn't muted: grey on blue fails contrast; other rows are.
+		expect(cells[3].className).toBe('d-none d-md-block small text-nowrap');
+		expect([...second.children][3].className).toBe(
+			'd-none d-md-block small text-nowrap text-body-secondary'
+		);
+		expect(cells[3].textContent!.replace(/\s+/g, ' ').trim()).toBe('1989 · USA, Europe · 32.0 KiB');
+		expect(cells[4].className).toBe('d-none d-md-block');
+		// Empty parts are left out.
+		expect([...second.children][3].textContent!.trim()).toBe('');
+	});
+
+	it('results show title, system badge, year, box art or placeholder and the read-only rating', async () => {
+		render(GlobalSearch, { open: true });
+
+		await typeAndWait('tetris');
+
+		const [first, second] = screen.getAllByRole('option', { hidden: true });
+		expect(first.textContent).toContain('Tetris');
+		expect(first.querySelector('.badge')!.textContent!.trim()).toBe('GB');
+		expect(first.textContent).toContain('1989');
+		expect(first.querySelector('img')!.getAttribute('src')).toBe('/api/games/g1/images/1');
+		expect(first.textContent).toContain('Rated 4 of 5');
+		expect(second.querySelector('img')).toBeNull();
+		expect(second.querySelector('.bi-controller')).toBeTruthy();
+		expect(second.textContent).toContain('Favourite');
+		expect(first.querySelector('button')).toBeNull();
+	});
+
+	it('Up/Down move the highlight, Enter opens it, navigates and closes', async () => {
+		render(GlobalSearch, { open: true });
+		await typeAndWait('tetris');
+		expect(input().getAttribute('aria-activedescendant')).toBe('global-search-results-0');
+
+		await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+		expect(input().getAttribute('aria-activedescendant')).toBe('global-search-results-1');
+		await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+		await fireEvent.keyDown(input(), { key: 'ArrowUp' });
+		expect(screen.getAllByRole('option', { hidden: true })[1].getAttribute('aria-selected')).toBe(
+			'true'
+		);
+		await fireEvent.keyDown(input(), { key: 'Enter' });
+
+		expect(goto).toHaveBeenCalledWith('/games/g2');
+		expect(shown.hidden).toBeGreaterThan(0);
+		expect(input().value).toBe('');
+	});
+
+	it('Enter opens the first result by default; clicking a result opens it', async () => {
+		const { unmount } = render(GlobalSearch, { open: true });
+		await typeAndWait('tetris');
+		await fireEvent.keyDown(input(), { key: 'Enter' });
+		expect(goto).toHaveBeenLastCalledWith('/games/g1');
+		unmount();
+
+		render(GlobalSearch, { open: true });
+		await typeAndWait('tetris');
+		await fireEvent.click(screen.getAllByRole('option', { hidden: true })[1]);
+		expect(goto).toHaveBeenLastCalledWith('/games/g2');
+	});
+
+	it('no results and errors show inline, the modal stays open', async () => {
+		items = [];
+		render(GlobalSearch, { open: true });
+		await type('zzz');
+		await vi.advanceTimersByTimeAsync(250);
+		await vi.waitFor(() => expect(screen.getByText('No games match')).toBeTruthy());
+
+		fail = true;
+		await type('zzzz');
+		await vi.advanceTimersByTimeAsync(250);
+		await vi.waitFor(() => expect(screen.getByText('Search is down')).toBeTruthy());
+		expect(shown.hidden).toBe(0);
+	});
+
+	it('closing returns focus to the element that had it', async () => {
+		const trigger = document.body.appendChild(document.createElement('button'));
+		trigger.focus();
+		render(GlobalSearch, { open: false });
+		press({ ctrlKey: true, key: 'k' });
+		await vi.waitFor(() => expect(document.activeElement).toBe(input()));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Close', hidden: true }));
+
+		expect(document.activeElement).toBe(trigger);
+	});
+
+	describe('collections group (B27)', () => {
+		const collection = (id: string, name: string, extra = {}) => ({
+			id,
+			name,
+			gameCount: 3,
+			coverUrl: null as string | null,
+			updatedAt: '',
+			...extra
+		});
+
+		beforeEach(() => {
+			collections = [
+				collection('c1', 'Tetris family', { coverUrl: '/api/collections/c1/cover?v=1' }),
+				collection('c2', 'Puzzles', { gameCount: 1 })
+			];
+		});
+
+		const options = () => screen.getAllByRole('option', { hidden: true });
+		/** A chip's name is its first span; a game row's the bold title. */
+		const name = (o: HTMLElement) =>
+			(o.classList.contains('btn') ? o.querySelector('span') : o.querySelector('.fw-semibold'))!
+				.textContent;
+
+		it('shows Collections first, then Games, with cover, name and game count', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			const listbox = screen.getByRole('listbox', { hidden: true });
+			const headings = [...listbox.querySelectorAll('[role="presentation"]')].map((h) =>
+				h.textContent?.trim()
+			);
+			expect(headings).toEqual(['Collections', 'Games']);
+			expect(options().map(name)).toEqual(['Tetris family', 'Puzzles', 'Tetris', 'Tetris 2']);
+			// S2: compact chips in one Collections group inside the listbox.
+			const group = screen.getByRole('group', { name: 'Collections', hidden: true });
+			expect(group.className).toBe('list-group-item d-flex flex-wrap gap-2');
+			expect(group.closest('[role="listbox"]')).toBe(listbox);
+			expect([...group.querySelectorAll('[role="option"]')]).toEqual(options().slice(0, 2));
+			expect(options()[0].className).toContain('btn btn-sm btn-outline-secondary');
+			const cover = options()[0].querySelector('img')!;
+			expect(cover.getAttribute('src')).toBe('/api/collections/c1/cover?v=1');
+			expect(cover.classList.contains('chip-thumb')).toBe(true);
+			expect(options()[0].textContent!.replace(/\s+/g, ' ').trim()).toBe('Tetris family · 3');
+			expect(options()[1].textContent!.replace(/\s+/g, ' ').trim()).toBe('Puzzles · 1');
+			expect(options()[1].querySelector('.bi-bookmarks')).toBeTruthy();
+			expect(options()[0].getAttribute('aria-selected')).toBe('true');
+		});
+
+		it('arrow keys cross from collections into games and wrap around', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+			await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+			expect(input().getAttribute('aria-activedescendant')).toBe('global-search-results-2');
+			expect(options()[2].textContent).toContain('Tetris');
+			await fireEvent.keyDown(input(), { key: 'ArrowUp' });
+			await fireEvent.keyDown(input(), { key: 'ArrowUp' });
+			await fireEvent.keyDown(input(), { key: 'ArrowUp' });
+			expect(input().getAttribute('aria-activedescendant')).toBe('global-search-results-3');
+
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+			expect(goto).toHaveBeenLastCalledWith('/games/g2');
+		});
+
+		it('clicking a chip opens its collection', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			await fireEvent.click(options()[1]);
+
+			expect(goto).toHaveBeenLastCalledWith('/collections/c2');
+		});
+
+		it('Enter on a collection opens it', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+
+			expect(goto).toHaveBeenLastCalledWith('/collections/c1');
+			expect(shown.hidden).toBeGreaterThan(0);
+		});
+
+		it('a failing collections request shows its error and keeps the games', async () => {
+			failCollections = true;
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			expect(screen.getByText('Collections are down')).toBeTruthy();
+			expect(options().map(name)).toEqual(['Tetris', 'Tetris 2']);
+		});
+
+		it('a failing games request shows its error and keeps the collections', async () => {
+			fail = true;
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			expect(screen.getByText('Search is down')).toBeTruthy();
+			expect(options().map(name)).toEqual(['Tetris family', 'Puzzles']);
+		});
+
+		it('only collections match: no Games heading, no "no results" text', async () => {
+			items = [];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			expect(screen.getByRole('listbox', { hidden: true }).textContent).not.toContain('Games');
+			expect(screen.queryByText('No games match')).toBeNull();
+		});
+	});
+
+	describe('play from search (B27)', () => {
+		const playable = (id: string, extra = {}) =>
+			item(id, `Game ${id}`, {
+				playRomId: 7,
+				playRomFileName: 'Game (World).gb',
+				playDisc: false,
+				browserCore: 'gambatte',
+				...extra
+			});
+		const hidden = () =>
+			document.querySelector('.global-search')!.dispatchEvent(new Event('hidden.bs.modal'));
+
+		it('Shift+Enter plays the active result, navigating only after the modal hid', async () => {
+			items = [playable('g1')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+			expect(shown.hidden).toBeGreaterThan(0);
+			expect(goto).not.toHaveBeenCalled();
+			hidden();
+			expect(goto).toHaveBeenCalledWith('/games/g1?play=7');
+		});
+
+		it('plain Enter still opens the game', async () => {
+			items = [playable('g1')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+			expect(goto).toHaveBeenLastCalledWith('/games/g1');
+		});
+
+		it('Shift+Enter on a game without playRomId, or on a collection, does nothing', async () => {
+			collections = [{ id: 'c1', name: 'Faves', gameCount: 2, coverUrl: null, updatedAt: '' }];
+			items = [item('g2', 'Not playable', { playRomId: null })];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+			const before = shown.hidden;
+
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+			await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+			hidden();
+
+			expect(shown.hidden).toBe(before);
+			expect(goto).not.toHaveBeenCalled();
+		});
+
+		it('only playable rows get the Play icon, its grid column and the shared Shift+Enter hint', async () => {
+			items = [playable('g1'), item('g2', 'Not playable', { playRomId: null })];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			const [first, second] = screen.getAllByRole('option', { hidden: true });
+			expect(first.classList).toContain('game-row-play');
+			expect(first.children).toHaveLength(6);
+			const icon = first.lastElementChild!;
+			expect(icon.getAttribute('aria-hidden')).toBe('true');
+			expect(icon.tagName).toBe('SPAN');
+			expect(icon.hasAttribute('tabindex')).toBe(false);
+			const hint = document.getElementById(first.getAttribute('aria-describedby')!)!;
+			expect(hint.textContent).toBe('Shift+Enter to play');
+			expect(hint.closest('[role="listbox"]')).toBeNull();
+			expect(second.classList).not.toContain('game-row-play');
+			expect(second.children).toHaveLength(5);
+			expect(second.hasAttribute('aria-describedby')).toBe(false);
+		});
+
+		it('a click on the Play icon plays without opening the game first', async () => {
+			items = [playable('g1')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			await fireEvent.click(screen.getAllByRole('option', { hidden: true })[0].lastElementChild!);
+			expect(goto).not.toHaveBeenCalled();
+			hidden();
+			expect(goto).toHaveBeenCalledTimes(1);
+			expect(goto).toHaveBeenCalledWith('/games/g1?play=7');
+		});
+
+		it('PSP opens its tab at once, records the play and opens the game without ?play=', async () => {
+			const open = vi.fn();
+			vi.stubGlobal('open', open);
+			items = [
+				playable('u', { browserCore: 'ppsspp', playDisc: true, playRomFileName: 'Umd.iso' })
+			];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('umd');
+
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+
+			expect(open).toHaveBeenCalledWith(
+				'/emulator/play-psp.html?game=u&rom=7&core=ppsspp&name=Umd.iso&disc=1',
+				'_blank',
+				'noopener'
+			);
+			expect(goto).toHaveBeenCalledWith('/games/u');
+			await vi.waitFor(() => expect(requested).toContain('/api/games/u/roms/7/played'));
+		});
+	});
+
+	describe('reports group (S)', () => {
+		const options = () => screen.getAllByRole('option', { hidden: true });
+		const admin = () =>
+			auth.set({ id: 1, username: 'admin', roles: ['admin'] as Role[], mustChangePassword: false });
+
+		it('"dup" shows a Duplicates chip first; Enter closes and opens the report', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('dup');
+
+			const first = options()[0];
+			expect(first.textContent!.trim()).toBe('Duplicates');
+			expect(first.id).toBe('global-search-results-0');
+			expect(first.closest('[role="group"]')!.getAttribute('aria-label')).toBe('Reports');
+			expect(first.querySelector('.bi')).toBeTruthy();
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+			expect(shown.hidden).toBeGreaterThan(0);
+			expect(goto).toHaveBeenLastCalledWith('/reports/duplicates');
+		});
+
+		it('matches every word, ignoring case; Admin-only reports only for Admins', async () => {
+			items = [item('g1', 'Tetris')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('MISSING metadata');
+			expect(options().map((o) => o.textContent!.trim())).not.toContain('Missing Metadata');
+
+			admin();
+			await typeAndWait('metadata missing');
+			expect(options()[0].textContent!.trim()).toBe('Missing Metadata');
+			expect(options()).toHaveLength(2);
+		});
+
+		it('Missing IGDB IDs is in the Reports group for Admins only', async () => {
+			items = [item('g1', 'Tetris')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('igdb');
+			expect(options().map((o) => o.textContent!.trim())).not.toContain('Missing IGDB IDs');
+
+			admin();
+			await typeAndWait('missing igdb');
+			expect(options()[0].textContent!.trim()).toBe('Missing IGDB IDs');
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+			expect(goto).toHaveBeenLastCalledWith('/reports/missing-igdb-ids');
+		});
+
+		it('Up/Down walk Reports, then Collections, then Games, with matching option ids', async () => {
+			collections = [{ id: 'c1', name: 'Faves', gameCount: 2, coverUrl: null, updatedAt: '' }];
+			items = [item('g1', 'Tetris')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('dup');
+
+			const texts = options().map((o) => o.textContent!.replace(/\s+/g, ' ').trim());
+			expect(texts[0]).toBe('Duplicates');
+			expect(texts[1]).toContain('Faves');
+			expect(texts[2]).toContain('Tetris');
+			expect(options().map((o) => o.id)).toEqual(
+				[0, 1, 2].map((i) => `global-search-results-${i}`)
+			);
+			const headers = screen
+				.getAllByRole('presentation', { hidden: true })
+				.map((h) => h.textContent!.trim());
+			expect(headers).toEqual(['Reports', 'Collections', 'Games']);
+			for (const i of [1, 2, 0]) {
+				await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+				expect(input().getAttribute('aria-activedescendant')).toBe(`global-search-results-${i}`);
+				expect(options()[i].getAttribute('aria-selected')).toBe('true');
+			}
+		});
+
+		it('Shift+Enter on a report does nothing; a click opens it', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('hacks');
+			const before = shown.hidden;
+
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+			expect(shown.hidden).toBe(before);
+			expect(goto).not.toHaveBeenCalled();
+			await fireEvent.click(options()[0]);
+			expect(goto).toHaveBeenLastCalledWith('/reports/hacks');
+		});
+
+		it('report matches still show when both searches fail', async () => {
+			fail = true;
+			failCollections = true;
+			render(GlobalSearch, { open: true });
+			await typeAndWait('duplicates');
+
+			expect(options().map((o) => o.textContent!.trim())).toEqual(['Duplicates']);
+			expect(screen.getByText('Search is down')).toBeTruthy();
+			expect(screen.queryByText('No games match')).toBeNull();
+		});
+
+		it('labels the input and placeholder for reports too', () => {
+			render(GlobalSearch, { open: true });
+			expect(screen.getByLabelText('Search games, collections and reports')).toBe(input());
+			expect(input().placeholder).toBe('Search games, collections and reports');
+		});
+	});
+});

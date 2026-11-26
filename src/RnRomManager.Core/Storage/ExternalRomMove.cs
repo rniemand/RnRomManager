@@ -3,47 +3,6 @@ using Microsoft.Extensions.Logging;
 
 namespace RnRomManager.Core.Storage;
 
-public enum ExternalMoveStatus
-{
-    /// <summary>The file is at the destination; <see cref="ExternalMoveResult.Snapshot"/> describes it there.</summary>
-    Moved,
-
-    /// <summary>
-    /// The file at the source is not the expected one (replaced, changed, or gone). It was left, or put back, at
-    /// the source; nothing reached the destination.
-    /// </summary>
-    SourceChanged,
-
-    /// <summary>An <c>IoError</c>: see <see cref="ExternalMoveResult.Details"/> and <see cref="ExternalMoveResult.SurvivingPath"/>.</summary>
-    Failed,
-}
-
-/// <param name="Path">The destination, for <see cref="ExternalMoveStatus.Moved"/>.</param>
-/// <param name="Snapshot">The promoted file, for <see cref="ExternalMoveStatus.Moved"/>; pass it to every later check, undo or cleanup of that path.</param>
-/// <param name="SurvivingPath">
-/// For <see cref="ExternalMoveStatus.Failed"/>: where the complete, owned copy is now (the source when nothing
-/// moved, a staging name when putting it back failed); null when it could not be found.
-/// </param>
-public sealed record ExternalMoveResult(
-    ExternalMoveStatus Status, string? Path = null, ExternalFileSnapshot? Snapshot = null, string? Details = null, string? SurvivingPath = null);
-
-/// <summary>Test seams of <see cref="ExternalRomMove.Move"/>.</summary>
-public sealed class ExternalMoveHooks
-{
-    /// <summary>Replaces <see cref="NoReplaceRename.Move"/>.</summary>
-    public Func<string, string, NoReplaceRenameResult>? Rename { get; init; }
-
-    /// <summary>Runs with the staging path once the file was renamed or copied to it, before it is checked.</summary>
-    public Action<string>? AfterStaging { get; init; }
-
-    /// <summary>Wraps the source stream of a staged copy, e.g. to fail part-way.</summary>
-    public Func<Stream, Stream>? WrapSource { get; init; }
-
-    /// <summary>Replaces <see cref="File.Delete"/> for the source of a staged copy.</summary>
-    public Action<string>? DeleteSource { get; init; }
-
-}
-
 /// <summary>
 /// Moves one external ROM file (spec W6), for ingest placement, edits and their undo alike: the file is renamed to
 /// the destination's staging name, checked there against the snapshot the caller verified, then renamed to the
@@ -64,8 +23,14 @@ public static class ExternalRomMove
     /// Only for the copy fallback: called with 0 once the staging file exists, then after each buffer with the bytes
     /// written so far. Never called when the file is renamed.
     /// </param>
-    public static ExternalMoveResult Move(string sourceRoot, string source, string destination,
-        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1 = null, ExternalMoveHooks? hooks = null,
+    public static ExternalMoveResult Move(
+        string sourceRoot,
+        string source,
+        string destination,
+        ExternalFileSnapshot expected,
+        ILogger logger,
+        string? expectedSha1 = null,
+        ExternalMoveHooks? hooks = null,
         Action<long>? onCopied = null)
     {
         var rename = hooks?.Rename ?? NoReplaceRename.Move;
@@ -101,8 +66,16 @@ public static class ExternalRomMove
             : new ExternalMoveResult(ExternalMoveStatus.Failed, Details: $"{destination} is not the file that was moved there");
     }
 
-    private static ExternalMoveResult CopyAndPublish(string sourceRoot, string source, string destination, string staging,
-        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1, ExternalMoveHooks? hooks, Action<long>? onCopied)
+    private static ExternalMoveResult CopyAndPublish(
+        string sourceRoot,
+        string source,
+        string destination,
+        string staging,
+        ExternalFileSnapshot expected,
+        ILogger logger,
+        string? expectedSha1,
+        ExternalMoveHooks? hooks,
+        Action<long>? onCopied)
     {
         ExternalMoveResult Fail(string details, string? survivor) => new(ExternalMoveStatus.Failed, Details: details, SurvivingPath: survivor);
         ExternalMoveResult Changed() => new(ExternalMoveStatus.SourceChanged, Details: $"{source} is not the file that was checked", SurvivingPath: source);
@@ -221,7 +194,11 @@ public static class ExternalRomMove
         }
     }
 
-    private static ExternalMoveResult PutBack(string staging, string source, ExternalMoveStatus status, string details,
+    private static ExternalMoveResult PutBack(
+        string staging,
+        string source,
+        ExternalMoveStatus status,
+        string details,
         Func<string, string, NoReplaceRenameResult> rename)
     {
         var back = rename(staging, source);
@@ -231,7 +208,11 @@ public static class ExternalRomMove
                 SurvivingPath: staging);
     }
 
-    private static ExternalMoveResult Failed(NoReplaceRenameResult result, string from, string destination, ILogger logger)
+    private static ExternalMoveResult Failed(
+        NoReplaceRenameResult result,
+        string from,
+        string destination,
+        ILogger logger)
     {
         var details = result.Details ?? $"moving {from} to {destination} failed";
         if (result.Status == NoReplaceRenameStatus.Unsupported)

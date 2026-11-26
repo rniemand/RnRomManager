@@ -2,6 +2,7 @@ using NSubstitute;
 using RnRomManager.Api.Endpoints;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests;
 
@@ -14,8 +15,7 @@ public class GameQueryParsingTests
     {
         var systems = Substitute.For<ISystemRegistry>();
         systems.ById(Arg.Any<string>()).Returns((ISystemHandler?)null);
-        var gb = Substitute.For<ISystemHandler>();
-        gb.EmbedRomsInZip.Returns(true);
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         systems.ById("gb").Returns(gb);
         return systems;
     }
@@ -23,7 +23,7 @@ public class GameQueryParsingTests
     private static (GameQuery Query, Dictionary<string, string[]> Errors) Parse(string? system = null, string? letter = null,
         string? region = null, string? q = null, string? sort = null, string? dir = null, int? page = null, int? pageSize = null,
         string? favourite = null, string? collection = null, string? notInCollection = null) =>
-        LibraryEndpoints.ParseQuery(system, letter, region, q, sort, dir, page, pageSize, Systems, favourite, collection, notInCollection);
+        LibraryRequestParsing.ParseQuery(system, letter, region, q, sort, dir, page, pageSize, Systems, favourite, collection, notInCollection);
 
     [Test]
     public void Defaults_TitleAscending_FirstPageOf48_NoFilters()

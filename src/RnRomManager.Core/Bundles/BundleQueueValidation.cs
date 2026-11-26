@@ -1,11 +1,5 @@
 namespace RnRomManager.Core.Bundles;
 
-/// <summary>An entry as the client sent it (B4): every field may be missing or malformed until validated.</summary>
-public sealed record BundleEntryInput(string? GameId, string? ReleaseSha1, BundleMemberInput? Member, string? GameTitle, string? FileName);
-
-/// <summary>A set-file member as the client sent it.</summary>
-public sealed record BundleMemberInput(string? Sha1, string? FileName);
-
 /// <summary>
 /// Structural validation shared by queue create and replace (B2–B4). It never consults the library: a well-formed
 /// identity is accepted whether or not it currently resolves, so users can resave queues after a library change.

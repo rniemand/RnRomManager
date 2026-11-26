@@ -47,7 +47,11 @@ public static class DatManifest
     /// </summary>
     /// <exception cref="IOException">Missing (<see cref="FileNotFoundException"/>), unsafe, unreadable, too big, or replaced.</exception>
     /// <param name="afterRead">Test seam: runs once the bytes are read, before the handle and path are re-checked.</param>
-    public static byte[] ReadCheckedBytes(string root, string path, long maxBytes, Action<string>? afterRead = null)
+    public static byte[] ReadCheckedBytes(
+        string root,
+        string path,
+        long maxBytes,
+        Action<string>? afterRead = null)
     {
         // Delete sharing as for library reads: a refresh may swap the file meanwhile, which the re-check below catches.
         var opened = ExternalRomPath.OpenRead(root, path, FileShare.Read | FileShare.Delete);

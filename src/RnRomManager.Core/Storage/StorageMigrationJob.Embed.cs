@@ -12,7 +12,7 @@ public sealed partial class StorageMigrationJob
     /// before it publishes, so a mismatch leaves ZIP and files untouched. After publish and mirror, each file is deleted
     /// if unchanged. A failed mirror deletes nothing (the DB rows still name the files; the resume re-mirrors).
     /// </summary>
-    private async Task<Outcome> EmbedAsync(GameRow row, InfoJsonGame game, LibraryZip existing)
+    private async Task<StorageMigrationJobOutcome> EmbedAsync(GameRow row, InfoJsonGame game, LibraryZip existing)
     {
         var ct = CancellationToken.None;
         var library = paths.Value.Roms;
@@ -73,7 +73,7 @@ public sealed partial class StorageMigrationJob
     /// B8: a candidate whose ZIP is already in its system's layout. Its DB rows still showing the other layout (a crash
     /// between publish and mirror) are re-mirrored, so the game leaves the query; otherwise it is skipped.
     /// </summary>
-    private async Task<Outcome> RemirrorIfStaleAsync(GameRow row, InfoJsonGame game, string zip)
+    private async Task<StorageMigrationJobOutcome> RemirrorIfStaleAsync(GameRow row, InfoJsonGame game, string zip)
     {
         var rows = await roms.ListByGameAsync(row.Id, CancellationToken.None).ConfigureAwait(false);
         var dbEmbedded = rows.All(r => r.ExternalFileName is null);

@@ -12,7 +12,11 @@ namespace RnRomManager.Core.Jobs;
 /// after a verified ZIP + DB commit. Links are never followed (spec G4): a linked <c>cache/work</c>, a linked entry in
 /// it and a ZIP temp in or behind a linked folder are skipped, so nothing outside the storage roots is deleted.
 /// </summary>
-public sealed class CrashRecovery(IJobRepository jobs, ISystemRegistry systems, IOptions<PathsOptions> paths, TimeProvider time,
+public sealed class CrashRecovery(
+    IJobRepository jobs,
+    ISystemRegistry systems,
+    IOptions<PathsOptions> paths,
+    TimeProvider time,
     ILogger<CrashRecovery> logger)
 {
     public const string WorkFolder = "work";

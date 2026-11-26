@@ -1,7 +1,8 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import Icon from '#lib/components/Icon.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
 
 	const notFound = $derived(page.status === 404);
 </script>
@@ -15,5 +16,5 @@
 	<p class="text-body-secondary">
 		{notFound ? "There's nothing at this address." : page.error?.message}
 	</p>
-	<a class="btn btn-primary" href={resolve('/')}>Go to the Library</a>
+	<Button variant="primary" href={resolve('/')}>Go to the Library</Button>
 </div>

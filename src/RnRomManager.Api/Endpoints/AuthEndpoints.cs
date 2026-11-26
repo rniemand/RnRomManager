@@ -7,10 +7,6 @@ namespace RnRomManager.Api.Endpoints;
 /// <summary><c>/api/auth/*</c> (spec §23, §9.1, §9.2) and the user's hotkeys (B23).</summary>
 public static class AuthEndpoints
 {
-    public sealed record LoginRequest(string? Username, string? Password);
-
-    public sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
-
     public static RouteGroupBuilder MapAuthEndpoints(this RouteGroupBuilder api)
     {
         var auth = api.MapGroup("/auth");

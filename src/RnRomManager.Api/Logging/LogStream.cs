@@ -6,17 +6,15 @@ using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Logging;
 
-/// <summary><see cref="LogStream"/> timing; a singleton so tests can shorten it.</summary>
-public sealed class LogStreamOptions
-{
-    public TimeSpan KeepAlive { get; init; } = TimeSpan.FromSeconds(15);
-}
-
 /// <summary><c>GET /api/admin/logs/stream</c> (L2): the live log as server-sent events.</summary>
 public static class LogStream
 {
     public static async Task RunAsync(
-        HttpContext ctx, LogBuffer buffer, LogStreamOptions options, IUserRepository users, TimeProvider time,
+        HttpContext ctx,
+        LogBuffer buffer,
+        LogStreamOptions options,
+        IUserRepository users,
+        TimeProvider time,
         IHostApplicationLifetime lifetime)
     {
         // The policy already let an enabled admin in; remember who, to notice when that stops being true.

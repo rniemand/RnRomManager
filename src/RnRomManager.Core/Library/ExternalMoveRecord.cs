@@ -6,41 +6,6 @@ using RnRomManager.Core.Storage;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>
-/// W3: what a multi-release move is about to do, written beside its verified source backup before any byte moves, so
-/// an Admin can tell the move's two ZIPs and its release apart even after both ZIPs were replaced (W7). It binds the
-/// backup (by SHA256) to the games, their library-relative ZIP paths, the moved release's SHA1 and its pointer before
-/// and after the move. Neither the record nor the backup alone authorizes recovery.
-/// </summary>
-/// <param name="Files">
-/// B18 (v2): the release's set files in <c>files</c> order, each with its name before and after the move; null in v1,
-/// written by a release without files.
-/// </param>
-public sealed record MoveRecord(
-    int Version,
-    string BackupSha256,
-    Guid SourceGameId,
-    string SourceZipPath,
-    Guid TargetGameId,
-    string TargetZipPath,
-    string RomSha1,
-    string SourceExternalFileName,
-    string TargetExternalFileName,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<MoveRecordFile>? Files = null)
-{
-    /// <summary>v1: one file per release (no <see cref="Files"/>).</summary>
-    public const int SingleFileVersion = 1;
-
-    /// <summary>v2 (B18): a release with set files.</summary>
-    public const int CurrentVersion = 2;
-
-    /// <summary>The version a move of a release with (or without) set files writes.</summary>
-    public static int VersionFor(IReadOnlyList<MoveRecordFile>? files) => files is null ? SingleFileVersion : CurrentVersion;
-}
-
-/// <summary>B18: one set file of a moved release, before and after the move.</summary>
-public sealed record MoveRecordFile(string SourceExternalFileName, string TargetExternalFileName);
-
 /// <summary>Publishes and reads the <c>&lt;backup&gt;.json</c> companion of an <see cref="ExternalZipBackup"/> (spec W3, W7).</summary>
 public static class ExternalMoveRecord
 {
@@ -60,8 +25,13 @@ public static class ExternalMoveRecord
     /// published by a rename that never replaces anything, then read back and validated against the backup.
     /// </summary>
     /// <exception cref="IOException">The record wasn't published (<c>IoError</c>, before any byte moves); an occupant is left as it is.</exception>
-    public static async Task<ExternalFileSnapshot> WriteAsync(string libraryRoot, ZipBackup backup, MoveRecord record, InfoJsonReader reader,
-        ExternalZipBackupHooks? hooks = null, CancellationToken cancellationToken = default)
+    public static async Task<ExternalFileSnapshot> WriteAsync(
+        string libraryRoot,
+        ZipBackup backup,
+        MoveRecord record,
+        InfoJsonReader reader,
+        ExternalZipBackupHooks? hooks = null,
+        CancellationToken cancellationToken = default)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(record, Json);
         if (bytes.Length > MaxBytes)
@@ -135,7 +105,11 @@ public static class ExternalMoveRecord
     /// </summary>
     /// <exception cref="InvalidDataException">The pair doesn't identify a move; recovery must stop.</exception>
     /// <exception cref="IOException">A member can't be read.</exception>
-    public static async Task<MoveRecord> ReadAsync(string libraryRoot, string backupPath, InfoJsonReader reader, CancellationToken cancellationToken = default)
+    public static async Task<MoveRecord> ReadAsync(
+        string libraryRoot,
+        string backupPath,
+        InfoJsonReader reader,
+        CancellationToken cancellationToken = default)
     {
         var opened = ExternalRomPath.OpenRead(libraryRoot, backupPath + ExternalRomName.RecordSuffix, FileShare.Read);
         if (opened.Status != ExternalPathStatus.Found)
@@ -158,7 +132,12 @@ public static class ExternalMoveRecord
     }
 
     /// <exception cref="InvalidDataException">The record doesn't describe a move of this backup.</exception>
-    private static async Task ValidateAsync(string libraryRoot, string backupPath, MoveRecord record, InfoJsonReader reader, CancellationToken cancellationToken)
+    private static async Task ValidateAsync(
+        string libraryRoot,
+        string backupPath,
+        MoveRecord record,
+        InfoJsonReader reader,
+        CancellationToken cancellationToken)
     {
         if (record.Version is not (MoveRecord.SingleFileVersion or MoveRecord.CurrentVersion))
             throw new InvalidDataException($"move record version {record.Version} isn't supported");
@@ -187,7 +166,7 @@ public static class ExternalMoveRecord
 
         copy.Position = 0;
         using var zip = LibraryZip.Open(copy, backupPath, reader);
-        if (zip.InfoJson is not { Kind: InfoJsonReadResult.Outcome.Ok, Game: { } game })
+        if (zip.InfoJson is not { Kind: InfoJsonReadResultOutcome.Ok, Game: { } game })
             throw new InvalidDataException("the backup's info.json can't be read");
         if (game.GameId != record.SourceGameId)
             throw new InvalidDataException($"the backup is game {game.GameId}, not the recorded source {record.SourceGameId}");

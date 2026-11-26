@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.Sega;
 /// </summary>
 public sealed class MegaDriveHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.megadrive.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(MegaDriveHandler), "boxart.megadrive.png");
 
     public string Id => "md";
     public string DisplayName => "Mega Drive / Genesis";

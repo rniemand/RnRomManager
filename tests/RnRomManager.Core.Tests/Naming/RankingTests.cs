@@ -26,8 +26,12 @@ public class RankingTests
     public void Revision_Equal(string? x, string? y) =>
         Assert.That(RevisionComparer.Instance.Compare(x, y), Is.Zero);
 
-    private static RankedRelease Release(string fileName, string[]? regions = null, string[]? languages = null,
-        string? revision = null, params string[] flags) =>
+    private static RankedRelease Release(
+        string fileName,
+        string[]? regions = null,
+        string[]? languages = null,
+        string? revision = null,
+        params string[] flags) =>
         new(fileName, regions ?? ["USA"], languages ?? [], revision, flags);
 
     private static string Primary(params RankedRelease[] releases) =>

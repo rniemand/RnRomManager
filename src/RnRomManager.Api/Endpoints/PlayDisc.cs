@@ -1,7 +1,4 @@
-using System.Globalization;
-using System.IO.Compression;
 using System.Text;
-using Microsoft.Net.Http.Headers;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
 
@@ -53,8 +50,14 @@ public static class PlayDisc
 
     private const int MaxBins = 99;
 
-    public static async Task<IResult> HandleAsync(Guid id, long romId, HttpContext ctx, IGameRepository repository,
-        IRomRepository roms, LibraryFiles files, ILoggerFactory loggers)
+    public static async Task<IResult> HandleAsync(
+        Guid id,
+        long romId,
+        HttpContext ctx,
+        IGameRepository repository,
+        IRomRepository roms,
+        LibraryFiles files,
+        ILoggerFactory loggers)
     {
         ctx.Response.Headers.CacheControl = "no-store";
         var cancellationToken = ctx.RequestAborted;
@@ -100,8 +103,14 @@ public static class PlayDisc
     /// <c>play-disc</c> would send it (cue and TOC tracks and an MDS <c>.mdf</c> aliased <c>disc&lt;n&gt;-track-NN.bin</c>, a CloneCD image <c>disc&lt;n&gt;-track-01.img</c>). One 2 GiB cap covers the set.
     /// Amiga F5, Plus/4 B12: Amiga and Plus/4 floppies are served by <see cref="FloppySetAsync"/> instead.
     /// </summary>
-    public static async Task<IResult> HandleSetAsync(Guid id, long romId, HttpContext ctx, IGameRepository repository,
-        IRomRepository roms, LibraryFiles files, ILoggerFactory loggers)
+    public static async Task<IResult> HandleSetAsync(
+        Guid id,
+        long romId,
+        HttpContext ctx,
+        IGameRepository repository,
+        IRomRepository roms,
+        LibraryFiles files,
+        ILoggerFactory loggers)
     {
         ctx.Response.Headers.CacheControl = "no-store";
         var cancellationToken = ctx.RequestAborted;
@@ -122,7 +131,7 @@ public static class PlayDisc
         try
         {
             var budget = new Budget($"The disc set is larger than {MaxBytes / (1024 * 1024 * 1024)} GiB.");
-            var entries = new List<Entry>();
+            var entries = new List<PlayDiscEntry>();
             var playlist = new StringBuilder();
             for (var i = 0; i < set.Discs.Count; i++)
             {
@@ -146,14 +155,14 @@ public static class PlayDisc
                 {
                     var name = disc.Entries[0].Name;
                     var cueBytes = new UTF8Encoding(false).GetBytes($"FILE \"{name}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n");
-                    cue = new Entry(Path.GetFileNameWithoutExtension(name) + ".cue", new MemoryStream(cueBytes), cueBytes.Length);
+                    cue = new PlayDiscEntry(Path.GetFileNameWithoutExtension(name) + ".cue", new MemoryStream(cueBytes), cueBytes.Length);
                 }
                 playlist.Append((cue ?? disc.Entries[0]).Name).Append('\n');
                 entries.AddRange(cue is null ? disc.Entries : [cue, .. disc.Entries]);
             }
 
             var bytes = new UTF8Encoding(false).GetBytes(playlist.ToString());
-            var head = new Entry(set.Name, new MemoryStream(bytes), bytes.Length);
+            var head = new PlayDiscEntry(set.Name, new MemoryStream(bytes), bytes.Length);
             if (entries.Select(e => e.Name).Append(head.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != entries.Count + 1)
             {
                 DisposeAll(opened);
@@ -180,7 +189,13 @@ public static class PlayDisc
     /// <c>Disk &lt;n&gt;</c> plus <paramref name="extension"/>. Each disk is read in full first
     /// (<see cref="LibraryFiles.ReadEntry"/>, bounded by its size), so a failure is a problem, never a cut-off 200.
     /// </summary>
-    private static async Task<IResult> FloppySetAsync(GameRow game, long romId, string extension, HttpContext ctx, IRomRepository roms, LibraryFiles files)
+    private static async Task<IResult> FloppySetAsync(
+        GameRow game,
+        long romId,
+        string extension,
+        HttpContext ctx,
+        IRomRepository roms,
+        LibraryFiles files)
     {
         var romRows = await roms.ListByGameAsync(game.Id, ctx.RequestAborted);
         var lookup = Array.Empty<RomFileRow>().ToLookup(f => f.RomId);
@@ -188,7 +203,7 @@ public static class PlayDisc
             || set.Discs.Any(d => d.SystemId != game.SystemId || d.ExternalFileName is not null))
             return Problems.NotFound(ctx);
 
-        var entries = new List<Entry>();
+        var entries = new List<PlayDiscEntry>();
         var playlist = new StringBuilder();
         for (var i = 0; i < set.Discs.Count; i++)
         {
@@ -200,10 +215,10 @@ public static class PlayDisc
                 return Invalid(ctx, $"Disk {number}: '{rom.FileName}' is empty");
             var name = FormattableString.Invariant($"Disk {number}{extension}");
             playlist.Append(name).Append('\n');
-            entries.Add(new Entry(name, new MemoryStream(bytes), bytes.Length));
+            entries.Add(new PlayDiscEntry(name, new MemoryStream(bytes), bytes.Length));
         }
         var list = new UTF8Encoding(false).GetBytes(playlist.ToString());
-        return new DiscResult("application/zip", new Entry(set.Name, new MemoryStream(list), list.Length), entries);
+        return new DiscResult("application/zip", new PlayDiscEntry(set.Name, new MemoryStream(list), list.Length), entries);
     }
 
     /// <summary>
@@ -216,17 +231,6 @@ public static class PlayDisc
         [SaturnSystemId] = ["saturn_bios.bin", "sega_101.bin", "mpr-17933.bin"],
         [SegaCdSystemId] = ["bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin"],
     };
-
-    /// <summary>The running total of opened lengths against <see cref="MaxBytes"/>, and the 409 title once it's passed.</summary>
-    private sealed class Budget(string tooLargeTitle)
-    {
-        public long Total { get; set; }
-
-        public string TooLargeTitle { get; } = tooLargeTitle;
-    }
-
-    /// <summary>One disc as streamed: a standalone image (no cue), or a playback cue and its aliased tracks.</summary>
-    private sealed record Disc(Entry? Cue, IReadOnlyList<Entry> Entries);
 
     /// <summary>
     /// B2: checks and opens one disc's members, adding each opened stream to <paramref name="opened"/> (the caller disposes
@@ -267,7 +271,7 @@ public static class PlayDisc
         if (members.Count == 1 && HasExtension(mainName, ".nrg"))
             return await NrgDiscAsync(ctx, mainName, streams[0], trackPrefix, detailPrefix);
         if (members.Count == 1)
-            return (null, new Disc(null, [new Entry(mainName, streams[0], streams[0].Length)]));
+            return (null, new Disc(null, [new PlayDiscEntry(mainName, streams[0], streams[0].Length)]));
 
         if (IsCloneCd(members))
         {
@@ -307,9 +311,9 @@ public static class PlayDisc
             return (Invalid(ctx, detailPrefix + playback.Error!), null);
 
         var byName = members.Select((m, i) => (m.Name, Stream: streams[i])).ToDictionary(m => m.Name, m => m.Stream, StringComparer.Ordinal);
-        List<Entry> entries = [.. playback.Tracks.Select(t => new Entry(t.Alias, byName[t.StoredName], byName[t.StoredName].Length))];
+        List<PlayDiscEntry> entries = [.. playback.Tracks.Select(t => new PlayDiscEntry(t.Alias, byName[t.StoredName], byName[t.StoredName].Length))];
         DisposeAll([sheet]); // read in full; the archive carries the playback cue instead
-        return (null, new Disc(new Entry(playback.CueName, new MemoryStream(playback.Content), playback.Content.Length), entries));
+        return (null, new Disc(new PlayDiscEntry(playback.CueName, new MemoryStream(playback.Content), playback.Content.Length), entries));
     }
 
     /// <summary>
@@ -337,8 +341,8 @@ public static class PlayDisc
         var (cue, dataLength) = NrgSheet.ForPlayback(region, chunkStart, v2, name, trackPrefix);
         if (!cue.IsValid)
             return (Invalid(ctx, detailPrefix + cue.Error!), null);
-        return (null, new Disc(new Entry(cue.CueName, new MemoryStream(cue.Content), cue.Content.Length),
-            [new Entry(cue.Tracks[0].Alias, image, dataLength)]));
+        return (null, new Disc(new PlayDiscEntry(cue.CueName, new MemoryStream(cue.Content), cue.Content.Length),
+            [new PlayDiscEntry(cue.Tracks[0].Alias, image, dataLength)]));
     }
 
     /// <summary>D11: exactly an <c>.mdf</c> (the main file) and an <c>.mds</c> of the same stem, ignoring case.</summary>
@@ -357,10 +361,6 @@ public static class PlayDisc
     }
 
     private static bool HasExtension(string name, string extension) => name.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
-
-    private sealed record Member(string Name, long? FileId);
-
-    private sealed record Entry(string Name, Stream Source, long Length);
 
     private static bool IsCue(string name) => name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase);
 
@@ -427,70 +427,14 @@ public static class PlayDisc
     }
 
     /// <summary>
-    /// Streams the checked members: the single image as is, or an uncompressed ZIP (UTF-8 names, async writes only).
-    /// Each source is copied up to its measured length; a source that ends early aborts the response. Range headers
-    /// are ignored: the whole payload is sent.
-    /// </summary>
-    private sealed class DiscResult(string contentType, Entry? cue, IReadOnlyList<Entry> entries) : IResult
-    {
-        public async Task ExecuteAsync(HttpContext httpContext)
-        {
-            var response = httpContext.Response;
-            var cancellationToken = httpContext.RequestAborted;
-            response.StatusCode = StatusCodes.Status200OK;
-            response.ContentType = contentType;
-            response.Headers.CacheControl = "no-store";
-            response.Headers[HeaderNames.AcceptRanges] = "none";
-            try
-            {
-                if (cue is null)
-                {
-                    response.ContentLength = entries[0].Length;
-                    await CopyAsync(entries[0], response.Body, cancellationToken);
-                }
-                else
-                {
-                    // The ZIP's own length isn't known up front; the payload size lets the player show progress.
-                    response.Headers["X-Content-Bytes"] = (cue.Length + entries.Sum(e => e.Length)).ToString(CultureInfo.InvariantCulture);
-                    // .NET 10 still writes an entry's data descriptor synchronously when the async entry stream is
-                    // disposed on an unseekable target, so small synchronous writes are held and sent asynchronously.
-                    await using var body = new AsyncOnlyWriteStream(response.Body);
-                    await using (var archive = await ZipArchive.CreateAsync(body, ZipArchiveMode.Create, leaveOpen: true,
-                        Encoding.UTF8, cancellationToken))
-                    {
-                        foreach (var entry in (IEnumerable<Entry>)[cue, .. entries])
-                        {
-                            var zipEntry = archive.CreateEntry(entry.Name, CompressionLevel.NoCompression);
-                            await using var target = await zipEntry.OpenAsync(cancellationToken);
-                            await CopyAsync(entry, target, cancellationToken);
-                        }
-                    }
-                    await body.FlushAsync(cancellationToken);
-                }
-                await response.Body.FlushAsync(cancellationToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-            {
-                httpContext.RequestServices.GetRequiredService<ILogger<DiscResult>>()
-                    .LogError(ex, "Streaming the disc of {Path} failed after the response started", httpContext.Request.Path);
-                httpContext.Abort();
-            }
-            finally
-            {
-                foreach (var entry in (IEnumerable<Entry>)[.. entries, .. cue is null ? [] : new[] { cue }])
-                    await entry.Source.DisposeAsync();
-            }
-        }
-
-        private static Task CopyAsync(Entry entry, Stream target, CancellationToken cancellationToken) =>
-            CopyMeasuredAsync(entry.Source, entry.Length, target, cancellationToken);
-    }
-
-    /// <summary>
     /// B2: copies exactly <paramref name="length"/> bytes (the length measured when the file was opened): bytes the
     /// file gained since are left out, and an <see cref="IOException"/> is thrown if it shrank.
     /// </summary>
-    public static async Task CopyMeasuredAsync(Stream source, long length, Stream target, CancellationToken cancellationToken)
+    public static async Task CopyMeasuredAsync(
+        Stream source,
+        long length,
+        Stream target,
+        CancellationToken cancellationToken)
     {
         var buffer = new byte[81920];
         var remaining = length;

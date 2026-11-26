@@ -23,9 +23,6 @@ vi.mock('#lib/tooltip.js', () => ({
 		return {};
 	}
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 const { default: RomStoragePage } = await import('./rom-storage/+page.svelte');
 
@@ -293,7 +290,10 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 			expect(tooltips.get(editButton)).toBe('Edit compression level');
 			const repackButton = within(gba).getByRole('button', { name: repack });
 			expect(repackButton.hasAttribute('aria-label')).toBe(false);
-			expect(repackButton.firstChild?.textContent?.trim()).toBe('Repack again');
+			expect(repackButton.textContent).toBe('Repack again Game Boy Advance ZIPs');
+			expect(repackButton.querySelector('.visually-hidden')?.textContent).toBe(
+				'Game Boy Advance ZIPs'
+			);
 			expect(repackButton.closest('td')).not.toBe(badge.closest('td'));
 			const nds = await row('Nintendo DS');
 			const cell = within(nds).getByText('Not applicable: ROMs are beside the ZIP').closest('td')!;

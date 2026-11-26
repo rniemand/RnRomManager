@@ -4,9 +4,6 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 
 vi.mock('$app/state', () => ({ page: { params: { id: 'j1' } } }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 const { default: JobPage } = await import('./[id]/+page.svelte');
 

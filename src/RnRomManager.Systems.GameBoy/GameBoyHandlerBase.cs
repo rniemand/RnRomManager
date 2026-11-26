@@ -9,7 +9,7 @@ public abstract class GameBoyHandlerBase : ISystemHandler
 
     private readonly Lazy<ReadOnlyMemory<byte>> _boxArt;
 
-    protected GameBoyHandlerBase() => _boxArt = new(() => EmbeddedResources.Load($"boxart.{Id}.png"));
+    protected GameBoyHandlerBase() => _boxArt = BoxArt.Lazy(typeof(GameBoyHandlerBase), $"boxart.{Id}.png");
 
     public abstract string Id { get; }
     public abstract string DisplayName { get; }

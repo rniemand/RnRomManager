@@ -13,7 +13,7 @@ namespace RnRomManager.Systems.Sega;
 /// </summary>
 public sealed class SegaCdHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.segacd.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(SegaCdHandler), "boxart.segacd.png");
 
     public string Id => "segacd";
     public string DisplayName => "Sega CD";

@@ -12,7 +12,11 @@ public static class TestDataCommand
           --nds-generate  write one synthetic DS ROM with a valid header CRC, streamed to disk
         """;
 
-    public static int Run(string[] args, TextWriter output, TextWriter error, TimeProvider time)
+    public static int Run(
+        string[] args,
+        TextWriter output,
+        TextWriter error,
+        TimeProvider time)
     {
         if (args is ["--help"]) { output.WriteLine(Usage); return 0; }
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -44,7 +48,12 @@ public static class TestDataCommand
     }
 
     /// <summary><c>--nds-generate &lt;file&gt; --size &lt;bytes&gt; --seed &lt;n&gt;</c>, and nothing else.</summary>
-    private static int Generate(string path, Dictionary<string, string> values, List<string> ndsDat, TextWriter output, TextWriter error)
+    private static int Generate(
+        string path,
+        Dictionary<string, string> values,
+        List<string> ndsDat,
+        TextWriter output,
+        TextWriter error)
     {
         if (values.Count != 3 || ndsDat.Count > 0 ||
             !values.TryGetValue("--size", out var sizeText) || !long.TryParse(sizeText, NumberStyles.None, CultureInfo.InvariantCulture, out var size) ||

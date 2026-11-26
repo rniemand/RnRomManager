@@ -33,7 +33,11 @@ public static class NintendoDiscHeader
         return Read(rom.Slice(1 << rom[8], WbfsCopyBytes), callerId, "wbfs", WbfsCopyBytes - TitleOffset);
     }
 
-    private static RomHeader Read(ReadOnlySpan<byte> rom, string callerId, string container, int titleMaxBytes)
+    private static RomHeader Read(
+        ReadOnlySpan<byte> rom,
+        string callerId,
+        string container,
+        int titleMaxBytes)
     {
         var classified = Has(rom, WiiMagicOffset, WiiMagic) ? "wii" : Has(rom, GameCubeMagicOffset, GameCubeMagic) ? "gc" : null;
         var title = Title(rom, titleMaxBytes);
@@ -41,7 +45,12 @@ public static class NintendoDiscHeader
             Fields(GameId(rom), rom.Length > 6 ? rom[6] : null, rom.Length > 7 ? rom[7] : null, title, container));
     }
 
-    private static Dictionary<string, object?> Fields(string? gameId, byte? discNumber, byte? version, string? title, string container) => new()
+    private static Dictionary<string, object?> Fields(
+        string? gameId,
+        byte? discNumber,
+        byte? version,
+        string? title,
+        string container) => new()
     {
         ["gameId"] = gameId,
         ["discNumber"] = discNumber,

@@ -21,7 +21,7 @@ public static class TimelineEndpoints
         timeline.MapGet("", async (string? system, HttpContext ctx, ISystemRegistry systems, IGameRepository games, IGameInfoLookup lookup) =>
         {
             if (system is not null && systems.ById(system) is null)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["system"] = ["Choose a registered system."] });
+                return Problems.Validation(ctx, "system", "Choose a registered system.");
             var years = await games.ListReleaseYearCountsAsync(system, ctx.RequestAborted);
             return Results.Ok(new
             {
@@ -58,7 +58,7 @@ public static class TimelineEndpoints
                 PageSize = pageSize ?? DefaultPageSize,
             };
             var result = await LibraryEndpoints.ForViewerAsync(await games.ListAsync(query, ctx.RequestAborted), ctx, games);
-            return Results.Ok(Paging.ToDto(result, game => LibraryEndpoints.ToListItemDto(game, systems)));
+            return Results.Ok(Paging.ToDto(result, game => LibraryDtos.ToListItemDto(game, systems)));
         });
 
         // T7: any signed-in user; found pages and not-found results are cached here, failures aren't.

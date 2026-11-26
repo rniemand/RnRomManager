@@ -9,7 +9,7 @@ public abstract class NeoGeoPocketHandlerBase : ISystemHandler
 
     private readonly Lazy<ReadOnlyMemory<byte>> _boxArt;
 
-    protected NeoGeoPocketHandlerBase() => _boxArt = new(() => EmbeddedResources.Load($"boxart.{Id}.png"));
+    protected NeoGeoPocketHandlerBase() => _boxArt = BoxArt.Lazy(typeof(NeoGeoPocketHandlerBase), $"boxart.{Id}.png");
 
     public abstract string Id { get; }
     public abstract string DisplayName { get; }

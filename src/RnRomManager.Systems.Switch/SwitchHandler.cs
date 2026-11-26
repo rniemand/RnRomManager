@@ -19,7 +19,7 @@ public sealed class SwitchHandler : ISystemHandler
     private static ReadOnlySpan<byte> XciMagic => "HEAD"u8;
     private static ReadOnlySpan<byte> TicketSuffix => ".tik"u8;
 
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => LoadResource("boxart.switch.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(SwitchHandler), "boxart.switch.png");
 
     public string Id => SystemId;
     public string DisplayName => "Nintendo Switch";
@@ -117,14 +117,5 @@ public sealed class SwitchHandler : ISystemHandler
                 return false;
         }
         return true;
-    }
-
-    private static byte[] LoadResource(string name)
-    {
-        using var stream = typeof(SwitchHandler).Assembly.GetManifestResourceStream($"RnRomManager.Systems.Switch.Resources.{name}")
-            ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");
-        using var copy = new MemoryStream();
-        stream.CopyTo(copy);
-        return copy.ToArray();
     }
 }

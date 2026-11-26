@@ -49,10 +49,8 @@ public class LegacyStorageTests
     [TearDown]
     public void TearDown() => _admin.Dispose();
 
-    public sealed record Legacy(Guid Id, long RomId, long ImageId, string ZipPath, byte[] Bytes);
-
     /// <summary>A mirrored legacy game with one release, a note and a cover image, all inside its ZIP.</summary>
-    private async Task<Legacy> WriteLegacy(string title)
+    private async Task<LegacyStorageLegacy> WriteLegacy(string title)
     {
         var rom = TestLibrary.RomBytes(++_seed);
         var image = new InfoJsonImage
@@ -108,7 +106,7 @@ public class LegacyStorageTests
 
     public static IEnumerable<TestCaseData> Writes()
     {
-        static TestCaseData Case(string name, Func<AuthClient, Legacy, Guid, Task<HttpResponseMessage>> send) =>
+        static TestCaseData Case(string name, Func<AuthClient, LegacyStorageLegacy, Guid, Task<HttpResponseMessage>> send) =>
             new TestCaseData(send).SetName("LegacyWriteRefused " + name);
 
         yield return Case("patch", (c, g, _) => c.PatchAsync($"/api/games/{g.Id}", new { title = "Renamed" }));
@@ -127,7 +125,7 @@ public class LegacyStorageTests
     }
 
     [TestCaseSource(nameof(Writes))]
-    public async Task LegacyGame_EveryWrite_IsStorageMigrationPending_AndLeavesTheZip(Func<AuthClient, Legacy, Guid, Task<HttpResponseMessage>> send)
+    public async Task LegacyGame_EveryWrite_IsStorageMigrationPending_AndLeavesTheZip(Func<AuthClient, LegacyStorageLegacy, Guid, Task<HttpResponseMessage>> send)
     {
         var game = await WriteLegacy("Alpha");
         var other = await MirrorMigrated("Beta");

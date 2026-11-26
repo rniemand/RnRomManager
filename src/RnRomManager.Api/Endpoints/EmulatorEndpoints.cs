@@ -83,10 +83,13 @@ public static partial class EmulatorEndpoints
     public const string Mame2003PlusCoreMismatch = "Mame2003PlusCoreMismatch";
     public const string FbneoCoreMismatch = "FbneoCoreMismatch";
 
-    private enum CoreOutcome { Verified, Unavailable, Mismatch, Unreadable }
-
-    private static async Task<IResult> GetCoreFileAsync(string coreId, string name, HttpContext ctx,
-        IOptions<EmulatorOptions> options, OperatorCoreManifest manifest, ILogger logger)
+    private static async Task<IResult> GetCoreFileAsync(
+        string coreId,
+        string name,
+        HttpContext ctx,
+        IOptions<EmulatorOptions> options,
+        OperatorCoreManifest manifest,
+        ILogger logger)
     {
         ctx.Response.Headers.CacheControl = "no-store";
         if (manifest.Find(coreId) is not { } core || core.PathOf(options.Value) is not { Length: > 0 } root
@@ -105,8 +108,12 @@ public static partial class EmulatorEndpoints
         };
     }
 
-    private static async Task<IResult> HeadCoreAsync(string coreId, HttpContext ctx, IOptions<EmulatorOptions> options,
-        OperatorCoreManifest manifest, ILogger logger)
+    private static async Task<IResult> HeadCoreAsync(
+        string coreId,
+        HttpContext ctx,
+        IOptions<EmulatorOptions> options,
+        OperatorCoreManifest manifest,
+        ILogger logger)
     {
         ctx.Response.Headers.CacheControl = "no-store";
         if (manifest.Find(coreId) is not { } core || core.PathOf(options.Value) is not { Length: > 0 } root)
@@ -193,10 +200,4 @@ public static partial class EmulatorEndpoints
 
     [GeneratedRegex(@"\A[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\z")]
     private static partial Regex BiosName();
-
-    /// <summary>Logger category for the BIOS endpoint.</summary>
-    public sealed class BiosLog;
-
-    /// <summary>Logger category for the operator-supplied core endpoints.</summary>
-    public sealed class OperatorCoreLog;
 }

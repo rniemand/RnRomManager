@@ -44,10 +44,8 @@ public class SaveCarryTests(bool external)
     [SetUp]
     public Task SetUp() => _factory.ResetAsync();
 
-    private sealed record TestGame(Guid Id, string Zip);
-
     /// <summary>A mirrored game of this fixture's system; external releases are files next to the ZIP.</summary>
-    private async Task<TestGame> WriteGame(string title, params string[] stems)
+    private async Task<SaveCarryTestGame> WriteGame(string title, params string[] stems)
     {
         var bytes = stems.Select(_ => TestLibrary.RomBytes(++_seed)).ToArray();
         var roms = stems.Select((s, i) =>
@@ -84,7 +82,11 @@ public class SaveCarryTests(bool external)
         return new(path, ".state", bytes.Length, Convert.ToHexStringLower(SHA1.HashData(bytes)));
     }
 
-    private async Task<GameSave> AddSave(TestGame game, string stem, string name, byte[] bytes)
+    private async Task<GameSave> AddSave(
+        SaveCarryTestGame game,
+        string stem,
+        string name,
+        byte[] bytes)
     {
         var result = await Editor.AddSaveAsync(game.Id, await RomId(game.Id, stem), "state", name, null, Upload(bytes), Alice, default);
         Assert.That(result.Code, Is.Null, result.Details);

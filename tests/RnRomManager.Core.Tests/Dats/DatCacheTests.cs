@@ -35,9 +35,7 @@ public class DatCacheTests
 
     private static ISystemHandler Handler(string id, string datName, params string[] extensions)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id, embedRomsInZip: true);
         handler.DatName.Returns(datName);
         handler.DatFolder.Returns(DatKind.NoIntro);
         handler.MetadatKinds.Returns(DatKind.Metadat);
@@ -63,8 +61,7 @@ public class DatCacheTests
     [Test]
     public void ANoneHandler_GetsNoStoreAndNoError_StrictOrNot()
     {
-        var none = Substitute.For<ISystemHandler>();
-        none.Id.Returns("dos");
+        var none = TestHandlers.Fake("dos");
         none.DatName.Returns("DOS");
         none.DatSource.Returns(DatSource.None);
         ISystemHandler[] handlers = [Handler("gb", Gb, ".gb"), Handler("gbc", Gbc, ".gbc", ".cgb"), none];

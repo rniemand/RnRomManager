@@ -4,7 +4,7 @@ namespace RnRomManager.Systems.Atari;
 
 public sealed class AtariJaguarHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.jaguar.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(AtariJaguarHandler), "boxart.jaguar.png");
 
     public string Id => "jaguar";
     public string DisplayName => "Atari Jaguar";

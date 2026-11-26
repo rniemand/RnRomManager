@@ -28,8 +28,6 @@ public static partial class DiscoveryLogoEndpoints
 
     private const string Route = "/discovery/{kind}/logo";
 
-    public sealed record LogoUrlRequest(string? Url);
-
     /// <summary>The route name of each kind.</summary>
     private static readonly IReadOnlyDictionary<string, LogoKind> Kinds = new Dictionary<string, LogoKind>(StringComparer.Ordinal)
     {
@@ -73,7 +71,7 @@ public static partial class DiscoveryLogoEndpoints
                 return problem;
             var (bytes, mediaType, error) = await ReadLogoAsync(form!, ctx.RequestAborted);
             if (error is not null)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["file"] = [error] });
+                return Problems.Validation(ctx, "file", error);
             if (await NameAsync(parsed, key!, discovery, systems, ctx.RequestAborted) is not { } name)
                 return Problems.NotFound(ctx);
 
@@ -94,14 +92,14 @@ public static partial class DiscoveryLogoEndpoints
                 return invalid;
             if (await NameAsync(parsed, key!, discovery, systems, ctx.RequestAborted) is not { } name)
                 return Problems.NotFound(ctx);
-            if (LibraryEndpoints.ParseImageUrl(request?.Url) is not { } url)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = ["Enter an http or https image URL."] });
+            if (LibraryImageEndpoints.ParseImageUrl(request?.Url) is not { } url)
+                return Problems.Validation(ctx, "url", "Enter an http or https image URL.");
             var download = await downloader.DownloadAsync(url, ctx.RequestAborted);
             if (download.Bytes is not { } bytes)
                 return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
             var (mediaType, error) = CheckLogo(bytes);
             if (error is not null)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [error] });
+                return Problems.Validation(ctx, "url", error);
 
             var actor = AuditActor.From(ctx.User);
             await logos.UpsertAsync(new DiscoveryLogo(parsed, StoredKey(parsed, key!), mediaType!, bytes, actor.UserId, time.GetUtcNow().UtcDateTime),
@@ -131,15 +129,19 @@ public static partial class DiscoveryLogoEndpoints
     private static IResult? KeyError(HttpContext ctx, LogoKind kind, string? key) => kind == LogoKind.Systems
         ? key is not null && SystemIdShape().IsMatch(key)
             ? null
-            : Problems.Validation(ctx, new Dictionary<string, string[]> { ["key"] = ["Must be 1 to 32 lowercase letters or digits."] })
+            : Problems.Validation(ctx, "key", "Must be 1 to 32 lowercase letters or digits.")
         : DiscoveryKey.IsValid(key)
             ? null
-            : Problems.Validation(ctx, new Dictionary<string, string[]> { ["key"] = ["Must be 64 lowercase hexadecimal characters."] });
+            : Problems.Validation(ctx, "key", "Must be 64 lowercase hexadecimal characters.");
 
     private static string StoredKey(LogoKind kind, string key) => kind == LogoKind.Systems ? DiscoveryKey.ForSystem(key) : key;
 
     /// <summary>The current group's name or the registered system's display name; null when there is none.</summary>
-    private static async Task<string?> NameAsync(LogoKind kind, string key, IDiscoveryRepository discovery, ISystemRegistry systems,
+    private static async Task<string?> NameAsync(
+        LogoKind kind,
+        string key,
+        IDiscoveryRepository discovery,
+        ISystemRegistry systems,
         CancellationToken cancellationToken) => kind switch
     {
         LogoKind.Systems => systems.ById(key)?.DisplayName,
@@ -149,7 +151,13 @@ public static partial class DiscoveryLogoEndpoints
     };
 
     /// <summary>B14: the audit event; system events carry the system id so the Auditing System filter finds them.</summary>
-    private static AuditEvent Event(LogoKind kind, bool replaced, AuditActor actor, string? name, string key, string? suffix = null)
+    private static AuditEvent Event(
+        LogoKind kind,
+        bool replaced,
+        AuditActor actor,
+        string? name,
+        string key,
+        string? suffix = null)
     {
         var (action, details) = kind switch
         {
@@ -177,7 +185,7 @@ public static partial class DiscoveryLogoEndpoints
         if (ctx.Request.ContentLength > RequestLimit)
             return (null, TooLarge(ctx));
         if (!ctx.Request.HasFormContentType)
-            return (null, Problems.Validation(ctx, new Dictionary<string, string[]> { ["file"] = ["Send the logo as multipart/form-data."] }));
+            return (null, Problems.Validation(ctx, "file", "Send the logo as multipart/form-data."));
 
         var buffer = new MemoryStream();
         var chunk = new byte[16 * 1024];
@@ -204,7 +212,7 @@ public static partial class DiscoveryLogoEndpoints
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException)
         {
-            return (null, Problems.Validation(ctx, new Dictionary<string, string[]> { ["file"] = ["The form couldn't be read."] }));
+            return (null, Problems.Validation(ctx, "file", "The form couldn't be read."));
         }
     }
 

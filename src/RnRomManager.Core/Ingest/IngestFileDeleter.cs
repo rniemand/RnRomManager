@@ -8,15 +8,15 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>D2: one file to delete; <see cref="Folder"/> is <c>pending</c> (<c>ingest/&lt;system&gt;/</c>), <c>failed</c> (its <c>_failed/</c>) or <c>removed</c> (its <c>_removed/</c>, Deleted ROMs D4).</summary>
-public sealed record IngestDeleteRef(string? System, string? Folder, string? Name);
-
-/// <param name="Code"><c>JobRunning</c> when the lock was busy (nothing deleted), else null.</param>
-public sealed record IngestDeleteResult(int Deleted, IReadOnlyList<IngestDeleteRef> Failed, string? Code = null);
-
 /// <summary>D2: hard-deletes pending files, failed files (with their <c>.error.txt</c>) and removed files (D4) under the global job lock.</summary>
-public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository reviews, ISystemRegistry systems, IOptions<PathsOptions> paths,
-    IAuditLog audit, AuditPaths auditPaths, ILogger<IngestFileDeleter> logger)
+public sealed class IngestFileDeleter(
+    JobLock jobLock,
+    IIngestReviewRepository reviews,
+    ISystemRegistry systems,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    AuditPaths auditPaths,
+    ILogger<IngestFileDeleter> logger)
 {
     public const string Pending = "pending";
     public const string Failed = "failed";

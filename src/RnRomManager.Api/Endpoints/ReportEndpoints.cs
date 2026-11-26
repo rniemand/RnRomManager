@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using RnRomManager.Api.Auth;
 using RnRomManager.Core.Audit;
-using RnRomManager.Core.Database;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Reports;
 using RnRomManager.Core.Systems;
@@ -38,7 +37,7 @@ public static partial class ReportEndpoints
             if (afterGameId is not null)
             {
                 if (!Guid.TryParse(afterGameId, out var parsed))
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["afterGameId"] = ["Must be a game ID."] });
+                    return Problems.Validation(ctx, "afterGameId", "Must be a game ID.");
                 after = parsed;
             }
             var next = await repository.NextMissingImageAsync(after, ctx.RequestAborted);
@@ -72,9 +71,7 @@ public static partial class ReportEndpoints
             };
             if (sortKey is null)
                 errors["sort"] = ["Must be name, system or year."];
-            bool? descending = dir?.ToLowerInvariant() switch { null or "asc" => false, "desc" => true, _ => null };
-            if (descending is null)
-                errors["dir"] = ["Must be asc or desc."];
+            var descending = SortQuery.ParseDir(dir, errors, whenMissing: false);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
@@ -112,9 +109,7 @@ public static partial class ReportEndpoints
             };
             if (sortKey is null)
                 errors["sort"] = ["Must be name, system or year."];
-            bool? descending = dir?.ToLowerInvariant() switch { null or "asc" => false, "desc" => true, _ => null };
-            if (descending is null)
-                errors["dir"] = ["Must be asc or desc."];
+            var descending = SortQuery.ParseDir(dir, errors, whenMissing: false);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
@@ -215,7 +210,7 @@ public static partial class ReportEndpoints
                 games = group.Games.Select(g => new
                 {
                     id = g.Id, displayTitle = g.DisplayTitle, romCount = g.RomCount, zipSizeBytes = g.ZipSizeBytes, createdAt = g.CreatedAt,
-                    boxArtUrl = g.BoxArtSha1 is { } sha1 ? LibraryEndpoints.CoverUrl(g.Id, sha1) : null,
+                    boxArtUrl = g.BoxArtSha1 is { } sha1 ? LibraryDtos.CoverUrl(g.Id, sha1) : null,
                 }),
             }));
         });
@@ -238,9 +233,7 @@ public static partial class ReportEndpoints
             };
             if (sortKey is null)
                 errors["sort"] = ["Must be name, system, releases, updates or size."];
-            bool? descending = dir?.ToLowerInvariant() switch { null => null, "asc" => false, "desc" => true, _ => null };
-            if (dir is not null && descending is null)
-                errors["dir"] = ["Must be asc or desc."];
+            var descending = SortQuery.ParseDir(dir, errors, whenMissing: null);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
@@ -299,9 +292,7 @@ public static partial class ReportEndpoints
             };
             if (sortKey is null)
                 errors["sort"] = ["Must be name, system, hacks, releases or size."];
-            bool? descending = dir?.ToLowerInvariant() switch { null => null, "asc" => false, "desc" => true, _ => null };
-            if (dir is not null && descending is null)
-                errors["dir"] = ["Must be asc or desc."];
+            var descending = SortQuery.ParseDir(dir, errors, whenMissing: null);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
@@ -374,7 +365,7 @@ public static partial class ReportEndpoints
                 return Problems.Validation(ctx, errors);
             // A key that matches no current group is stored anyway: the group may have just changed (RP8).
             await repository.DismissDuplicateAsync(igdbGiven ? DuplicateMatch.Igdb : DuplicateMatch.Title, request.System!,
-                igdbGiven ? igdbId.ToString(CultureInfo.InvariantCulture) : request.BaseTitle!, request.GamesKey!, DatEndpoints.UserId(ctx.User),
+                igdbGiven ? igdbId.ToString(CultureInfo.InvariantCulture) : request.BaseTitle!, request.GamesKey!, EndpointUser.Id(ctx.User),
                 time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
             return Results.NoContent();
         }).RequireAuthorization(AuthSetup.AdminOnly);
@@ -421,7 +412,11 @@ public static partial class ReportEndpoints
     private static partial Regex GamesKeyPattern();
 
     /// <summary>The paged reports' shared rules: house paging, and an optional registered <c>system</c>.</summary>
-    private static Dictionary<string, string[]> Validate(string? system, int? page, int? pageSize, ISystemRegistry systems)
+    private static Dictionary<string, string[]> Validate(
+        string? system,
+        int? page,
+        int? pageSize,
+        ISystemRegistry systems)
     {
         var errors = Paging.Validate(page, pageSize);
         if (system is not null && systems.ById(system) is null)
@@ -439,16 +434,10 @@ public static partial class ReportEndpoints
         if (afterGameId is not null)
         {
             if (!Guid.TryParse(afterGameId, out var parsed))
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["afterGameId"] = ["Must be a game ID."] });
+                return Problems.Validation(ctx, "afterGameId", "Must be a game ID.");
             after = parsed;
         }
         var found = await next(after, ctx.RequestAborted);
         return Results.Ok(new { id = found.Id, currentIsOnly = found.CurrentIsOnly });
     }
 }
-
-/// <summary><c>POST /api/reports/duplicates/dismiss</c> (RP8): a title group's <c>baseTitle</c> or (D3) an IGDB group's <c>igdbId</c>.</summary>
-public sealed record DismissDuplicateRequest(string? System, string? BaseTitle, string? GamesKey, JsonElement? IgdbId = null);
-
-/// <summary><c>POST /api/reports/duplicates/merge</c> (RP8): every source is merged into the target, in order.</summary>
-public sealed record MergeDuplicatesRequest(Guid? TargetGameId, IReadOnlyList<Guid>? SourceGameIds);

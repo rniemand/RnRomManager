@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using RnRomManager.Api.Endpoints;
@@ -206,7 +205,7 @@ public partial class BundleQueueEndpointsTests
         var json = $$"""{ "name": "x", "entries": [], "pad": "{{new string('a', BundleQueueEndpoints.RequestLimit)}}" }""";
         HttpContent content = new StringContent(json, Encoding.UTF8, "application/json");
         if (chunked)
-            content = new UnknownLengthContent(content);
+            content = new BundleQueueEndpointsUnknownLengthContent(content);
 
         using var response = await _alice.SendContentAsync(HttpMethod.Post, "/api/bundle-queues", content);
 
@@ -222,31 +221,5 @@ public partial class BundleQueueEndpointsTests
         using var response = await _alice.PostAsync("/api/bundle-queues", new { name = "x", entries = Array.Empty<object>() }, sendXsrf: false);
 
         Assert.That((int)response.StatusCode, Is.EqualTo(400).Or.EqualTo(403));
-    }
-
-    /// <summary>A body without a Content-Length, so the server sees it chunked.</summary>
-    private sealed class UnknownLengthContent : HttpContent
-    {
-        private readonly HttpContent _inner;
-
-        public UnknownLengthContent(HttpContent inner)
-        {
-            _inner = inner;
-            Headers.ContentType = inner.Headers.ContentType ?? new MediaTypeHeaderValue("application/json");
-        }
-
-        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) => _inner.CopyToAsync(stream);
-
-        protected override bool TryComputeLength(out long length)
-        {
-            length = 0;
-            return false;
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing) _inner.Dispose();
-            base.Dispose(disposing);
-        }
     }
 }

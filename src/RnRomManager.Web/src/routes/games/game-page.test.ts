@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { GameDetail, ReleaseFile, RomDetail } from '#lib/api/types.js';
+import type { GameDetail, ReleaseFile, RomDetail } from '#lib/types/index.js';
 import { formatDateTime, formatSize } from '#lib/format.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 import { auth } from '#lib/stores/auth.svelte.js';
@@ -20,9 +20,6 @@ vi.mock('$app/state', () => ({
 			return testUrl.current;
 		}
 	}
-}));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
 // Bootstrap's Modal needs layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
@@ -709,7 +706,7 @@ describe('game detail page', () => {
 		]);
 		// B6: chevron + name on the left (min-width 0); badges then buttons on the right.
 		const left = heading.parentElement!;
-		expect(left.style.minWidth).toBe('0px');
+		expect(left.classList.contains('min-w-0')).toBe(true);
 		expect(left.contains(card.querySelector('.chevron-toggle'))).toBe(true);
 		const right = left.nextElementSibling!;
 		expect(right.className).toBe(

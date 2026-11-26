@@ -6,37 +6,6 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Library;
 
-public enum DbSyncChange
-{
-    Inserted,
-
-    /// <summary>Changed ZIP, or the same <c>gameId</c> found at another path (<c>zip_path</c> updated).</summary>
-    Updated,
-
-    Deleted,
-}
-
-/// <summary>Why a ZIP's DB rows were left as they are (§12.2).</summary>
-public enum DbSyncSkip
-{
-    ZipUnreadable,
-    InfoJsonMissing,
-    InfoJsonInvalid,
-    InfoJsonNewerSchema,
-    DuplicateGameId,
-    DuplicateSha1,
-}
-
-public sealed record DbSyncChangeItem(DbSyncChange Kind, Guid GameId, string ZipPath);
-
-/// <param name="NotChecked">
-/// Nothing at this path was opened or entered (an unsafe or unreadable path, or a ZIP path the database equates with
-/// another, spec G4/E4); integrity reports it and keeps the path's issues, as no check of it ran.
-/// </param>
-public sealed record DbSyncSkipItem(DbSyncSkip Reason, string ZipPath, string? Details, bool NotChecked = false);
-
-public sealed record DbSyncResult(IReadOnlyList<DbSyncChangeItem> Changes, IReadOnlyList<DbSyncSkipItem> Skipped);
-
 /// <summary>
 /// The DB auto-repair shared by the ingest pre-pass (§7.1 step 4) and integrity (§12.2, D10): every <c>.zip</c> under a
 /// registered system folder is compared with its <c>games</c> row (size + whole-second mtime); new or changed ZIPs are
@@ -60,8 +29,6 @@ public sealed class DbSync(
     IOptions<PathsOptions> paths,
     ILogger<DbSync> logger)
 {
-    private sealed record Found(string ZipPath, Guid Id, MirrorEntry? Entry, IReadOnlyCollection<string> Sha1s);
-
     public async Task<DbSyncResult> SyncAllAsync(CancellationToken cancellationToken)
     {
         var state = await games.ListSyncStateAsync(cancellationToken).ConfigureAwait(false);
@@ -182,8 +149,14 @@ public sealed class DbSync(
     /// confirmed absent is relocated or replaced as usual.</item>
     /// </list>
     /// </summary>
-    private async Task GuardEquivalentPathsAsync(IReadOnlyList<GameSyncState> state, List<CheckedFile> zips, List<Found> found, HashSet<Guid> kept,
-        List<DbSyncSkipItem> skipped, ILookup<Guid, string> dbSha1s, CancellationToken cancellationToken)
+    private async Task GuardEquivalentPathsAsync(
+        IReadOnlyList<GameSyncState> state,
+        List<CheckedFile> zips,
+        List<Found> found,
+        HashSet<Guid> kept,
+        List<DbSyncSkipItem> skipped,
+        ILookup<Guid, string> dbSha1s,
+        CancellationToken cancellationToken)
     {
         var external = systems.All.Where(RomStorage.MayHoldExternalFiles).Select(h => h.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         bool InExternalFolder(string path) => path.IndexOf('/') is var slash and > 0 && external.Contains(path[..slash]);
@@ -263,8 +236,8 @@ public sealed class DbSync(
             return zip.InfoJson switch
             {
                 null => (null, new DbSyncSkipItem(DbSyncSkip.InfoJsonMissing, path, null)),
-                { Kind: InfoJsonReadResult.Outcome.Ok, Game: { } game } => (new MirrorEntry(game, path, size, mtime), null),
-                { Kind: InfoJsonReadResult.Outcome.NewerSchema } r => (null, new DbSyncSkipItem(DbSyncSkip.InfoJsonNewerSchema, path, $"schemaVersion {r.FileVersion}")),
+                { Kind: InfoJsonReadResultOutcome.Ok, Game: { } game } => (new MirrorEntry(game, path, size, mtime), null),
+                { Kind: InfoJsonReadResultOutcome.NewerSchema } r => (null, new DbSyncSkipItem(DbSyncSkip.InfoJsonNewerSchema, path, $"schemaVersion {r.FileVersion}")),
                 var r => (null, new DbSyncSkipItem(DbSyncSkip.InfoJsonInvalid, path, r.Rule)),
             };
         }

@@ -1,9 +1,11 @@
 <script lang="ts">
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { Me } from '#lib/api/types.js';
-	import Icon from '#lib/components/Icon.svelte';
+	import type { Me } from '#lib/types/index.js';
+	import Icon from '#lib/icons/Icon.svelte';
 	import { safeReturnUrl } from '#lib/guard.js';
 	import { navigate } from '#lib/navigation.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -61,9 +63,8 @@
 			{/if}
 			<div class="mb-3">
 				<label class="form-label" for="username">Username</label>
-				<input
+				<TextInput
 					id="username"
-					class="form-control"
 					autocomplete="username"
 					autocapitalize="none"
 					spellcheck="false"
@@ -73,19 +74,18 @@
 			</div>
 			<div class="mb-3">
 				<label class="form-label" for="password">Password</label>
-				<input
+				<TextInput
 					id="password"
 					type="password"
-					class="form-control"
 					autocomplete="current-password"
 					required
 					bind:value={password}
 				/>
 			</div>
-			<button type="submit" class="btn btn-primary w-100" disabled={busy}>
-				{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-				Sign in
-			</button>
+			<Button variant="primary" class="w-100" type="submit" disabled={busy}
+				>{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
+				Sign in</Button
+			>
 		</form>
 	</div>
 </div>

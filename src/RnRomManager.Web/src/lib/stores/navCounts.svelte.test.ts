@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetClient } from '../api/client';
-import type { Me } from '../api/types';
+import { resetClient } from '#lib/api/client.js';
+import type { Me } from '#lib/types/index.js';
 import { auth } from './auth.svelte';
 import { navCounts, refreshCounts } from './navCounts.svelte';
 

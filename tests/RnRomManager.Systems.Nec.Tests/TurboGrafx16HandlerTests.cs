@@ -1,6 +1,6 @@
-using System.Buffers.Binary;
 using RnRomManager.Core.Systems;
 using RnRomManager.Systems.Atari;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Systems.Nec.Tests;
 
@@ -28,7 +28,7 @@ public class TurboGrafx16HandlerTests
     {
         var rom = new byte[size];
         new Random(size).NextBytes(rom);
-        Assert.That(Handler.ReadHeader(rom), Is.Null);
+        HandlerAsserts.AssertNoHeader(Handler, rom);
     }
 
     [Test]
@@ -44,7 +44,7 @@ public class TurboGrafx16HandlerTests
     {
         var rom = new byte[262144];
         new Random(7).NextBytes(rom);
-        Assert.That(Handler.NormalizeForHashing(rom).ToArray(), Is.EqualTo(rom));
+        HandlerAsserts.AssertNormalizeIsIdentity(Handler, rom);
     }
 
     [Test]
@@ -61,8 +61,7 @@ public class TurboGrafx16HandlerTests
     {
         var png = Handler.DefaultBoxArtPng.Span;
 
-        Assert.That(png[..8].ToArray(), Is.EqualTo(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }), "PNG signature");
-        Assert.That((BinaryPrimitives.ReadInt32BigEndian(png[16..]), BinaryPrimitives.ReadInt32BigEndian(png[20..])), Is.EqualTo((512, 512)));
+        HandlerAsserts.AssertBoxArtPng(Handler, 512);
         Assert.That(png.ToArray(), Is.Not.EqualTo(new Atari2600Handler().DefaultBoxArtPng.ToArray()));
     }
 }

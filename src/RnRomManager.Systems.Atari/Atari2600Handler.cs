@@ -8,7 +8,7 @@ namespace RnRomManager.Systems.Atari;
 /// </summary>
 public sealed class Atari2600Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.a2600.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(Atari2600Handler), "boxart.a2600.png");
 
     public string Id => "a2600";
     public string DisplayName => "Atari 2600";

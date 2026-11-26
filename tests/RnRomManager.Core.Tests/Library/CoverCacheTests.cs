@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Library;
 using SkiaSharp;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Library;
 
@@ -10,14 +11,19 @@ namespace RnRomManager.Core.Tests.Library;
 public class CoverCacheTests
 {
     private const string Sha1 = "0123456789abcdef0123456789abcdef01234567";
+    private TempDir _temp = null!;
     private string _root = null!;
     private readonly Guid _game = Guid.NewGuid();
 
     [SetUp]
-    public void SetUp() => _root = Directory.CreateTempSubdirectory("rnrm-covers-").FullName;
+    public void SetUp()
+    {
+        _temp = new TempDir();
+        _root = _temp.Path;
+    }
 
     [TearDown]
-    public void TearDown() => Directory.Delete(_root, recursive: true);
+    public void TearDown() => _temp.Dispose();
 
     private CoverCache Cache(string? imageCache = null) =>
         new(Options.Create(new PathsOptions { ImageCache = imageCache ?? Path.Combine(_root, "imagecache") }), NullLogger<CoverCache>.Instance);
@@ -39,7 +45,11 @@ public class CoverCacheTests
     [TestCase(1000, 600, 512, 307)]
     [TestCase(600, 1000, 307, 512)]
     [TestCase(200, 100, 200, 100)]
-    public async Task Generate_ScalesTheLongestSideDownTo512_NeverUp_AsWebp(int width, int height, int expectedWidth, int expectedHeight)
+    public async Task Generate_ScalesTheLongestSideDownTo512_NeverUp_AsWebp(
+        int width,
+        int height,
+        int expectedWidth,
+        int expectedHeight)
     {
         var cache = Cache();
 
@@ -106,25 +116,5 @@ public class CoverCacheTests
         Assert.That(async () => await waiting, Throws.InstanceOf<OperationCanceledException>());
         gate.SetResult();
         Assert.That(async () => await Task.WhenAll(held), Throws.Nothing);
-    }
-
-    /// <summary>Reads only after <c>gate</c> completes, recording that a generation got its slot.</summary>
-    private sealed class GatedStream(byte[] bytes, Task gate) : MemoryStream(bytes)
-    {
-        public bool Started { get; private set; }
-
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            Started = true;
-            await gate;
-            return await base.ReadAsync(buffer, cancellationToken);
-        }
-
-        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-        {
-            Started = true;
-            await gate;
-            return await base.ReadAsync(buffer, offset, count, cancellationToken);
-        }
     }
 }

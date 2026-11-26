@@ -18,8 +18,7 @@ public class InfoJsonTests
 
     private static InfoJsonReader Reader(params IInfoJsonUpgrader[] upgraders)
     {
-        var zipRoms = Substitute.For<ISystemHandler>();
-        zipRoms.Id.Returns("zipx");
+        var zipRoms = TestHandlers.Fake("zipx");
         zipRoms.RomExtensions.Returns([".dosz", ".zip"]);
         zipRoms.MaxRomSizeBytes.Returns(1L << 30);
         ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler(), new ExternalSetTestHandler(), new LegacyExternalTestHandler(), zipRoms];
@@ -30,9 +29,7 @@ public class InfoJsonTests
 
     private static ISystemHandler Handler(string id)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id, embedRomsInZip: true);
         return handler;
     }
 
@@ -95,7 +92,7 @@ public class InfoJsonTests
     }
 
     private static string? RuleOf(InfoJsonReadResult result) =>
-        result.Kind == InfoJsonReadResult.Outcome.Invalid ? result.Rule : $"not invalid ({result.Kind})";
+        result.Kind == InfoJsonReadResultOutcome.Invalid ? result.Rule : $"not invalid ({result.Kind})";
 
     [Test]
     public void RoundTrip_GivesTheSameGame()
@@ -104,7 +101,7 @@ public class InfoJsonTests
 
         var result = _reader.Read(InfoJsonSerializer.Serialize(game));
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         var read = result.Game!;
         Assert.That(read with { Roms = [], Images = [], Developers = [], Publishers = [], Genres = [] },
             Is.EqualTo(game with { Roms = [], Images = [], Developers = [], Publishers = [], Genres = [] }));
@@ -141,7 +138,7 @@ public class InfoJsonTests
             d["roms"]![0]!["extra"] = new JsonObject { ["a"] = 1 };
         });
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(result.Game!)), Does.Not.Contain("futureField"), "dropped on the next write");
     }
 
@@ -159,7 +156,7 @@ public class InfoJsonTests
             d["images"]![0]!.AsObject().Remove("sourceUrl");
         });
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
     }
 
     [Test]
@@ -167,7 +164,7 @@ public class InfoJsonTests
     {
         var result = _reader.Read([0xEF, 0xBB, 0xBF, .. InfoJsonSerializer.Serialize(Game())]);
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
     }
 
     [Test]
@@ -175,7 +172,7 @@ public class InfoJsonTests
     {
         var result = ReadJson("""{ "schemaVersion": 9, "anything": "goes" }""");
 
-        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)9)));
+        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResultOutcome.NewerSchema, (int?)9)));
     }
 
     [Test]
@@ -191,7 +188,7 @@ public class InfoJsonTests
 
         var result = reader.Read(Encoding.UTF8.GetBytes(v0.ToJsonString()));
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 8)));
         Assert.That(result.Game.Genres, Is.EqualTo(new[] { "Puzzle" }));
         upgrader.Received(1).Upgrade(Arg.Any<JsonObject>());
@@ -209,7 +206,7 @@ public class InfoJsonTests
             RemoveExternalFileName(d);
         });
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Rating, result.Game.Favourite),
             Is.EqualTo(((int?)1, 8, (int?)null, false)));
         Assert.That(result.Game.Roms[0].ExternalFileName, Is.Null);
@@ -226,7 +223,7 @@ public class InfoJsonTests
     {
         var result = ReadEdited(d => d["rating"] = null);
 
-        Assert.That((result.Kind, result.Game?.Rating), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)null)), result.Rule);
+        Assert.That((result.Kind, result.Game?.Rating), Is.EqualTo((InfoJsonReadResultOutcome.Ok, (int?)null)), result.Rule);
     }
 
     [TestCase(0)]
@@ -331,8 +328,8 @@ public class InfoJsonTests
         var snapCover = _reader.Read(InfoJsonSerializer.Serialize(Game() with { Images = [Image("snap-01.png", ImageType.Snap) with { IsCover = true }] }));
         var none = _reader.Read(InfoJsonSerializer.Serialize(Game() with { Images = [] }));
 
-        Assert.That(snapCover.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), snapCover.Rule);
-        Assert.That(none.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), none.Rule);
+        Assert.That(snapCover.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), snapCover.Rule);
+        Assert.That(none.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), none.Rule);
     }
 
     [Test]
@@ -351,7 +348,7 @@ public class InfoJsonTests
 
         var result = _reader.Read(InfoJsonSerializer.Serialize(game));
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
     }
 
     private static void RemoveIsCover(JsonObject document)
@@ -373,7 +370,7 @@ public class InfoJsonTests
     {
         var result = ReadV2(Image("snap-01.png", ImageType.Snap), Image("boxart-01.png", ImageType.BoxArt));
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(result.Game!.Images.Select(i => (i.FileName, i.IsCover)), Is.EqualTo(new[] { ("snap-01.png", false), ("boxart-01.png", true) }));
         Assert.That((result.FileVersion, result.Game.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)2, 8, (string?)null)));
     }
@@ -383,7 +380,7 @@ public class InfoJsonTests
     {
         var result = ReadV2(Image("snap-01.png", ImageType.Snap), Image("title-01.png", ImageType.TitleScreen));
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(result.Game!.Images.Select(i => i.IsCover), Is.EqualTo(new[] { true, false }));
     }
 
@@ -392,7 +389,7 @@ public class InfoJsonTests
     {
         var result = ReadV2();
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(result.Game!.Images, Is.Empty);
     }
 
@@ -417,7 +414,7 @@ public class InfoJsonTests
             RemoveExternalFileName(d);
         });
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)3, 8, (string?)null)));
     }
 
@@ -455,12 +452,16 @@ public class InfoJsonTests
             d[list]!.AsArray().Add(null);
         }));
 
-        Assert.That(result!.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Invalid));
+        Assert.That(result!.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Invalid));
     }
 
     private const string ExtRomName = "Orbit Test [0100000000010000][v0].nsp";
 
-    private static InfoJsonRom ExtRom(string? pointer, string fileName = ExtRomName, bool isPrimary = true, char hash = 'b') =>
+    private static InfoJsonRom ExtRom(
+        string? pointer,
+        string fileName = ExtRomName,
+        bool isPrimary = true,
+        char hash = 'b') =>
         Rom(fileName, isPrimary) with
         {
             ExternalFileName = pointer,
@@ -476,7 +477,7 @@ public class InfoJsonTests
     {
         var result = ReadGame(ExtGame(ExtRom("Orbit Test." + ExtRomName)));
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(result.Game!.Roms[0].ExternalFileName, Is.EqualTo("Orbit Test." + ExtRomName));
         Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(result.Game)), Does.Contain("\"externalFileName\": \"Orbit Test.Orbit Test [0100000000010000][v0].nsp\""));
     }
@@ -496,7 +497,7 @@ public class InfoJsonTests
     {
         var result = ReadGame(ExtGame(ExtRom(pointer)));
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
     }
 
     private static IEnumerable<TestCaseData> InvalidPointers()
@@ -532,7 +533,7 @@ public class InfoJsonTests
         static InfoJsonGame ZipGame(string pointer) => Game() with { System = "zipx", Roms = [ExtRom(pointer, "Game.dosz")] };
 
         Assert.That(RuleOf(ReadGame(ZipGame("Game.x.ZIP"))), Is.EqualTo("rom 'Game.dosz' externalFileName must not end with .zip"));
-        Assert.That(ReadGame(ZipGame("Game.x.dosz")).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        Assert.That(ReadGame(ZipGame("Game.x.dosz")).Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok));
     }
 
     [Test]
@@ -544,12 +545,12 @@ public class InfoJsonTests
     [Test]
     public void LegacySystem_AllRomsEmbedded_IsValid() =>
         Assert.That(ReadGame(LegacyGame(ExtRom(null, "A.nds"), ExtRom(null, "B.nds", isPrimary: false, hash: 'c'))).Kind,
-            Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+            Is.EqualTo(InfoJsonReadResultOutcome.Ok));
 
     [Test]
     public void LegacySystem_AllRomsExternal_IsValid() =>
         Assert.That(ReadGame(LegacyGame(ExtRom("G.A.nds", "A.nds"), ExtRom("G.B.nds", "B.nds", isPrimary: false, hash: 'c'))).Kind,
-            Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+            Is.EqualTo(InfoJsonReadResultOutcome.Ok));
 
     [Test]
     public void LegacySystem_MixedStorage_IsInvalid() =>
@@ -582,7 +583,7 @@ public class InfoJsonTests
         var fits = string.Concat(Enumerable.Repeat("\U0001F600", 251)) + ".nsp";
         var tooLong = string.Concat(Enumerable.Repeat("\U0001F600", 252)) + ".nsp";
 
-        Assert.That(ReadGame(ExtGame(ExtRom("Game.x.nsp", fits))).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        Assert.That(ReadGame(ExtGame(ExtRom("Game.x.nsp", fits))).Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok));
         Assert.That(RuleOf(ReadGame(ExtGame(ExtRom("Game.x.nsp", tooLong)))), Does.Contain("at most 255 characters"));
     }
 
@@ -590,7 +591,7 @@ public class InfoJsonTests
     [TestCase("NUL.gb")]
     [TestCase("game.bin")]
     public void EmbeddedRom_LogicalFileNameRules_AreUnchanged(string fileName) =>
-        Assert.That(ReadGame(Game() with { Roms = [Rom(fileName)] }).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        Assert.That(ReadGame(Game() with { Roms = [Rom(fileName)] }).Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok));
 
     [Test]
     public void ExternalRom_SizeOverTheHandlerLimit_IsInvalid_EvenWithAValidPointer()
@@ -598,7 +599,7 @@ public class InfoJsonTests
         var max = new ExternalTestHandler().MaxRomSizeBytes;
         InfoJsonGame Sized(long size) => ExtGame(ExtRom("Game.x.nsp") with { Metadata = ExtRom("Game.x.nsp").Metadata with { SizeBytes = size } });
 
-        Assert.That(ReadGame(Sized(max)).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        Assert.That(ReadGame(Sized(max)).Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok));
         Assert.That(RuleOf(ReadGame(Sized(max + 1))), Does.Contain("sizeBytes is over the system's limit"));
     }
 
@@ -612,7 +613,7 @@ public class InfoJsonTests
 
         var result = ReadGame(game);
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That((result.Game!.Roms[0].Identification.Method, result.Game.Images[0].Source), Is.EqualTo((IdentificationMethod.TitleDb, "titledb")));
         Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(result.Game)), Does.Contain("\"method\": \"TitleDb\""));
     }
@@ -637,7 +638,7 @@ public class InfoJsonTests
             rom["flags"] = new JsonArray(flags.Select(f => (JsonNode?)f).ToArray());
         });
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].Version), Is.EqualTo(((int?)4, 8, expected)));
     }
 
@@ -681,7 +682,7 @@ public class InfoJsonTests
     {
         var result = _reader.Read(InfoJsonSerializer.Serialize(Game() with { Roms = [Rom("Tetris (World) (Rev 1).gb") with { Version = version }] }));
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(result.Game!.Roms[0].Version, Is.EqualTo(version));
     }
 
@@ -722,7 +723,7 @@ public class InfoJsonTests
 
         var result = ReadGame(game);
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(result.Game!.Roms[0].Files, Is.EqualTo(game.Roms[0].Files));
         Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(game)), Does.Contain("\"originalFileName\": \"Disc (USA).cue\""));
         Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(Game())), Does.Contain("\"files\": null"));
@@ -761,7 +762,7 @@ public class InfoJsonTests
         const string main = "...Iru! (Japan) (Track 1).bin";
         var result = ReadGame(SetGame(SetRom(main, SetFile("...Iru! (Japan).cue"))));
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(RuleOf(ReadGame(SetGame(SetRom(main, SetFile(".."))))), Does.Contain("must be a plain, portable file name"));
     }
 
@@ -770,7 +771,7 @@ public class InfoJsonTests
     public void DotsInsideRomNames_AreValid_OnEverySystem_B1()
     {
         var result = ReadGame(Game() with { Roms = [Rom("Hello... World (USA).gb")] });
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
 
         Assert.That(RuleOf(ReadGame(Game() with { Roms = [Rom("..")] })), Does.Contain("roms fileName '..' must be a plain name"));
         Assert.That(RuleOf(ReadGame(Game() with { Roms = [Rom("a/b.gb")] })), Does.Contain("roms fileName 'a/b.gb' must be a plain name"));
@@ -794,7 +795,7 @@ public class InfoJsonTests
             d["schemaVersion"] = 5;
             d["roms"]![0]!.AsObject().Remove("files");
         });
-        Assert.That((read.Kind, read.FileVersion, read.Game!.SchemaVersion, read.Game.Roms[0].Files), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)5, 8, (IReadOnlyList<InfoJsonRomFile>?)null)));
+        Assert.That((read.Kind, read.FileVersion, read.Game!.SchemaVersion, read.Game.Roms[0].Files), Is.EqualTo((InfoJsonReadResultOutcome.Ok, (int?)5, 8, (IReadOnlyList<InfoJsonRomFile>?)null)));
     }
 
     [Test]
@@ -818,7 +819,7 @@ public class InfoJsonTests
     {
         var read = ReadEdited(d => { d["schemaVersion"] = 6; d.Remove("igdbId"); });
 
-        Assert.That((read.Kind, read.FileVersion, read.Game?.SchemaVersion), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)6, (int?)8)), read.Rule);
+        Assert.That((read.Kind, read.FileVersion, read.Game?.SchemaVersion), Is.EqualTo((InfoJsonReadResultOutcome.Ok, (int?)6, (int?)8)), read.Rule);
         Assert.That(read.Game! with { SchemaVersion = 8, Roms = [], Images = [], Developers = [], Publishers = [], Genres = [] },
             Is.EqualTo(Game() with { Roms = [], Images = [], Developers = [], Publishers = [], Genres = [] }));
     }
@@ -831,7 +832,7 @@ public class InfoJsonTests
         var read = ReadEdited(d => { d["schemaVersion"] = 7; d.Remove("igdbId"); });
 
         Assert.That((read.Kind, read.FileVersion, read.Game?.SchemaVersion, read.Game?.IgdbId),
-            Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)7, (int?)8, (int?)null)), read.Rule);
+            Is.EqualTo((InfoJsonReadResultOutcome.Ok, (int?)7, (int?)8, (int?)null)), read.Rule);
         var written = JsonNode.Parse(InfoJsonSerializer.Serialize(read.Game!))!.AsObject();
         Assert.That((written["schemaVersion"]!.GetValue<int>(), written.ContainsKey("igdbId"), written["igdbId"]), Is.EqualTo((8, true, (JsonNode?)null)));
     }
@@ -853,7 +854,7 @@ public class InfoJsonTests
     {
         var read = ReadGame(Game() with { IgdbId = igdbId });
 
-        Assert.That((read.Kind, read.Game?.IgdbId), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, igdbId)), read.Rule);
+        Assert.That((read.Kind, read.Game?.IgdbId), Is.EqualTo((InfoJsonReadResultOutcome.Ok, igdbId)), read.Rule);
     }
 
     [Test]
@@ -873,7 +874,7 @@ public class InfoJsonTests
 
         var result = _reader.Read(bytes);
 
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(result.Game!.Actions!.CoverImagePulled, Is.EqualTo("2026-11-26T08:15:30.0000000+00:00"));
         Assert.That(InfoJsonSerializer.Serialize(result.Game), Is.EqualTo(bytes));
         Assert.That(text.IndexOf("\n  \"actions\"", StringComparison.Ordinal), Is.GreaterThan(text.IndexOf("\n  \"images\"", StringComparison.Ordinal))
@@ -891,9 +892,9 @@ public class InfoJsonTests
     [Test]
     public void Actions_NullOrUnknownKeys_AreValid()
     {
-        Assert.That(ReadEdited(d => d["actions"] = null).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        Assert.That(ReadEdited(d => d["actions"] = null).Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok));
         var result = ReadEdited(d => d["actions"] = new JsonObject { ["future"] = 1, ["coverImagePulled"] = null });
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(result.Game!)), Does.Not.Contain("actions"));
     }
 
@@ -922,7 +923,7 @@ public class InfoJsonTests
         var result = _reader.Read(bytes);
 
         Assert.That(Encoding.UTF8.GetString(bytes), Does.Contain("\"method\": \"Serial\""));
-        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), result.Rule);
         Assert.That(result.Game!.Roms[0].Identification.Method, Is.EqualTo(IdentificationMethod.Serial));
     }
 }

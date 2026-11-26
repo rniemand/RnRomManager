@@ -57,9 +57,7 @@ public class IngestJobTests
 
     private static ISystemHandler Handler(string id, string datName)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id, embedRomsInZip: true);
         handler.DatName.Returns(datName);
         handler.DatFolder.Returns(DatKind.NoIntro);
         handler.MetadatKinds.Returns(DatKind.Metadat);
@@ -119,15 +117,15 @@ public class IngestJobTests
         static IngestItemResult R(string outcome) => new(outcome, null);
         var ingested = R(IngestOutcome.Ingested);
 
-        Assert.That(IngestJob.FateOf([ingested, new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent)]), Is.EqualTo(IngestJob.ArchiveFate.Keep));
-        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Review)]), Is.EqualTo(IngestJob.ArchiveFate.Keep));
-        Assert.That(IngestJob.FateOf([ingested, null]), Is.EqualTo(IngestJob.ArchiveFate.Keep));
-        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Failed), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Failed));
-        Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Duplicates));
-        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Duplicate), R(IngestOutcome.Repaired)]), Is.EqualTo(IngestJob.ArchiveFate.Delete));
+        Assert.That(IngestJob.FateOf([ingested, new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent)]), Is.EqualTo(ArchiveFate.Keep));
+        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Review)]), Is.EqualTo(ArchiveFate.Keep));
+        Assert.That(IngestJob.FateOf([ingested, null]), Is.EqualTo(ArchiveFate.Keep));
+        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Failed), R(IngestOutcome.Duplicate)]), Is.EqualTo(ArchiveFate.Failed));
+        Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate), R(IngestOutcome.Duplicate)]), Is.EqualTo(ArchiveFate.Duplicates));
+        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Duplicate), R(IngestOutcome.Repaired)]), Is.EqualTo(ArchiveFate.Delete));
         // Another system's ROM or a nested archive was never ingested: the archive is kept aside, not deleted.
-        Assert.That(IngestJob.FateOf([ingested], holdsUnhandled: true), Is.EqualTo(IngestJob.ArchiveFate.Failed));
-        Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate)], holdsUnhandled: true), Is.EqualTo(IngestJob.ArchiveFate.Duplicates));
+        Assert.That(IngestJob.FateOf([ingested], holdsUnhandled: true), Is.EqualTo(ArchiveFate.Failed));
+        Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate)], holdsUnhandled: true), Is.EqualTo(ArchiveFate.Duplicates));
     }
 
     private IngestJob Job(ExternalIngestHooks? hooks = null)
@@ -295,45 +293,7 @@ public class IngestJobTests
 
     // --- disc sets (B7) ---
 
-    /// <summary>
-    /// A FileSets system that takes no .cue: nothing is planned there. A class, not a substitute: Castle proxies can't
-    /// intercept <see cref="ISystemHandler.ReadHeader"/>'s span parameter, which the external path calls.
-    /// </summary>
-    private sealed class DiscXHandler : ISystemHandler
-    {
-        public string Id => "discx";
-        public string DisplayName => "Disc X";
-        public string Family => "discx";
-        public IReadOnlyList<string> RomExtensions => [".bin"];
-        public long MinRomSizeBytes => 1;
-        public long MaxRomSizeBytes => 1024 * 1024;
-        public string DatName => "Test - Disc X";
-        public bool EmbedRomsInZip => false;
-        public bool FileSets => true;
-        public string DatFolder => DatKind.Redump;
-        public IReadOnlyList<string> MetadatKinds => [];
-        public ReadOnlyMemory<byte> DefaultBoxArtPng => ExternalTestHandler.FixtureBoxArtPng;
-        public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
-    }
-
     private static ISystemHandler DiscX() => new DiscXHandler();
-
-    /// <summary>MS-DOS spec I1: an external no-DAT system whose ROMs are <c>.zip</c> files.</summary>
-    private sealed class ZipRomHandler : ISystemHandler
-    {
-        public string Id => "zipx";
-        public string DisplayName => "Zip X";
-        public string Family => "zipx";
-        public IReadOnlyList<string> RomExtensions => [".dosz", ".zip"];
-        public long MinRomSizeBytes => 1;
-        public long MaxRomSizeBytes => 1024 * 1024;
-        public string DatName => "Test - Zip X";
-        public bool EmbedRomsInZip => false;
-        public DatSource DatSource => DatSource.None;
-        public IReadOnlyList<string> MetadatKinds => [];
-        public ReadOnlyMemory<byte> DefaultBoxArtPng => ExternalTestHandler.FixtureBoxArtPng;
-        public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
-    }
 
     [Test]
     public async Task AZipListedAsARomExtension_IsQueuedAsOneFile_NotUnpacked()

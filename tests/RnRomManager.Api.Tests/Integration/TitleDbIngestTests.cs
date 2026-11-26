@@ -9,7 +9,6 @@ using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
-using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
@@ -588,7 +587,7 @@ public class TitleDbIngestTests
         var item = await ReviewOfAsync(bytes);
         Assert.That((item.Status, item.ArchiveEntry), Is.EqualTo(("Pending", (string?)"dump.nsp")));
         var failing = ActivatorUtilities.CreateInstance<ReviewResolver>(Factory.Services,
-            ExternalLibraryTests.FailFirstResolution.Wrap(Service<IIngestReviewRepository>()));
+            FailFirstResolution.Wrap(Service<IIngestReviewRepository>()));
         var first = await failing.ResolveInJobAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
         Assert.That(first.Code, Is.EqualTo(IngestErrors.DbWriteFailed), "committed, but the item stayed Pending");
         RefreshWithoutEntries();

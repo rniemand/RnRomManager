@@ -66,7 +66,10 @@ public sealed record CueSheet(IReadOnlyList<string> Files, string? Error)
     /// <param name="cueFileName">The stored cue's file name, ending in <c>.cue</c> (any case).</param>
     /// <param name="storedTracks">The release's stored track file names (the cue excluded).</param>
     /// <param name="trackPrefix">Multi-disc M4: what each track alias starts with (<c>disc2-track-</c> gives <c>disc2-track-01.bin</c>).</param>
-    public static PlaybackCue ForPlayback(ReadOnlySpan<byte> bytes, string cueFileName, IReadOnlyCollection<string> storedTracks,
+    public static PlaybackCue ForPlayback(
+        ReadOnlySpan<byte> bytes,
+        string cueFileName,
+        IReadOnlyCollection<string> storedTracks,
         string trackPrefix = "track-")
     {
         if (bytes.Length > IngestSetPlanner.MaxCueBytes)
@@ -251,22 +254,4 @@ public sealed record CueSheet(IReadOnlyList<string> Files, string? Error)
     }
 
     private static CueSheet Fail(string error) => new([], error);
-}
-
-/// <summary>One stored track and the short name it has inside a playback archive.</summary>
-public sealed record PlaybackTrack(string StoredName, string Alias);
-
-/// <summary>Play B2: the result of <see cref="CueSheet.ForPlayback"/>.</summary>
-/// <param name="CueName">The playback cue's file name: the stored cue's base name with <c>.cue</c>.</param>
-/// <param name="Content">The canonical cue (UTF-8, no BOM, LF).</param>
-/// <param name="Tracks">Each stored track and its alias, in FILE order; every stored track exactly once.</param>
-/// <param name="Error">Why the cue can't be played, or null.</param>
-public sealed record PlaybackCue(string CueName, byte[] Content, IReadOnlyList<PlaybackTrack> Tracks, string? Error)
-{
-    /// <summary>The pinned parser reads lines into a 256-byte buffer: 254 bytes, the LF and the terminator.</summary>
-    public const int MaxLineBytes = 254;
-
-    public bool IsValid => Error is null;
-
-    internal static PlaybackCue Fail(string error) => new("", [], [], error);
 }

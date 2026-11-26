@@ -12,7 +12,11 @@ namespace RnRomManager.Api.Cli;
 /// </summary>
 public static class ResetPasswordCommand
 {
-    public static async Task<int> RunAsync(string[] args, string username, TextWriter stdout, TextWriter stderr)
+    public static async Task<int> RunAsync(
+        string[] args,
+        string username,
+        TextWriter stdout,
+        TextWriter stderr)
     {
         try
         {
@@ -47,7 +51,12 @@ public static class ResetPasswordCommand
     /// U9: the CLI host never starts <c>AuditWriter</c>, so the row is inserted synchronously, after the password was
     /// printed; a failure only warns (AU2 best effort) and keeps exit code 0.
     /// </summary>
-    private static async Task RecordAsync(IServiceProvider services, string username, bool promoted, bool reenabled, TextWriter stderr)
+    private static async Task RecordAsync(
+        IServiceProvider services,
+        string username,
+        bool promoted,
+        bool reenabled,
+        TextWriter stderr)
     {
         try
         {

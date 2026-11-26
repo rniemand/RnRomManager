@@ -1,18 +1,26 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
+	import SortHeader from '#lib/components/common/SortHeader.svelte';
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
+	import { debounced } from '#lib/debounce.js';
+	import { pageParam } from '#lib/urlState.js';
+	import { parseDir } from '#lib/sort.js';
+	import type { SortDir } from '#lib/enums/index.js';
 	import { onDestroy, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { MissingIgdbItem, Page, SystemInfo } from '#lib/api/types.js';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import type { MissingIgdbItem, Page, SystemInfo } from '#lib/types/index.js';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatCount } from '#lib/format.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
@@ -23,13 +31,12 @@
 	 */
 	type Status = 'missing' | 'not-on-igdb';
 	type Sort = 'name' | 'system' | 'year';
-	type Dir = 'asc' | 'desc';
 	interface View {
 		system: string;
 		status: Status;
 		q: string;
 		sort: Sort;
-		dir: Dir;
+		dir: SortDir;
 		page: number;
 	}
 
@@ -47,14 +54,13 @@
 	const params = $derived(page.url.searchParams);
 	const view = $derived.by<View>(() => {
 		const sort = params.get('sort');
-		const p = params.get('page');
 		return {
 			system: params.get('system') ?? '',
 			status: params.get('status') === 'not-on-igdb' ? 'not-on-igdb' : 'missing',
 			q: (params.get('q') ?? '').trim(),
 			sort: sort === 'system' || sort === 'year' ? sort : 'name',
-			dir: params.get('dir') === 'desc' ? 'desc' : 'asc',
-			page: p !== null && /^\d+$/.test(p) && Number(p) >= 1 ? Number(p) : 1
+			dir: parseDir(params.get('dir'), 'asc'),
+			page: pageParam(params, 'page', 'digits')
 		};
 	});
 	/** System or Title set; Show isn't counted for the empty text, since each status has its own unfiltered text. */
@@ -92,16 +98,12 @@
 	}
 
 	let search = $state('');
-	let searchTimer: ReturnType<typeof setTimeout> | undefined;
-	onDestroy(() => clearTimeout(searchTimer));
+	onDestroy(() => onSearchInput.cancel());
 
-	function onSearchInput(): void {
-		clearTimeout(searchTimer);
-		searchTimer = setTimeout(() => {
-			const q = search.trim();
-			if (q !== view.q) show({ ...view, q, page: 1 });
-		}, 300);
-	}
+	const onSearchInput = debounced(() => {
+		const q = search.trim();
+		if (q !== view.q) show({ ...view, q, page: 1 });
+	}, 300);
 
 	// URL → search box (restore, Clear).
 	$effect(() => {
@@ -112,15 +114,12 @@
 	});
 
 	function clear(): void {
-		clearTimeout(searchTimer);
+		onSearchInput.cancel();
 		search = '';
 		show({ ...view, system: '', status: 'missing', q: '', page: 1 });
 	}
 
 	let systems = $state<SystemInfo[]>([]);
-	let result = $state<Page<MissingIgdbItem> | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 
 	$effect(() => {
 		api.get<SystemInfo[]>('/api/systems').then(
@@ -129,22 +128,14 @@
 		);
 	});
 
-	$effect(() => {
+	const report = useAbortableGet<Page<MissingIgdbItem>>(() => {
 		let url = `/api/reports/missing-igdb-ids?status=${view.status}&sort=${view.sort}&dir=${view.dir}&page=${view.page}&pageSize=${pageSize}`;
 		if (view.system) url += `&system=${encodeURIComponent(view.system)}`;
 		if (view.q) url += `&q=${encodeURIComponent(view.q)}`;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api.get<Page<MissingIgdbItem>>(url, { signal: controller.signal }).then(
-			(p) => (result = p),
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
+		return url;
 	});
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 </script>
 
 <svelte:head><title>Missing IGDB IDs · RnRomManager</title></svelte:head>
@@ -157,11 +148,9 @@
 	>
 		<div class="input-group input-group-sm flex-grow-1 flex-md-grow-0 missing-metadata-title">
 			<label class="input-group-text" for="missing-igdb-q">Title</label>
-			<input
+			<SearchInput
 				id="missing-igdb-q"
-				type="search"
-				class="form-control"
-				maxlength="100"
+				maxlength={100}
 				bind:value={search}
 				oninput={onSearchInput}
 			/>
@@ -176,27 +165,23 @@
 		/>
 		<div class="input-group input-group-sm w-auto">
 			<label class="input-group-text" for="missing-igdb-status">Show</label>
-			<select
+			<Select
+				class="w-auto"
 				id="missing-igdb-status"
-				class="form-select w-auto"
 				value={view.status}
 				onchange={(e) => show({ ...view, status: e.currentTarget.value as Status, page: 1 })}
-			>
-				{#each statusOptions as option (option.value)}
+				>{#each statusOptions as option (option.value)}
 					<option value={option.value}>{option.label}</option>
-				{/each}
-			</select>
+				{/each}</Select
+			>
 		</div>
-		<button
-			type="button"
-			class="btn btn-sm btn-outline-secondary"
-			disabled={!clearable}
-			onclick={clear}>Clear</button
+		<Button variant="secondary" outline size="sm" disabled={!clearable} onclick={clear}
+			>Clear</Button
 		>
 	</form>
 
 	{#if error}
-		<ErrorAlert {error} onretry={() => reload++} />
+		<ErrorAlert {error} onretry={() => report.reload()} />
 	{:else if !result}
 		<Loading />
 	{:else}
@@ -206,63 +191,36 @@
 				{result.total === 1 ? 'game' : 'games'}
 			</p>
 		{/if}
-		<div class="card">
-			<div class="table-responsive">
-				{#if result.total === 0}
-					<EmptyState
-						message={filtered
-							? 'No games match these filters.'
-							: view.status === 'missing'
-								? 'Every game is linked to IGDB.'
-								: 'No games are marked as not on IGDB.'}
-					/>
-				{:else}
-					<table class="table table-sm table-striped table-hover align-middle mb-0">
-						<thead class="table-dark">
-							<tr>
-								{#each columns as column (column.label)}
-									{@const key = column.sort}
-									<th
-										scope="col"
-										aria-sort={key === view.sort
-											? view.dir === 'asc'
-												? 'ascending'
-												: 'descending'
-											: undefined}
-									>
-										<button
-											type="button"
-											class="btn btn-link p-0 text-reset text-decoration-none fw-semibold"
-											onclick={() => sortBy(key)}
-											>{column.label}
-											{#if key === view.sort}<Icon
-													name={view.dir === 'asc' ? 'sort-asc' : 'sort-desc'}
-												/>{/if}</button
-										>
-									</th>
-								{/each}
-							</tr>
-						</thead>
-						<tbody>
-							{#each result.items as item (item.id)}
-								<tr>
-									<td>
-										<!-- Unlinked games open Lookup Info, with Next missing IGDB ID (as Missing Metadata's links). -->
-										<a
-											href="{resolve('/games/[id]', { id: item.id })}{view.status === 'missing'
-												? '?from=missing-igdb'
-												: ''}">{item.displayTitle}</a
-										>
-									</td>
-									<td><SystemBadge system={item.system} name={item.systemName} /></td>
-									<td>{item.releaseYear ?? '—'}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				{/if}
-			</div>
-		</div>
+		<DataTable
+			items={result.items}
+			key={(item) => item.id}
+			empty={filtered
+				? 'No games match these filters.'
+				: view.status === 'missing'
+					? 'Every game is linked to IGDB.'
+					: 'No games are marked as not on IGDB.'}
+			emptyInCard
+		>
+			{#snippet head()}
+				<tr>
+					<SortHeader {columns} sort={view.sort} dir={view.dir} onsort={sortBy} />
+				</tr>
+			{/snippet}
+			{#snippet row(item)}
+				<tr>
+					<td>
+						<!-- Unlinked games open Lookup Info, with Next missing IGDB ID (as Missing Metadata's links). -->
+						<a
+							href="{resolve('/games/[id]', { id: item.id })}{view.status === 'missing'
+								? '?from=missing-igdb'
+								: ''}">{item.displayTitle}</a
+						>
+					</td>
+					<td><SystemBadge system={item.system} name={item.systemName} /></td>
+					<td>{item.releaseYear ?? '—'}</td>
+				</tr>
+			{/snippet}
+		</DataTable>
 		<Pagination
 			page={view.page}
 			pages={pageCount(result.total, pageSize)}

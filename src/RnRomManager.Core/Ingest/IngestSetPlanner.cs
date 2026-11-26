@@ -1,33 +1,4 @@
-using Microsoft.Extensions.Logging;
-using RnRomManager.Core.Storage;
-
 namespace RnRomManager.Core.Ingest;
-
-/// <summary>One loose file of an ingest folder, as the planner sees it.</summary>
-/// <param name="CueBytes">
-/// For a <c>.cue</c>, <c>.toc</c>, <c>.ccd</c> or <c>.mds</c> of at most <see cref="IngestSetPlanner.MaxCueBytes"/>: its bytes, or null when it couldn't be read.
-/// Ignored for other files.
-/// </param>
-public sealed record PlannerFile(string Name, long Size, byte[]? CueBytes = null);
-
-public enum PlannedKind
-{
-    /// <summary>A complete cue, TOC, CloneCD or MDS set: processed as one unit.</summary>
-    Set,
-
-    /// <summary>A file no cue names: processed on its own as today.</summary>
-    Lone,
-
-    /// <summary>Present members of a set that can't be processed; each is <c>Skipped</c> with <see cref="PlannedUnit.Reason"/> and stays.</summary>
-    Skipped,
-}
-
-/// <param name="Members">
-/// File names as on disk. For a set: the cue or <c>.toc</c> first, then the files it names in order; the <c>.ccd</c>, its
-/// <c>.img</c> and its <c>.sub</c> when there is one; or the <c>.mds</c> and its <c>.mdf</c>.
-/// </param>
-/// <param name="Reason">An <see cref="IngestReason"/> for <see cref="PlannedKind.Skipped"/>; null otherwise.</param>
-public sealed record PlannedUnit(PlannedKind Kind, IReadOnlyList<string> Members, string? Reason = null);
 
 /// <summary>
 /// B7, CloneCD B5, file type gaps D8: groups one <c>FileSets</c> folder's loose files into cue, TOC, CloneCD and MDS sets, lone
@@ -161,34 +132,4 @@ public static class IngestSetPlanner
     }
 
     private static bool IsExtension(string name, string extension) => name.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
-}
-
-/// <summary>B7/B12, CloneCD B5, D8: the checked read of a small cue, <c>.toc</c>, <c>.ccd</c> or <c>.mds</c> for <see cref="IngestSetPlanner"/>, shared by ingest and Review.</summary>
-internal static class IngestCueReader
-{
-    private static readonly string[] SheetExtensions = [".cue", ".toc", ".ccd", ".mds"];
-
-    /// <returns>The cue's, <c>.toc</c>'s, <c>.ccd</c>'s or <c>.mds</c>'s bytes, through the same checked open as other ingest reads; null for any other file, one over
-    /// <see cref="IngestSetPlanner.MaxCueBytes"/>, or one that can't be read.</returns>
-    public static byte[]? Read(string ingestRoot, IngestFile file, ILogger logger)
-    {
-        if (!SheetExtensions.Any(e => file.Name.EndsWith(e, StringComparison.OrdinalIgnoreCase))
-            || file.SizeBytes > IngestSetPlanner.MaxCueBytes)
-            return null;
-        var opened = ExternalRomPath.OpenRead(ingestRoot, file.FullPath, FileShare.Read);
-        if (opened.Status != ExternalPathStatus.Found)
-            return null;
-        try
-        {
-            using var stream = opened.Stream!;
-            using var buffer = new MemoryStream();
-            new LimitStream(stream, IngestSetPlanner.MaxCueBytes).CopyTo(buffer);
-            return buffer.ToArray();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or LimitExceededException)
-        {
-            logger.LogWarning("{Path}: the set sheet couldn't be read: {Error}", file.FullPath, ex.Message);
-            return null;
-        }
-    }
 }

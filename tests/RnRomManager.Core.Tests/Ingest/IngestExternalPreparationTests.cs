@@ -46,27 +46,6 @@ public class IngestExternalPreparationTests
     [TearDown]
     public void TearDown() => _dir.Dispose();
 
-    /// <summary>A headerless external handler that records how many bytes each <c>ReadHeader</c> call got.</summary>
-    private sealed class Handler(string id, string[] extensions, long maxBytes = 64L * 1024 * 1024) : ISystemHandler
-    {
-        public List<int> HeaderLengths { get; } = [];
-        public string Id => id;
-        public string DisplayName => id;
-        public string Family => "ext";
-        public IReadOnlyList<string> RomExtensions => extensions;
-        public long MinRomSizeBytes => 1;
-        public long MaxRomSizeBytes => maxBytes;
-        public string DatName => "Test - " + id;
-        public bool EmbedRomsInZip => false;
-        public ReadOnlyMemory<byte> DefaultBoxArtPng => ExternalTestHandler.FixtureBoxArtPng;
-
-        public RomHeader? ReadHeader(ReadOnlySpan<byte> rom)
-        {
-            HeaderLengths.Add(rom.Length);
-            return null;
-        }
-    }
-
     private (IngestPipeline Pipeline, SystemRegistry Systems, DatCache Dats) Build(ISystemHandler[] handlers, Action<IngestFile>? beforeHash = null)
     {
         var systems = new SystemRegistry(handlers);
@@ -222,7 +201,11 @@ public class IngestExternalPreparationTests
         await _reviews.DidNotReceiveWithAnyArgs().CompleteSourceAsync(default!, default, default!, default, default, default);
     }
 
-    private IngestJob Job(IngestPipeline pipeline, SystemRegistry systems, DatCache dats, IngestFileScanner? scanner = null)
+    private IngestJob Job(
+        IngestPipeline pipeline,
+        SystemRegistry systems,
+        DatCache dats,
+        IngestFileScanner? scanner = null)
     {
         var options = Options.Create(_paths);
         var games = Substitute.For<IGameRepository>();

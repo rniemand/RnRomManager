@@ -21,7 +21,11 @@ public class IntegrityIssueRepositoryTests
         _issues = new IntegrityIssueRepository(factory);
     }
 
-    private Task<long> InsertAsync(string type, string zipPath, string? entryName = null, string status = IntegrityIssue.Open) =>
+    private Task<long> InsertAsync(
+        string type,
+        string zipPath,
+        string? entryName = null,
+        string status = IntegrityIssue.Open) =>
         _issues.InsertAsync(new IntegrityIssue
         {
             Type = type, Severity = "Info", ZipPath = zipPath, EntryName = entryName, Status = status,

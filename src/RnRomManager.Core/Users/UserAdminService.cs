@@ -19,7 +19,12 @@ public sealed class UserAdminService(
         audit.Record(new AuditEvent(action, actor, Details: details));
 
     /// <summary>New users must change the password on first login.</summary>
-    public async Task<UserAdminResult> CreateAsync(string? username, IReadOnlyList<string?>? roles, string? password, AuditActor actor, CancellationToken cancellationToken)
+    public async Task<UserAdminResult> CreateAsync(
+        string? username,
+        IReadOnlyList<string?>? roles,
+        string? password,
+        AuditActor actor,
+        CancellationToken cancellationToken)
     {
         if (UsernamePolicy.Validate(username) is { } usernameError)
             return UserAdminResult.Invalid("username", usernameError);
@@ -46,7 +51,7 @@ public sealed class UserAdminService(
         }
         catch (UsernameTakenException)
         {
-            return UserAdminResult.Fail(UserAdminResult.Failure.UsernameTaken);
+            return UserAdminResult.Fail(UserAdminResultFailure.UsernameTaken);
         }
         logger.LogInformation("Created user '{Username}' with roles {Roles}", user.Username, string.Join(", ", user.Roles));
         Record(AuditActions.UserCreated, actor, $"user={user.Username} type={TypeOf(user.Roles)}");
@@ -55,20 +60,25 @@ public sealed class UserAdminService(
 
     /// <summary>
     /// Roles or disabled change (null = unchanged); either one rotates the security stamp so the user's sessions die (spec §9.2).
-    /// The actor can't disable or demote themselves (U6 <see cref="UserAdminResult.Failure.SelfChange"/>).
+    /// The actor can't disable or demote themselves (U6 <see cref="UserAdminResultFailure.SelfChange"/>).
     /// </summary>
-    public async Task<UserAdminResult> UpdateAsync(int id, IReadOnlyList<string?>? roles, bool? isDisabled, AuditActor actor, CancellationToken cancellationToken)
+    public async Task<UserAdminResult> UpdateAsync(
+        int id,
+        IReadOnlyList<string?>? roles,
+        bool? isDisabled,
+        AuditActor actor,
+        CancellationToken cancellationToken)
     {
         IReadOnlySet<string>? parsedRoles = null;
         if (roles is not null && (parsedRoles = Roles.Parse(roles)) is null)
             return UserAdminResult.Invalid("roles", Roles.ValidationError);
         if (await users.GetByIdAsync(id, cancellationToken) is not { } user)
-            return UserAdminResult.Fail(UserAdminResult.Failure.NotFound);
+            return UserAdminResult.Fail(UserAdminResultFailure.NotFound);
 
         var newRoles = parsedRoles ?? user.Roles;
         var newDisabled = isDisabled ?? user.IsDisabled;
         if (actor.UserId == id && (newDisabled || !newRoles.Contains(Roles.Admin)))
-            return UserAdminResult.Fail(UserAdminResult.Failure.SelfChange);
+            return UserAdminResult.Fail(UserAdminResultFailure.SelfChange);
         if (newRoles.SetEquals(user.Roles) && newDisabled == user.IsDisabled)
             return UserAdminResult.Ok(user);
 
@@ -76,7 +86,7 @@ public sealed class UserAdminService(
 
         updated = updated with { SecurityStamp = Secrets.NewSecurityStamp(), UpdatedAt = time.GetUtcNow().UtcDateTime };
         if (!await users.UpdateUnlessLastAdminAsync(updated, cancellationToken))
-            return UserAdminResult.Fail(UserAdminResult.Failure.LastAdmin);
+            return UserAdminResult.Fail(UserAdminResultFailure.LastAdmin);
 
         logger.LogInformation("User '{Username}' updated: roles {Roles}, disabled {IsDisabled}", updated.Username, string.Join(", ", updated.Roles), updated.IsDisabled);
         if (TypeOf(user.Roles) != TypeOf(updated.Roles))
@@ -87,10 +97,14 @@ public sealed class UserAdminService(
     }
 
     /// <summary>Admin reset: new password, lockout cleared, must change at next login, sessions die.</summary>
-    public async Task<UserAdminResult> ResetPasswordAsync(int id, string? newPassword, AuditActor actor, CancellationToken cancellationToken)
+    public async Task<UserAdminResult> ResetPasswordAsync(
+        int id,
+        string? newPassword,
+        AuditActor actor,
+        CancellationToken cancellationToken)
     {
         if (await users.GetByIdAsync(id, cancellationToken) is not { } user)
-            return UserAdminResult.Fail(UserAdminResult.Failure.NotFound);
+            return UserAdminResult.Fail(UserAdminResultFailure.NotFound);
         if (PasswordPolicy.Validate(newPassword, user.Username) is { } error)
             return UserAdminResult.Invalid("newPassword", error);
 

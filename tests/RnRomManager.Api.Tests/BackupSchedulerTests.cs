@@ -21,7 +21,7 @@ public class BackupSchedulerTests
     private IBackupStore _store = null!;
     private ConcurrentQueue<DateTimeOffset> _dumps = null!;
     private TaskCompletionSource? _block;
-    private ListLogger _log = null!;
+    private BackupSchedulerListLogger _log = null!;
     private BackupService _service = null!;
     private BackupScheduler? _scheduler;
 
@@ -42,13 +42,13 @@ public class BackupSchedulerTests
                 await call.Arg<Stream>().WriteAsync("zip"u8.ToArray());
                 return new BackupManifest(1, call.Arg<Guid>(), call.Arg<DateTimeOffset>(), "x", "db", [], []);
             });
-        _log = new ListLogger();
-        _service = new BackupService(_store, new InMemorySettings(), Options.Create(new PathsOptions { Backups = _dir.Combine("backups") }),
+        _log = new BackupSchedulerListLogger();
+        _service = new BackupService(_store, new BackupSchedulerInMemorySettings(), Options.Create(new PathsOptions { Backups = _dir.Combine("backups") }),
             Options.Create(new BackupOptions()), TimeZoneInfo.Utc, _time, NullLogger<BackupService>.Instance, new RnRomManager.Core.Jobs.JobLock(),
             Substitute.For<IMaintenanceWindow>(), Substitute.For<RnRomManager.Core.Database.IDatabaseLifecycle>(),
             Substitute.For<RnRomManager.Core.Jobs.IJobRepository>(), Substitute.For<RnRomManager.Core.Users.IUserRepository>(),
             Substitute.For<RnRomManager.Core.Discovery.IDiscoveryRepository>(),
-            new RnRomManager.Core.Dats.DatRefreshSettingsService(new InMemorySettings(), TimeZoneInfo.Utc, _time,
+            new RnRomManager.Core.Dats.DatRefreshSettingsService(new BackupSchedulerInMemorySettings(), TimeZoneInfo.Utc, _time,
                 NullLogger<RnRomManager.Core.Dats.DatRefreshSettingsService>.Instance),
             Substitute.For<RnRomManager.Core.Storage.IRomStorageSettings>(),
             Substitute.For<RnRomManager.Core.Audit.IAuditLog>());
@@ -181,32 +181,5 @@ public class BackupSchedulerTests
 
         await Eventually(() => Logged("Next scheduled backup: 2026-11-06T03:30:00"));
         Assert.That(_dumps, Is.Empty);
-    }
-
-    private sealed class ListLogger : ILogger<BackupScheduler>
-    {
-        public ConcurrentQueue<(LogLevel Level, string Message)> Entries { get; } = new();
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Entries.Enqueue((logLevel, formatter(state, exception)));
-    }
-
-    private sealed class InMemorySettings : ISettingsRepository
-    {
-        private readonly ConcurrentDictionary<string, string> _values = new(StringComparer.Ordinal);
-
-        public Task<IReadOnlyDictionary<string, string>> GetAsync(IReadOnlyCollection<string> names, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyDictionary<string, string>>(_values.Where(v => names.Contains(v.Key)).ToDictionary());
-
-        public Task SetAsync(IReadOnlyDictionary<string, string> values, CancellationToken cancellationToken)
-        {
-            foreach (var (name, value) in values)
-                _values[name] = value;
-            return Task.CompletedTask;
-        }
     }
 }

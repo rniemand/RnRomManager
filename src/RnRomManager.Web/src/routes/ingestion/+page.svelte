@@ -1,8 +1,11 @@
 <script lang="ts">
-	import PageTitle from '#lib/components/PageTitle.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
+	import IngestDeleteModal from '#lib/components/modals/IngestDeleteModal.svelte';
+	import { replaceUrl } from '#lib/urlState.js';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
@@ -14,26 +17,19 @@
 		Job,
 		Page,
 		PendingSystem
-	} from '#lib/api/types.js';
-	import AccordionItem from '#lib/components/AccordionItem.svelte';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
-	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
-	import IngestFileTable from '#lib/components/IngestFileTable.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
+	} from '#lib/types/index.js';
+	import AccordionItem from '#lib/components/layout/AccordionItem.svelte';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
+	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
+	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
+	import IngestFileTable from '#lib/components/ingest/IngestFileTable.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
 	import { formatDateTime } from '#lib/format.js';
-	import {
-		deleteIngestFiles,
-		deleteTitle,
-		fileKey as key,
-		isArchive,
-		modalListSize
-	} from '#lib/ingestDelete.js';
+	import { deleteIngestFiles, fileKey as key, isArchive } from '#lib/ingestDelete.js';
 	import { formatSummary, isCancellable, jobLabel, percent, statusClass } from '#lib/jobs.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -76,7 +72,7 @@
 		const tab = page.url.searchParams.get('tab');
 		if (tab === null) return;
 		if (tab === 'failed' || tab === 'runs') openPanel = tab;
-		void goto(resolve('/ingestion'), { replace: true, reset: false });
+		void replaceUrl(resolve('/ingestion'));
 	});
 
 	function selectAll(set: SvelteSet<string>, keys: string[], next: boolean): void {
@@ -229,10 +225,12 @@
 								<strong>{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''} running</strong>
 								<span class="text-body-secondary small">since {formatDateTime(job.startedAt)}</span>
 								{#if isCancellable(job.type)}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-danger ms-auto"
-										onclick={() => cancel(job.id)}>Cancel</button
+									<Button
+										variant="danger"
+										outline
+										size="sm"
+										class="ms-auto"
+										onclick={() => cancel(job.id)}>Cancel</Button
 									>
 								{/if}
 							</div>
@@ -258,7 +256,7 @@
 						>
 							{#snippet action()}
 								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- route arrives in S47 -->
-								<a class="btn btn-primary" href="/admin/dats">Go to Admin → DATs</a>
+								<Button variant="primary" href="/admin/dats">Go to Admin → DATs</Button>
 							{/snippet}
 						</EmptyState>
 					{/if}
@@ -275,41 +273,43 @@
 			{#snippet header()}Pending files ({pendingFileCount}){/snippet}
 			{#if !job && !datsMissing}
 				<div class="d-flex flex-wrap gap-2 mb-3">
-					<button type="button" class="btn btn-primary" disabled={busy} onclick={() => start()}>
-						{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-						<Icon name="ingest" /> Import all
-					</button>
-					<!-- Disabled at none (nothing to do) and at all (Import all does the same). -->
-					<button
-						type="button"
-						class="btn btn-outline-primary"
-						disabled={busy || selectedCount === 0 || selectedCount === allKeys.length}
-						onclick={importSelected}
+					<Button variant="primary" disabled={busy} onclick={() => start()}
+						>{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"
+							></span>{/if}
+						<Icon name="ingest" /> Import all</Button
 					>
-						Import selected ({selectedCount})
-					</button>
+					<!-- Disabled at none (nothing to do) and at all (Import all does the same). -->
+					<Button
+						variant="primary"
+						outline
+						disabled={busy || selectedCount === 0 || selectedCount === allKeys.length}
+						onclick={importSelected}>Import selected ({selectedCount})</Button
+					>
 				</div>
 			{/if}
 			{#if withFiles.length === 0}
 				<div class="card"><EmptyState message="No files waiting in the ingest folders." /></div>
 			{:else}
 				<div class="d-flex flex-wrap gap-2 mb-2">
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(selected, allKeys, true)}>Select all</button
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						onclick={() => selectAll(selected, allKeys, true)}>Select all</Button
 					>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(selected, allKeys, false)}>Clear selection</button
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						onclick={() => selectAll(selected, allKeys, false)}>Clear selection</Button
 					>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-danger"
+					<Button
+						variant="danger"
+						outline
+						size="sm"
 						disabled={deleteDisabled || selectedCount === 0}
 						onclick={() => askDelete(selectedEntries(withFiles, selected, 'pending'))}
-						>Delete selected ({selectedCount})</button
+						>Delete selected ({selectedCount})</Button
 					>
 				</div>
 				{#each withFiles as system (system.system)}
@@ -335,22 +335,25 @@
 				<div class="card"><EmptyState message="No failed imports." /></div>
 			{:else}
 				<div class="d-flex flex-wrap gap-2 mb-2">
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(failedSelected, failedKeys, true)}>Select all</button
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						onclick={() => selectAll(failedSelected, failedKeys, true)}>Select all</Button
 					>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(failedSelected, failedKeys, false)}>Clear selection</button
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						onclick={() => selectAll(failedSelected, failedKeys, false)}>Clear selection</Button
 					>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-danger"
+					<Button
+						variant="danger"
+						outline
+						size="sm"
 						disabled={deleteDisabled || failedCount === 0}
 						onclick={() => askDelete(selectedEntries(failedWithFiles, failedSelected, 'failed'))}
-						>Delete selected ({failedCount})</button
+						>Delete selected ({failedCount})</Button
 					>
 				</div>
 				{#each failedWithFiles as system (system.system)}
@@ -377,34 +380,26 @@
 			{#if !runs || runs.items.length === 0}
 				<div class="card"><EmptyState message="No ingestion has run yet." /></div>
 			{:else}
-				<div class="card">
-					<div class="table-responsive">
-						<table class="table table-sm table-striped table-hover align-middle mb-0">
-							<thead class="table-dark">
-								<tr class="small text-uppercase text-body-secondary">
-									<th scope="col">Started</th>
-									<th scope="col">Status</th>
-									<th scope="col">Trigger</th>
-									<th scope="col">Summary</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each runs.items as run (run.id)}
-									<tr>
-										<td class="text-nowrap">
-											<a href={resolve('/jobs/[id]', { id: run.id })}
-												>{formatDateTime(run.startedAt)}</a
-											>
-										</td>
-										<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
-										<td>{run.triggerSource}</td>
-										<td class="small">{formatSummary(run.summary)}</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				</div>
+				<DataTable items={runs.items} key={(run) => run.id}>
+					{#snippet head()}
+						<tr class="small text-uppercase text-body-secondary">
+							<th scope="col">Started</th>
+							<th scope="col">Status</th>
+							<th scope="col">Trigger</th>
+							<th scope="col">Summary</th>
+						</tr>
+					{/snippet}
+					{#snippet row(run)}
+						<tr>
+							<td class="text-nowrap">
+								<a href={resolve('/jobs/[id]', { id: run.id })}>{formatDateTime(run.startedAt)}</a>
+							</td>
+							<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
+							<td>{run.triggerSource}</td>
+							<td class="small">{formatSummary(run.summary)}</td>
+						</tr>
+					{/snippet}
+				</DataTable>
 				<Pagination
 					page={runsPage}
 					pages={pageCount(runs.total, pageSize)}
@@ -415,28 +410,10 @@
 		</AccordionItem>
 	{/if}
 
-	<ConfirmModal
+	<IngestDeleteModal
 		bind:open={deleteOpen}
-		title={deleteTitle(deleteEntries)}
-		confirmLabel="Delete"
-		confirmClass="btn-danger"
+		entries={deleteEntries}
 		busy={deleting}
 		onconfirm={() => runDelete(deleteEntries)}
-	>
-		<p>
-			{deleteEntries.length === 1 ? 'This file is' : 'These files are'} permanently deleted from the ingest
-			folder. This can't be undone.
-			{#if deleteEntries.some((e) => e.folder === 'pending')}
-				Their pending Review items are deleted too.
-			{/if}
-		</p>
-		<ul class="mb-0 text-break">
-			{#each deleteEntries.slice(0, modalListSize) as entry (`${entry.folder}/${entry.system}/${entry.name}`)}
-				<li><code>{entry.system}/{entry.name}</code></li>
-			{/each}
-			{#if deleteEntries.length > modalListSize}
-				<li>and {deleteEntries.length - modalListSize} more</li>
-			{/if}
-		</ul>
-	</ConfirmModal>
+	/>
 </AdminOnly>

@@ -188,7 +188,11 @@ public class TitleDbTests
     [TestCase("Oh...Sir! The Insult Simulator", 0u, ".NSP", "Oh…Sir! The Insult Simulator [0100000000001000][v0].nsp")]
     [TestCase("Zelda™: Tears\nof the Kingdom",65536u, ".xci", "Zelda - Tears of the Kingdom [0100000000001000][v65536].xci")]
     [TestCase("What? A/B", 0u, ".nsp", "What_ A_B [0100000000001000][v0].nsp")]
-    public void RomFileName(string name, uint version, string extension, string expected) =>
+    public void RomFileName(
+        string name,
+        uint version,
+        string extension,
+        string expected) =>
         Assert.That(TitleDb.RomFileName(name, "0100000000001000", version, extension), Is.EqualTo(expected));
 
     [TestCase("Game [0100000000001800][v65536].nsp", 65536u)]

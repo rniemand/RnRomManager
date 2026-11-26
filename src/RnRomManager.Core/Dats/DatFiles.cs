@@ -59,7 +59,11 @@ public static class DatFiles
     private static string Required(DatBlock rom, string key, string gameName) =>
         rom.Value(key) ?? throw new DatParseException($"ROM of '{gameName}' has no {key}.");
 
-    private static string Hex(DatBlock rom, string key, int length, string gameName)
+    private static string Hex(
+        DatBlock rom,
+        string key,
+        int length,
+        string gameName)
     {
         var value = Required(rom, key, gameName);
         return value.Length == length && value.All(char.IsAsciiHexDigit)

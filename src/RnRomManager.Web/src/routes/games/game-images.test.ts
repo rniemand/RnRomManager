@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { GameDetail, ImageInfo, ImageSuggestion } from '#lib/api/types.js';
+import type { GameDetail, ImageInfo, ImageSuggestion } from '#lib/types/index.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 
@@ -40,7 +40,7 @@ vi.mock('#lib/bootstrap.js', () => ({
 // The release note button has a tooltip (R4); Bootstrap's Tooltip isn't mocked here.
 vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 const { default: GamePage } = await import('./[id]/+page.svelte');
-const { default: GameImages } = await import('#lib/components/GameImages.svelte');
+const { default: GameImages } = await import('#lib/components/games/GameImages.svelte');
 
 const image = (id: number, type: ImageInfo['type'], extra: Partial<ImageInfo> = {}): ImageInfo => ({
 	id,

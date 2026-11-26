@@ -4,8 +4,8 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
-import GameAdminModal from '#lib/components/GameAdminModal.svelte';
-import type { GameDetail } from '#lib/api/types.js';
+import GameAdminModal from '#lib/components/modals/GameAdminModal.svelte';
+import type { GameDetail } from '#lib/types/index.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
 vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
@@ -16,9 +16,6 @@ vi.mock('$app/state', () => ({
 			return testUrl.current;
 		}
 	}
-}));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
 
 // Bootstrap's Modal needs layout/transitions jsdom lacks; the modal markup is always in the DOM anyway.

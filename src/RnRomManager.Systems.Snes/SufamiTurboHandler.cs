@@ -10,7 +10,7 @@ namespace RnRomManager.Systems.Snes;
 /// </summary>
 public sealed class SufamiTurboHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => SnesHandler.LoadResource("boxart.sufami.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(SufamiTurboHandler), "boxart.sufami.png");
 
     public string Id => "sufami";
     public string DisplayName => "Sufami Turbo";

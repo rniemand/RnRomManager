@@ -28,9 +28,7 @@ public class LibraryZipSavesTests(bool useCheckedWrite)
         _dir = new TempDir();
         _root = _dir.Combine("roms");
         _zip = Path.Combine(_root, "gb", "T", "Tetris.zip");
-        var gb = Substitute.For<ISystemHandler>();
-        gb.EmbedRomsInZip.Returns(true);
-        gb.Id.Returns("gb");
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([gb]);
         _reader = new InfoJsonReader([], registry);

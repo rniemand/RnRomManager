@@ -113,7 +113,11 @@ public sealed record SyntheticNdsRomBuilder
         return (ushort)crc;
     }
 
-    private static void WriteAscii(byte[] rom, int offset, int length, string? value)
+    private static void WriteAscii(
+        byte[] rom,
+        int offset,
+        int length,
+        string? value)
     {
         var area = rom.AsSpan(offset, length);
         area.Clear();

@@ -34,9 +34,7 @@ public static class DiscoveryEndpoints
             };
             if (sortKey is null)
                 errors["sort"] = ["Must be name or games."];
-            bool? descending = dir?.ToLowerInvariant() switch { null => null, "asc" => false, "desc" => true, _ => null };
-            if (dir is not null && descending is null)
-                errors["dir"] = ["Must be asc or desc."];
+            var descending = SortQuery.ParseDir(dir, errors, whenMissing: null);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
@@ -76,7 +74,7 @@ public static class DiscoveryEndpoints
                 parsed, key!, page ?? 1, pageSize ?? Page<GameListItem>.DefaultSize, ctx.RequestAborted);
             return result is null
                 ? Problems.NotFound(ctx)
-                : Results.Ok(Paging.ToDto(await LibraryEndpoints.ForViewerAsync(result, ctx, games), game => LibraryEndpoints.ToListItemDto(game, systems)));
+                : Results.Ok(Paging.ToDto(await LibraryEndpoints.ForViewerAsync(result, ctx, games), game => LibraryDtos.ToListItemDto(game, systems)));
         });
 
         // P4: a metadata value's group key, so the game page can link straight to the group.
@@ -85,7 +83,7 @@ public static class DiscoveryEndpoints
             if (!DiscoveryKinds.TryParse(kind, out var parsed))
                 return Problems.NotFound(ctx);
             if (name?.Trim() is not { Length: >= 1 and <= 255 })
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["name"] = ["Must be 1–255 characters."] });
+                return Problems.Validation(ctx, "name", "Must be 1–255 characters.");
             return await repository.FindKeyAsync(parsed, name, ctx.RequestAborted) is { } key
                 ? Results.Ok(new { key })
                 : Problems.NotFound(ctx);

@@ -17,7 +17,11 @@ public partial class LibraryMirrorTests
     }
 
     /// <summary>One disc: data track (main) + cue + Track 2, every file named exactly.</summary>
-    private static InfoJsonRom Disc(string title, int seed, int audioSeed, bool isPrimary = true)
+    private static InfoJsonRom Disc(
+        string title,
+        int seed,
+        int audioSeed,
+        bool isPrimary = true)
     {
         var track = $"{title} (Track 1).bin";
         return Rom(track, RomBytes(seed), isPrimary) with

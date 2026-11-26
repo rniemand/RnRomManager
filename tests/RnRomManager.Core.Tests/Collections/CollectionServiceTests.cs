@@ -58,7 +58,7 @@ public class CollectionServiceTests
     {
         var result = await _service.CreateAsync(UserId, new string('é', length), null, default);
 
-        Assert.That(result.Error, Is.EqualTo(valid ? CollectionResult.Failure.None : CollectionResult.Failure.ValidationFailed));
+        Assert.That(result.Error, Is.EqualTo(valid ? CollectionResultFailure.None : CollectionResultFailure.ValidationFailed));
         if (!valid)
             Assert.That(result.Errors!.Keys, Is.EquivalentTo(new[] { "name" }));
     }
@@ -88,7 +88,7 @@ public class CollectionServiceTests
 
         var result = await _service.CreateAsync(UserId, "a", notes, default);
 
-        Assert.That(result.Error, Is.EqualTo(valid ? CollectionResult.Failure.None : CollectionResult.Failure.ValidationFailed));
+        Assert.That(result.Error, Is.EqualTo(valid ? CollectionResultFailure.None : CollectionResultFailure.ValidationFailed));
         if (!valid)
             Assert.That(result.Errors!.Keys, Is.EquivalentTo(new[] { "notes" }));
     }
@@ -110,9 +110,9 @@ public class CollectionServiceTests
         _repository.UpdateAsync(default!, default).ThrowsAsyncForAnyArgs(new CollectionNameTakenException("x"));
         var existing = Existing();
 
-        Assert.That((await _service.CreateAsync(UserId, "x", null, default)).Error, Is.EqualTo(CollectionResult.Failure.NameTaken));
+        Assert.That((await _service.CreateAsync(UserId, "x", null, default)).Error, Is.EqualTo(CollectionResultFailure.NameTaken));
         Assert.That((await _service.UpdateAsync(existing.Id, UserId, new CollectionPatch("x"), default)).Error,
-            Is.EqualTo(CollectionResult.Failure.NameTaken));
+            Is.EqualTo(CollectionResultFailure.NameTaken));
     }
 
     // --- update (B4, B4a) ---
@@ -145,12 +145,12 @@ public class CollectionServiceTests
     {
         var id = Guid.NewGuid();
 
-        Assert.That((await _service.UpdateAsync(id, UserId, new CollectionPatch("x"), default)).Error, Is.EqualTo(CollectionResult.Failure.NotFound));
-        Assert.That((await _service.DeleteAsync(id, UserId, default)).Error, Is.EqualTo(CollectionResult.Failure.NotFound));
-        Assert.That((await _service.SetCoverAsync(id, UserId, Png(1, 1), default)).Error, Is.EqualTo(CollectionResult.Failure.NotFound));
-        Assert.That((await _service.RemoveCoverAsync(id, UserId, default)).Error, Is.EqualTo(CollectionResult.Failure.NotFound));
-        Assert.That((await _service.AddGamesAsync(id, UserId, [Guid.NewGuid()], default)).Error, Is.EqualTo(CollectionResult.Failure.NotFound));
-        Assert.That((await _service.RemoveGameAsync(id, UserId, Guid.NewGuid(), default)).Error, Is.EqualTo(CollectionResult.Failure.NotFound));
+        Assert.That((await _service.UpdateAsync(id, UserId, new CollectionPatch("x"), default)).Error, Is.EqualTo(CollectionResultFailure.NotFound));
+        Assert.That((await _service.DeleteAsync(id, UserId, default)).Error, Is.EqualTo(CollectionResultFailure.NotFound));
+        Assert.That((await _service.SetCoverAsync(id, UserId, Png(1, 1), default)).Error, Is.EqualTo(CollectionResultFailure.NotFound));
+        Assert.That((await _service.RemoveCoverAsync(id, UserId, default)).Error, Is.EqualTo(CollectionResultFailure.NotFound));
+        Assert.That((await _service.AddGamesAsync(id, UserId, [Guid.NewGuid()], default)).Error, Is.EqualTo(CollectionResultFailure.NotFound));
+        Assert.That((await _service.RemoveGameAsync(id, UserId, Guid.NewGuid(), default)).Error, Is.EqualTo(CollectionResultFailure.NotFound));
         Assert.That(Files(), Is.Empty);
     }
 
@@ -164,7 +164,7 @@ public class CollectionServiceTests
         WriteFile(id, "png");
         WriteFile(id, "jpg");
 
-        Assert.That((await _service.DeleteAsync(id, UserId, default)).Error, Is.EqualTo(CollectionResult.Failure.None));
+        Assert.That((await _service.DeleteAsync(id, UserId, default)).Error, Is.EqualTo(CollectionResultFailure.None));
         Assert.That(Files(), Is.Empty);
     }
 
@@ -227,7 +227,7 @@ public class CollectionServiceTests
         var existing = Existing();
         _repository.UpdateAsync(default!, default).ReturnsForAnyArgs(false);
 
-        Assert.That((await _service.SetCoverAsync(existing.Id, UserId, Png(1, 1), default)).Error, Is.EqualTo(CollectionResult.Failure.NotFound));
+        Assert.That((await _service.SetCoverAsync(existing.Id, UserId, Png(1, 1), default)).Error, Is.EqualTo(CollectionResultFailure.NotFound));
         Assert.That(Files(), Is.Empty);
     }
 
@@ -288,7 +288,7 @@ public class CollectionServiceTests
         var member = Guid.NewGuid();
         _repository.RemoveGameAsync(existing.Id, member, Arg.Any<CancellationToken>()).Returns(true);
 
-        Assert.That((await _service.RemoveGameAsync(existing.Id, UserId, Guid.NewGuid(), default)).Error, Is.EqualTo(CollectionResult.Failure.None));
+        Assert.That((await _service.RemoveGameAsync(existing.Id, UserId, Guid.NewGuid(), default)).Error, Is.EqualTo(CollectionResultFailure.None));
         await _repository.DidNotReceiveWithAnyArgs().UpdateAsync(default!, default);
 
         await _service.RemoveGameAsync(existing.Id, UserId, member, default);

@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
-	import PageTitle from '#lib/components/PageTitle.svelte';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -25,17 +24,11 @@
 
 <AdminOnly>
 	<PageTitle icon="admin" text="Admin" />
-	<ul class="nav nav-tabs mb-3" use:scrollActiveTab>
-		{#each tabs as tab (tab.href)}
-			<li class="nav-item">
-				<a
-					class="nav-link d-flex align-items-center gap-1"
-					class:active={page.url.pathname === tab.href}
-					aria-current={page.url.pathname === tab.href ? 'page' : undefined}
-					href={tab.href}><Icon name={tab.icon} /> {tab.label}</a
-				>
-			</li>
-		{/each}
-	</ul>
+	<NavTabs
+		tabs={tabs.map((tab) => ({ ...tab, id: tab.href }))}
+		active={page.url.pathname}
+		class="mb-3"
+		linkClass="d-flex align-items-center gap-1"
+	/>
 	{@render children()}
 </AdminOnly>

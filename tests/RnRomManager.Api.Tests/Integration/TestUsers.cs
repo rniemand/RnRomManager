@@ -21,7 +21,10 @@ public static class TestUsers
     public static readonly IReadOnlySet<string> AllRoles = Roles.Of(Roles.All);
 
     public static async Task<User> CreateAsync(
-        ApiFactory factory, string username, IReadOnlySet<string>? roles = null, bool mustChangePassword = false)
+        ApiFactory factory,
+        string username,
+        IReadOnlySet<string>? roles = null,
+        bool mustChangePassword = false)
     {
         var now = DateTime.UtcNow;
         var user = new User

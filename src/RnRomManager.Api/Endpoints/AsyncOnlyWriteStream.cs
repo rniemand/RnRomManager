@@ -46,7 +46,11 @@ public sealed class AsyncOnlyWriteStream(Stream inner) : Stream
         _position += buffer.Length;
     }
 
-    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+    public override Task WriteAsync(
+        byte[] buffer,
+        int offset,
+        int count,
+        CancellationToken cancellationToken) =>
         WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
     public override async Task FlushAsync(CancellationToken cancellationToken)

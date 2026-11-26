@@ -1,15 +1,17 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { Job, Page } from '#lib/api/types.js';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import PageTitle from '#lib/components/PageTitle.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
+	import type { Job, Page } from '#lib/types/index.js';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import { isCancellable, jobLabel, percent, statusClass } from '#lib/jobs.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -82,11 +84,11 @@
 		<div class="table-responsive">
 			<table class="table table-sm table-striped table-hover align-middle mb-0 job-fixed-table">
 				<colgroup>
-					<col style="width: 14rem" />
+					<col class="col-14" />
 					<col />
-					<col style="width: 11rem" />
-					<col style="width: 5rem" />
-					<col style="width: 6rem" />
+					<col class="col-11" />
+					<col class="col-5" />
+					<col class="col-6" />
 				</colgroup>
 				<thead class="table-dark">
 					<tr>
@@ -128,10 +130,8 @@
 							<td><a href={resolve('/jobs/[id]', { id: running.id })}>Details</a></td>
 							<td class="text-end">
 								{#if isCancellable(running.type)}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-danger"
-										onclick={() => cancel(running.id)}>Cancel</button
+									<Button variant="danger" outline size="sm" onclick={() => cancel(running.id)}
+										>Cancel</Button
 									>
 								{/if}
 							</td>
@@ -154,34 +154,43 @@
 	{:else if list.items.length === 0}
 		<EmptyState icon="list" message="No jobs yet." />
 	{:else}
-		<div class="card">
-			<div class="table-responsive">
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<thead class="table-dark">
-						<tr>
-							<th scope="col">Job</th>
-							<th scope="col">Trigger</th>
-							<th scope="col">Status</th>
-							<th scope="col">Started</th>
-							<th scope="col">Ended</th>
-							<th scope="col"><span class="visually-hidden">Details</span></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each list.items as job (job.id)}
-							<tr>
-								<td>{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''}</td>
-								<td>{job.triggerSource}</td>
-								<td><span class="badge {statusClass(job.status)}">{job.status}</span></td>
-								<td>{formatDateTime(job.startedAt)}</td>
-								<td>{job.finishedAt ? formatDateTime(job.finishedAt) : '—'}</td>
-								<td><a href={resolve('/jobs/[id]', { id: job.id })}>Details</a></td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		</div>
+		<DataTable items={list.items} key={(job) => job.id}>
+			{#snippet head()}
+				<tr>
+					<th scope="col">Job</th>
+					<th scope="col">Trigger</th>
+					<th scope="col">Status</th>
+					<th scope="col">Started</th>
+					<th scope="col">Ended</th>
+					<th scope="col"><span class="visually-hidden">Details</span></th>
+				</tr>
+			{/snippet}
+			{#snippet row(job)}
+				<tr>
+					<td>{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''}</td>
+					<td>{job.triggerSource}</td>
+					<td><span class="badge {statusClass(job.status)}">{job.status}</span></td>
+					<td>{formatDateTime(job.startedAt)}</td>
+					<td>{job.finishedAt ? formatDateTime(job.finishedAt) : '—'}</td>
+					<td><a href={resolve('/jobs/[id]', { id: job.id })}>Details</a></td>
+				</tr>
+			{/snippet}
+		</DataTable>
 		<Pagination page={listPage} {pages} onpage={(p) => (listPage = p)} label="Job pages" />
 	{/if}
 </AdminOnly>
+
+<style>
+	.col-14 {
+		width: 14rem;
+	}
+	.col-11 {
+		width: 11rem;
+	}
+	.col-5 {
+		width: 5rem;
+	}
+	.col-6 {
+		width: 6rem;
+	}
+</style>

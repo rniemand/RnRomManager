@@ -7,12 +7,6 @@ namespace RnRomManager.Api.Endpoints;
 /// <summary><c>/api/users*</c>, Admin only (spec §23, §9.1).</summary>
 public static class UserEndpoints
 {
-    public sealed record CreateUserRequest(string? Username, IReadOnlyList<string?>? Roles, string? Password);
-
-    public sealed record UpdateUserRequest(IReadOnlyList<string?>? Roles, bool? IsDisabled);
-
-    public sealed record ResetPasswordRequest(string? NewPassword);
-
     public static RouteGroupBuilder MapUserEndpoints(this RouteGroupBuilder api)
     {
         var users = api.MapGroup("/users").RequireAuthorization(AuthSetup.AdminOnly);
@@ -37,12 +31,12 @@ public static class UserEndpoints
 
     private static IResult ToResult(HttpContext ctx, UserAdminResult result, Func<User, IResult> ok) => result.Error switch
     {
-        UserAdminResult.Failure.None => ok(result.User!),
-        UserAdminResult.Failure.NotFound => Problems.NotFound(ctx),
-        UserAdminResult.Failure.ValidationFailed => Problems.Validation(ctx, result.Errors!),
-        UserAdminResult.Failure.UsernameTaken => Problems.Create(ctx, StatusCodes.Status409Conflict, "UsernameTaken", "Username is already taken"),
-        UserAdminResult.Failure.LastAdmin => Problems.Create(ctx, StatusCodes.Status409Conflict, "LastAdmin", "The last enabled Admin can't be disabled or demoted"),
-        UserAdminResult.Failure.SelfChange => Problems.Create(ctx, StatusCodes.Status409Conflict, "SelfChange", "You can't disable or demote your own account"),
+        UserAdminResultFailure.None => ok(result.User!),
+        UserAdminResultFailure.NotFound => Problems.NotFound(ctx),
+        UserAdminResultFailure.ValidationFailed => Problems.Validation(ctx, result.Errors!),
+        UserAdminResultFailure.UsernameTaken => Problems.Create(ctx, StatusCodes.Status409Conflict, "UsernameTaken", "Username is already taken"),
+        UserAdminResultFailure.LastAdmin => Problems.Create(ctx, StatusCodes.Status409Conflict, "LastAdmin", "The last enabled Admin can't be disabled or demoted"),
+        UserAdminResultFailure.SelfChange => Problems.Create(ctx, StatusCodes.Status409Conflict, "SelfChange", "You can't disable or demote your own account"),
         _ => throw new ArgumentOutOfRangeException(nameof(result)),
     };
 

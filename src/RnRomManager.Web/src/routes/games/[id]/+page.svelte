@@ -1,5 +1,8 @@
 <script lang="ts">
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
+	import Button from '#lib/components/forms/Button.svelte';
+	import RomHeaderModal from '#lib/components/modals/RomHeaderModal.svelte';
+	import { replaceUrl } from '#lib/urlState.js';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 	import { untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
@@ -8,61 +11,35 @@
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type {
-		BundleEntry,
 		CollectionRef,
 		GameDetail,
-		ReleaseFile,
-		RomDetail
-	} from '#lib/api/types.js';
+		ReleaseNoteState,
+		RomDetail,
+		AdminAction,
+		AdminOutcome
+	} from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import CopyButton from '#lib/components/CopyButton.svelte';
-	import GameAdminModal, {
-		type AdminAction,
-		type AdminOutcome
-	} from '#lib/components/GameAdminModal.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import GameImages from '#lib/components/GameImages.svelte';
-	import GameSaves from '#lib/components/GameSaves.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
-	import GameCollectionsModal from '#lib/components/GameCollectionsModal.svelte';
-	import SystemEmulatorsModal from '#lib/components/SystemEmulatorsModal.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
-	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import RatingControl from '#lib/components/RatingControl.svelte';
-	import GameTitle from '#lib/components/GameTitle.svelte';
-	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
-	import EditReleaseModal, { type ReleaseKind } from '#lib/components/EditReleaseModal.svelte';
-	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
-	import {
-		canPlay,
-		opensInNewTab,
-		playLinkEvents,
-		playUrl,
-		setMedia,
-		usesPlayDisc
-	} from '#lib/emulator.js';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
-	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
-	import { formatCount, formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
-	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
-	import { renderMarkdown } from '#lib/markdown.js';
+	import GameAdminModal from '#lib/components/modals/GameAdminModal.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import GameHeader from '#lib/components/games/GameHeader.svelte';
+	import GameLinks from '#lib/components/games/GameLinks.svelte';
+	import GameImages from '#lib/components/games/GameImages.svelte';
+	import GameSaves from '#lib/components/games/GameSaves.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import GameCollectionsModal from '#lib/components/modals/GameCollectionsModal.svelte';
+	import SystemEmulatorsModal from '#lib/components/modals/SystemEmulatorsModal.svelte';
+	import InfoJsonModal from '#lib/components/modals/InfoJsonModal.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import ReleaseNoteModal from '#lib/components/modals/ReleaseNoteModal.svelte';
+	import EditReleaseModal from '#lib/components/modals/EditReleaseModal.svelte';
+	import ReleaseTable from '#lib/components/games/ReleaseTable.svelte';
+	import type { ReleaseKind } from '#lib/enums/index.js';
+	import EmulatorModal from '#lib/components/modals/EmulatorModal.svelte';
+	import { canPlay, opensInNewTab, usesPlayDisc } from '#lib/emulator.js';
+	import ZipBrowser from '#lib/components/games/ZipBrowser.svelte';
 	import { auth } from '#lib/stores/auth.svelte.js';
-	import { bundle, maxBundleEntries, type AddResult } from '#lib/stores/bundle.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import {
-		compareDlc,
-		compareUpdates,
-		discNumber,
-		isDlc,
-		isUpdate,
-		orderByDisc
-	} from '#lib/releases.js';
-	import { systemColour } from '#lib/systemColours.js';
-	import { tooltip } from '#lib/tooltip.js';
+	import { compareDlc, compareUpdates, isDlc, isUpdate, orderByDisc } from '#lib/releases.js';
 
 	const changedMessage = 'This game changed, please retry.';
 
@@ -99,31 +76,9 @@
 
 	const id = $derived(page.params.id ?? '');
 
-	/** P5: the description is clamped to two lines; the toggle shows only when the text is taller than that. */
-	let descriptionEl = $state<HTMLParagraphElement>();
+	/** P5: Show more on the description; kept across reloads, collapsed again for another game. */
 	let descriptionExpanded = $state(false);
-	let descriptionOverflows = $state(false);
-	function measureDescription(): void {
-		if (descriptionEl && !descriptionExpanded)
-			descriptionOverflows = descriptionEl.scrollHeight > descriptionEl.clientHeight;
-	}
-	// Another game collapses it again.
-	$effect(() => {
-		void id;
-		untrack(() => {
-			descriptionExpanded = false;
-			descriptionOverflows = false;
-		});
-	});
-	$effect(() => {
-		void game?.description;
-		if (descriptionEl && !descriptionExpanded) untrack(measureDescription);
-	});
-	// P3: the cover (any type); screenshots are in the Images gallery.
-	const cover = $derived(game?.images.find((i) => i.isCover));
 	// P1: primary first, then the Releases order.
-	// G5: a release pointer means the game's ROMs are stored next to its ZIP.
-	const external = $derived(game?.roms.some((r) => r.externalFileName !== null) ?? false);
 	// B9/B11 (DLC B1–B3): updates and DLC have their own tabs; the rest are the releases.
 	const releases = $derived(orderByDisc(game?.roms.filter((r) => !isUpdate(r) && !isDlc(r)) ?? []));
 	const updates = $derived(game ? game.roms.filter(isUpdate).sort(compareUpdates) : []);
@@ -209,30 +164,6 @@
 		}
 	}
 
-	/** Bundle Creator B1/B3: a cart entry from the rendered metadata; `file` names a set file, else the main file. */
-	function bundleEntry(g: GameDetail, rom: RomDetail, file?: ReleaseFile): BundleEntry {
-		return {
-			gameId: g.id,
-			releaseSha1: rom.sha1,
-			member: file ? { sha1: file.sha1, fileName: file.fileName } : null,
-			gameTitle: g.displayTitle,
-			fileName: file?.fileName ?? rom.fileName
-		};
-	}
-
-	const bundleMessages: Record<AddResult, [string, 'success' | 'info' | 'warning' | 'danger']> = {
-		added: ['Added {file} to the bundle.', 'success'],
-		duplicate: ['{file} is already in the bundle.', 'info'],
-		full: [`The bundle holds at most ${maxBundleEntries} files.`, 'warning'],
-		signedOut: ['Sign in to use the bundle.', 'warning'],
-		invalid: ["{file} can't be added to the bundle.", 'danger']
-	};
-
-	function addToBundle(entry: BundleEntry): void {
-		const [text, kind] = bundleMessages[bundle.add(entry)];
-		toasts.show(text.replace('{file}', entry.fileName), kind);
-	}
-
 	/**
 	 * B27: `?play=<romId>` (from Global Search) opens the Play modal for that release once the game is loaded, also on
 	 * the already-open game; then only `play` leaves the URL (`tab` stays). A release not in the game, one that can't
@@ -256,8 +187,7 @@
 			}
 			const next = new URL(page.url.href);
 			next.searchParams.delete('play');
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-			void goto(`${next.pathname}${next.search}`, { replace: true, reset: false });
+			void replaceUrl(`${next.pathname}${next.search}`);
 		});
 	});
 
@@ -282,36 +212,8 @@
 	 * B7: each open card's rendered note, by file name (ROM ids change on every ZIP rewrite), loaded on first expand.
 	 * `pendingNotes` holds file names whose note was just saved: their ids are stale until the refetch lands.
 	 */
-	type NoteState = { loading: true } | { text: string } | { error: unknown };
-	const notes = new SvelteMap<string, NoteState>();
+	const notes = new SvelteMap<string, ReleaseNoteState>();
 	const pendingNotes = new SvelteSet<string>();
-
-	async function loadNote(rom: RomDetail): Promise<void> {
-		const fileName = rom.fileName;
-		notes.set(fileName, { loading: true });
-		try {
-			const text = await api.getText(`/api/games/${encodeURIComponent(id)}/roms/${rom.id}/note`);
-			notes.set(fileName, { text });
-		} catch (e) {
-			if (isApiError(e) && e.status === 404) {
-				// Deleted meanwhile, as the modal treats it: the block goes and the game is refetched.
-				notes.delete(fileName);
-				rom.hasNote = false;
-				await refreshGame();
-			} else notes.set(fileName, { error: e });
-		}
-	}
-
-	$effect(() => {
-		for (const rom of shownRoms)
-			if (
-				rom.hasNote &&
-				openReleases.has(rom.fileName) &&
-				!notes.has(rom.fileName) &&
-				!pendingNotes.has(rom.fileName)
-			)
-				untrack(() => void loadNote(rom));
-	});
 
 	/**
 	 * A note write rewrites the ZIP, and the mirror gives every ROM a new id (§11): flip the icon now, then quietly
@@ -361,24 +263,6 @@
 		}
 	}
 
-	const list = (items: string[]) => (items.length ? items.join(', ') : '—');
-
-	/** R2: how a release was identified. */
-	const identifiedBy = {
-		Dat: 'DAT',
-		Manual: 'Manual',
-		TitleDb: 'Title DB',
-		Serial: 'Game ID'
-	} as const;
-
-	/** R3: the header's key/value pairs, two per table row. */
-	function headerRows(header: Record<string, unknown>): [string, unknown][][] {
-		const entries = Object.entries(header);
-		const rows: [string, unknown][][] = [];
-		for (let i = 0; i < entries.length; i += 2) rows.push(entries.slice(i, i + 2));
-		return rows;
-	}
-
 	// R1–R4: release cards start collapsed. Open ones are kept by file name (unique within a game; ROM ids change on
 	// every ZIP rewrite), so a reload of the same game keeps them; a new game id starts collapsed again.
 	const openReleases = new SvelteSet<string>();
@@ -389,6 +273,7 @@
 	$effect(() => {
 		void id;
 		untrack(() => {
+			descriptionExpanded = false;
 			openReleases.clear();
 			openFiles.clear();
 			notes.clear();
@@ -398,25 +283,6 @@
 	});
 	// B20: which releases' file lists are open, by file name like openReleases.
 	const openFiles = new SvelteSet<string>();
-	const allReleasesOpen = $derived.by(() => shownRoms.every((r) => openReleases.has(r.fileName)));
-
-	function toggleRelease(fileName: string): void {
-		if (openReleases.has(fileName)) openReleases.delete(fileName);
-		else openReleases.add(fileName);
-	}
-
-	/** R2: empty header space toggles; its buttons and links don't, nor does ending a text selection (copying the name). */
-	function onReleaseHeaderClick(event: MouseEvent, fileName: string): void {
-		if ((event.target as Element).closest('button, a')) return;
-		if (getSelection()?.toString()) return;
-		toggleRelease(fileName);
-	}
-
-	function toggleAllReleases(): void {
-		if (allReleasesOpen) openReleases.clear();
-		else shownRoms.forEach((r) => openReleases.add(r.fileName));
-	}
-
 	// GP1: the tab is URL state (`?tab=images`); switching never reloads the game (the load effect keys on the id).
 	type Tab = 'releases' | 'updates' | 'dlc' | 'images' | 'saves' | 'zip';
 	// B9 (DLC B2): ?tab=updates or ?tab=dlc on a game without any shows Releases, as an unknown tab does.
@@ -477,51 +343,19 @@
 		]
 			.filter(Boolean)
 			.join('&');
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
-		void goto(query ? `${path}?${query}` : path, { replace: true, reset: false });
+		void replaceUrl(query ? `${path}?${query}` : path);
 	}
 </script>
 
 <svelte:head><title>{game?.displayTitle ?? 'Game'} · RnRomManager</title></svelte:head>
 
-<svelte:window onresize={measureDescription} />
-
-<!-- P2: each value links to its Collections group (resolved by name there); none is a plain dash. -->
-{#snippet metadataLinks(tab: 'developers' | 'publishers' | 'genres', names: string[])}
-	{#each names as name, i (i)}{i > 0 ? ', ' : ''}<a
-			href="{resolve('/collections')}?{new URLSearchParams({ tab, name })}">{name}</a
-		>{:else}—{/each}
-{/snippet}
-
 <!-- P1: the top row; the game's own links follow Back to Library once it has loaded. -->
 <div class="d-flex flex-wrap gap-2 mb-3">
-	<a class="btn btn-sm btn-outline-primary" href={resolve('/')}
-		><Icon name="back" /> Back to Library</a
+	<Button variant="primary" outline size="sm" icon="back" href={resolve('/')}
+		>Back to Library</Button
 	>
 	{#if game}
-		<!-- External links: resolve() is for app routes. -->
-		<!-- eslint-disable svelte/no-navigation-without-resolve -->
-		<a
-			class="btn btn-sm btn-outline-secondary"
-			href={googleSearchUrl(gameSearchQuery(game))}
-			target="_blank"
-			rel="noopener noreferrer"><Icon name="google" /> Google</a
-		>
-		<button
-			type="button"
-			class="btn btn-sm btn-outline-secondary"
-			bind:this={emulatorsButton}
-			onclick={() => (emulatorsOpen = true)}><Icon name="emulators" /> Emulators</button
-		>
-		{#if game.igdbConfigured && game.igdbId !== null && game.igdbId > 0}
-			<a
-				class="btn btn-sm btn-outline-secondary"
-				href="/api/igdb/games/{game.igdbId}/page"
-				target="_blank"
-				rel="noopener noreferrer"><Icon name="external" /> View on IGDB</a
-			>
-		{/if}
-		<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		<GameLinks {game} bind:emulatorsButton onemulators={() => (emulatorsOpen = true)} />
 	{/if}
 </div>
 
@@ -530,7 +364,7 @@
 {:else if notFound}
 	<EmptyState icon="not-found" message="This game doesn't exist any more.">
 		{#snippet action()}
-			<a class="btn btn-primary" href={resolve('/')}>Go to the Library</a>
+			<Button variant="primary" href={resolve('/')}>Go to the Library</Button>
 		{/snippet}
 	</EmptyState>
 {:else if !game}
@@ -539,666 +373,66 @@
 	{#if notice}
 		<div class="alert alert-warning alert-dismissible" role="alert">
 			{notice}
-			<button type="button" class="btn-close" aria-label="Dismiss" onclick={() => (notice = null)}
-			></button>
+			<Button class="btn-close" aria-label="Dismiss" onclick={() => (notice = null)} />
 		</div>
 	{/if}
 
-	<div class="row g-4 mb-4">
-		<div class="col-12 col-md-4 col-lg-3">
-			{#if cover}
-				<img
-					class="img-fluid rounded border"
-					src={cover.url}
-					width={cover.width}
-					height={cover.height}
-					alt="{game.displayTitle} cover"
-				/>
-			{/if}
-		</div>
-		<div class="col-12 col-md-8 col-lg-9">
-			<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-				{#if auth.isAdmin}
-					<GameTitle
-						{game}
-						onsaved={setGame}
-						onstale={() => onAdminDone({ reload: true, message: changedMessage, warning: true })}
-					/>
-				{:else}
-					<h1 class="h3 mb-0">{game.displayTitle}</h1>
-				{/if}
-				<RatingControl
-					gameId={game.id}
-					title={game.displayTitle}
-					bind:rating={game.rating}
-					bind:favourite={game.favourite}
-					readonly={!auth.isAdmin}
-					onsaved={setGame}
-				/>
-				{#if game.igdbRating}
-					{@const votes = game.igdbRating.votes}
-					<!-- G1: the IGDB rating (rounded half away from zero), shown to every user; focusable for its tooltip. -->
-					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-					<span
-						class="badge text-bg-light border"
-						tabindex="0"
-						use:tooltip={`IGDB rating (users and critics), refreshed ${formatDateTime(game.igdbRating.syncedAt)}`}
-						>IGDB {Math.sign(game.igdbRating.score) *
-							Math.round(Math.abs(game.igdbRating.score))}/100 · {formatCount(votes)}
-						{votes === 1 ? 'vote' : 'votes'}</span
-					>
-				{/if}
-			</div>
-			{#if memberOf.length}
-				<ul class="list-inline mb-2" aria-label="In collections">
-					{#each memberOf as collection (collection.id)}
-						<li class="list-inline-item">
-							<a
-								class="badge text-bg-secondary text-decoration-none"
-								href={resolve('/collections/[id]', { id: collection.id })}
-								><Icon name="collections" /> {collection.name}</a
-							>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-			<!-- G1: key/value table (T3). -->
-			<div class="card mb-3">
-				<table class="table table-sm table-striped table-hover mb-0">
-					<caption class="visually-hidden">Game information</caption>
-					<tbody>
-						<tr>
-							<th scope="row" class="fw-normal text-body-secondary">System</th>
-							<td class="text-break">
-								<div class="d-flex align-items-center gap-2">
-									<SystemBadge system={game.system} name={game.systemName} class="text-wrap" />
-									{#if auth.isAdmin}
-										<!-- Quick edit: opens the same Edit Metadata modal as the Manage menu. -->
-										<button
-											type="button"
-											class="btn btn-sm btn-link text-body-secondary p-0 ms-auto quick-edit"
-											aria-label="Quick edit"
-											use:tooltip={'Edit Metadata'}
-											onclick={() => (action = { kind: 'edit' })}><Icon name="edit" /></button
-										>
-									{/if}
-								</div>
-							</td>
-						</tr>
-						<tr>
-							<th scope="row" class="fw-normal text-body-secondary">Year</th>
-							<td class="text-break">
-								{#if game.releaseYear !== null && game.igdbId !== null && game.igdbId > 0}
-									<!-- P2: Timeline only shows IGDB-linked games, so only those link there. -->
-									<a
-										href="{resolve('/timeline')}?{new URLSearchParams({
-											from: String(game.releaseYear),
-											to: String(game.releaseYear)
-										})}">{game.releaseYear}</a
-									>
-								{:else}
-									{game.releaseYear ?? '—'}
-								{/if}
-							</td>
-						</tr>
-						<tr>
-							<th scope="row" class="fw-normal text-body-secondary">Developers</th>
-							<td class="text-break">{@render metadataLinks('developers', game.developers)}</td>
-						</tr>
-						<tr>
-							<th scope="row" class="fw-normal text-body-secondary">Publishers</th>
-							<td class="text-break">{@render metadataLinks('publishers', game.publishers)}</td>
-						</tr>
-						<tr>
-							<th scope="row" class="fw-normal text-body-secondary">Genres</th>
-							<td class="text-break">{@render metadataLinks('genres', game.genres)}</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-			{#if auth.isAdmin && game.igdbConfigured && game.igdbId === null}
-				<!-- IGDB lookup N1: unlinked games only; gone once a save returns the linked detail. -->
-				<div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3" role="status">
-					This game isn't linked to IGDB.
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-primary ms-auto"
-						onclick={() => (action = { kind: 'edit', lookup: true })}
-						><Icon name="search" /> Find on IGDB</button
-					>
-				</div>
-			{/if}
-			{#if game.description}
-				<p
-					id="game-description"
-					class="game-description"
-					class:clamped={!descriptionExpanded}
-					class:mb-1={descriptionOverflows}
-					bind:this={descriptionEl}
-				>
-					{game.description}
-				</p>
-				{#if descriptionOverflows}
-					<button
-						type="button"
-						class="btn btn-link btn-sm p-0 mb-3"
-						aria-expanded={descriptionExpanded}
-						aria-controls="game-description"
-						onclick={() => (descriptionExpanded = !descriptionExpanded)}
-						>{descriptionExpanded ? 'Show less' : 'Show more'}</button
-					>
-				{/if}
-			{/if}
-			<div class="d-flex flex-wrap gap-2">
-				{#if external}
-					<!-- G5: an external system's ZIP holds no ROMs; they download per release. -->
-					<button
-						type="button"
-						class="btn btn-sm btn-primary"
-						use:tooltip={'ROM files are downloaded per release'}
-						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
-					>
-						<Icon name="download" /> Download ZIP
-					</button>
-				{:else}
-					<button
-						type="button"
-						class="btn btn-sm btn-primary"
-						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
-					>
-						<Icon name="download" /> Download ZIP
-					</button>
-				{/if}
-				{#if downloadRoms.length === 1}
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-primary"
-						onclick={() => download(downloadRoms[0].downloadUrl, downloadRoms[0])}
-					>
-						<Icon name="download" /> Download ROM
-					</button>
-				{:else if downloadRoms.length > 1}
-					<div class="dropdown">
-						<button
-							type="button"
-							class="btn btn-sm btn-outline-primary dropdown-toggle"
-							data-bs-toggle="dropdown"
-							aria-expanded="false"
-						>
-							<Icon name="download" /> Download ROM
-						</button>
-						<ul class="dropdown-menu">
-							{#each downloadRoms as rom (rom.id)}
-								<li>
-									<button
-										type="button"
-										class="dropdown-item"
-										onclick={() => download(rom.downloadUrl, rom)}
-									>
-										{rom.fileName} — {formatSize(rom.sizeBytes)}
-									</button>
-								</li>
-							{/each}
-						</ul>
-					</div>
-				{/if}
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-secondary"
-					onclick={() => (collectionsOpen = true)}
-				>
-					<Icon name="collections" /> Collections
-				</button>
-				{#if fromMissingMetadata && auth.isAdmin}
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-primary"
-						onclick={() => void hotkeys.run('reports.missingMetadata.next')}
-					>
-						<Icon name="report-missing-metadata" /> Next missing metadata
-					</button>
-				{/if}
-				{#if fromMissingIgdb && auth.isAdmin}
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-primary"
-						onclick={() => void hotkeys.run('reports.missingIgdbId.next')}
-					>
-						<Icon name="search" /> Next missing IGDB ID
-					</button>
-				{/if}
-				<!-- B3: Manage, last in the row: View info.json for everyone, then the Admin actions. -->
-				<div class="dropdown">
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary dropdown-toggle"
-						data-bs-toggle="dropdown"
-						aria-expanded="false"
-					>
-						<Icon name="admin" /> Manage
-					</button>
-					<ul class="dropdown-menu dropdown-menu-end">
-						<li>
-							<button type="button" class="dropdown-item" onclick={() => (infoJsonOpen = true)}>
-								<Icon name="code" /> View info.json
-							</button>
-						</li>
-						{#if auth.isAdmin}
-							<li><hr class="dropdown-divider" /></li>
-							<li>
-								<button
-									type="button"
-									class="dropdown-item"
-									onclick={() => (action = { kind: 'edit' })}
-								>
-									<Icon name="edit" /> Edit Metadata
-								</button>
-							</li>
-							<li>
-								<button
-									type="button"
-									class="dropdown-item"
-									onclick={() => (action = { kind: 'retry' })}
-								>
-									<Icon name="retry" /> Retry media
-								</button>
-							</li>
-							<li>
-								<button
-									type="button"
-									class="dropdown-item"
-									onclick={() => (action = { kind: 'merge' })}
-								>
-									<Icon name="merge" /> Merge into…
-								</button>
-							</li>
-							<li><hr class="dropdown-divider" /></li>
-							<li>
-								<!-- text-danger-emphasis: plain text-danger fails AA on the dark dropdown. -->
-								<button
-									type="button"
-									class="dropdown-item text-danger-emphasis"
-									onclick={() => (action = { kind: 'deleteGame' })}
-								>
-									<Icon name="delete" /> Delete game
-								</button>
-							</li>
-						{/if}
-					</ul>
-				</div>
-			</div>
-		</div>
-	</div>
+	<GameHeader
+		bind:game
+		gameId={id}
+		{memberOf}
+		{downloadRoms}
+		{fromMissingMetadata}
+		{fromMissingIgdb}
+		bind:descriptionExpanded
+		ondownload={download}
+		onsaved={setGame}
+		onstale={() => onAdminDone({ reload: true, message: changedMessage, warning: true })}
+		onaction={(a) => (action = a)}
+		oninfojson={() => (infoJsonOpen = true)}
+		oncollections={() => (collectionsOpen = true)}
+	/>
 
-	<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
-		{#each tabs as [value, label, icon] (value)}
-			<li class="nav-item" role="presentation">
-				<button
-					type="button"
-					class="nav-link"
-					class:active={tab === value}
-					id="{value}-tab"
-					role="tab"
-					aria-selected={tab === value}
-					aria-controls={value === 'updates' || value === 'dlc'
-						? 'releases-panel'
-						: `${value}-panel`}
-					onclick={() => selectTab(value)}><Icon name={icon} /> {label}</button
-				>
-			</li>
-		{/each}
-	</ul>
+	<NavTabs
+		tabs={tabs.map(([value, label, icon]) => ({
+			id: value,
+			label,
+			icon,
+			tabId: `${value}-tab`,
+			controls: value === 'updates' || value === 'dlc' ? 'releases-panel' : `${value}-panel`
+		}))}
+		active={tab}
+		onselect={selectTab}
+		class="mb-3"
+	/>
 
 	<!-- Both panels stay mounted (hidden, not removed) so nothing unmounts on a tab switch. -->
 	<div id="releases-panel" role="tabpanel" aria-labelledby="{romTab}-tab" hidden={tab !== romTab}>
-		<h2 class="h5 visually-hidden">
-			{tab === 'updates' ? 'Updates' : tab === 'dlc' ? 'DLC' : 'Releases'}
-		</h2>
-		{#if tab === 'releases' && !releases.length}
-			<p class="text-body-secondary">No releases other than updates and DLC.</p>
-		{/if}
-		{#if shownRoms.length >= 2}
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-secondary mb-2"
-				onclick={toggleAllReleases}>{allReleasesOpen ? 'Collapse all' : 'Expand all'}</button
-			>
-		{/if}
-		<!-- G2: one card per release, so nothing scrolls sideways on a phone. -->
-		<div class="d-flex flex-column gap-3 mb-4">
-			{#each shownRoms as rom (rom.id)}
-				{@const open = openReleases.has(rom.fileName)}
-				<!-- R1: a stripe in the system's colour and a tinted header mark where each release starts. -->
-				<article
-					class="card"
-					style="border-left: 6px solid var(--bs-{systemColour(game.system).name})"
-					aria-labelledby="release-{rom.id}-name"
-				>
-					<!-- The chevron button is the keyboard path; a click on empty header space is a mouse shortcut. -->
-					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-					<div
-						class="card-header bg-body-tertiary release-header"
-						onclick={(e) => onReleaseHeaderClick(e, rom.fileName)}
-					>
-						<div class="d-flex flex-wrap align-items-center gap-2">
-							<!-- B6: chevron and name on the left; min-width 0 lets a long name wrap. -->
-							<div class="d-flex align-items-center gap-2" style="min-width: 0">
-								<button
-									type="button"
-									class="btn btn-sm btn-link p-0 text-body chevron-toggle"
-									aria-expanded={open}
-									aria-controls="release-{rom.id}-details"
-									aria-label="{open ? 'Hide' : 'Show'} details for {rom.fileName}"
-									onclick={() => toggleRelease(rom.fileName)}><Icon name="chevron" /></button
-								>
-								<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
-							</div>
-							<!-- B6: badges, then buttons, on the right. -->
-							<div class="ms-auto d-flex flex-wrap gap-2 align-items-center justify-content-end">
-								{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
-								{#if rom.version}<span class="badge text-bg-info">Version {rom.version}</span>{/if}
-								{#if discNumber(rom) !== null}<span class="badge text-bg-info"
-										>Disc {discNumber(rom)}</span
-									>{/if}
-								{#if rom.externalFileName}
-									<!-- G7: stored next to the ZIP under this name. -->
-									<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-									<span class="badge text-bg-dark" tabindex="0" use:tooltip={rom.externalFileName}
-										>External</span
-									>
-								{/if}
-								{#each rom.regions as region (region)}
-									<span class="badge text-bg-secondary">{region}</span>
-								{/each}
-								<!-- R4: a filled button when the release has a note; Site users only view notes (U3). -->
-								{#if auth.isAdmin || rom.hasNote}<button
-										type="button"
-										class="btn btn-sm {rom.hasNote ? 'btn-warning' : 'btn-outline-secondary'}"
-										aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
-										use:tooltip={rom.hasNote ? 'View note' : 'Add note'}
-										onclick={() => showNote(rom)}
-									>
-										<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
-									</button>{/if}
-								{#if canPlay(game, rom) && game.browserCore && opensInNewTab(game.browserCore)}
-									<!-- PSP B3: the isolated player runs in its own tab; a static page outside the SPA router. -->
-									<!-- eslint-disable svelte/no-navigation-without-resolve -->
-									<a
-										class="btn btn-sm btn-outline-success"
-										href={playUrl(
-											game.id,
-											rom,
-											game.browserCore,
-											usesPlayDisc(game.browserCore, rom)
-										)}
-										target="_blank"
-										rel="noopener"
-										aria-label="Play {rom.fileName} (opens in a new tab)"
-										{...playLinkEvents(game.id, rom.id)}
-										><!-- eslint-enable svelte/no-navigation-without-resolve -->
-										<Icon name="play" />
-									</a>
-								{:else if canPlay(game, rom)}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-success"
-										aria-label="Play {rom.fileName}"
-										onclick={() => {
-											playRom = rom;
-											playSet = null;
-											playOpen = true;
-										}}
-									>
-										<Icon name="play" />
-									</button>
-									{#if rom.discSet}
-										{@const discSet = rom.discSet}
-										{@const media = setMedia(game.browserCore)}
-										<!-- Multi-disc M7 (Amiga F8: disks): every disc of the set in one session, from Disc 1's card. -->
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-success"
-											aria-label="Play all {media} of {discSet.name}"
-											use:tooltip={`Play all ${media} in one session`}
-											onclick={() => {
-												playRom = rom;
-												playSet = discSet.name;
-												playOpen = true;
-											}}
-										>
-											<Icon name="play" /> All {media}
-										</button>
-									{/if}
-								{/if}
-								<button
-									type="button"
-									class="btn btn-sm btn-outline-primary"
-									aria-label="Download {rom.fileName}"
-									onclick={() => download(rom.downloadUrl, rom)}
-								>
-									<Icon name="download" />
-								</button>
-								{@render bundleButton(bundleEntry(game, rom))}
-							</div>
-						</div>
-					</div>
-					<div class="card-body small" id="release-{rom.id}-details" hidden={!open}>
-						{#if rom.hasNote}
-							{@const note = notes.get(rom.fileName)}
-							<!-- B7: the note comes first; a non-interactive block (its Markdown links work) beside an Edit/View button. -->
-							<div class="border rounded p-2 mb-3" data-testid="release-note">
-								<div class="d-flex align-items-center gap-2 mb-2">
-									<h4 class="h6 mb-0">Release note</h4>
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary ms-auto"
-										aria-label="{auth.isAdmin ? 'Edit' : 'View'} note for {rom.fileName}"
-										onclick={() => showNote(rom, auth.isAdmin ? 'edit' : undefined)}
-									>
-										<Icon name={auth.isAdmin ? 'edit' : 'note-filled'} />
-										{auth.isAdmin ? 'Edit note' : 'View note'}
-									</button>
-								</div>
-								{#if note && 'error' in note}
-									<ErrorAlert error={note.error} onretry={() => loadNote(rom)} />
-								{:else if note && 'text' in note}
-									<div class="note-markdown">
-										<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by DOMPurify in renderMarkdown -->
-										{@html renderMarkdown(note.text)}
-									</div>
-								{:else}
-									<Loading label="Loading note…" />
-								{/if}
-							</div>
-						{/if}
-						<!-- B8: a key/value table (T1–T4), one pair per row, each row only when it has a value. Values
-						     keep wrapping (G2: never truncated), an exception to the T-rule's text-truncate. -->
-						<div class="card">
-							<div class="table-responsive">
-								<table class="table table-sm table-striped table-hover mb-0">
-									<tbody>
-										{#if rom.originalFileName !== rom.fileName}
-											<tr>
-												<th scope="row" class="fw-normal text-body-secondary">Original file name</th
-												>
-												<td class="text-break">
-													<span class="text-break">{rom.originalFileName}</span>
-													<CopyButton value={rom.originalFileName} label="original file name" />
-												</td>
-											</tr>
-										{/if}
-										<tr>
-											<th scope="row" class="fw-normal text-body-secondary">Size</th>
-											<td class="text-break"><FileSize bytes={rom.totalSizeBytes} /></td>
-										</tr>
-										{#each [['SHA1', rom.sha1], ['CRC32', rom.crc32], ['MD5', rom.md5]] as [name, hash] (name)}
-											<tr>
-												<th scope="row" class="fw-normal text-body-secondary">{name}</th>
-												<td class="text-break">
-													<span class="font-monospace text-break">{hash}</span>
-													<CopyButton value={hash} label={name} />
-												</td>
-											</tr>
-										{/each}
-										{#if rom.revision}
-											<tr>
-												<th scope="row" class="fw-normal text-body-secondary">Revision</th>
-												<td class="text-break">{rom.revision}</td>
-											</tr>
-										{/if}
-										{#if rom.languages.length}
-											<tr>
-												<th scope="row" class="fw-normal text-body-secondary">Languages</th>
-												<td class="text-break">{list(rom.languages)}</td>
-											</tr>
-										{/if}
-										{#if rom.flags.length}
-											<tr>
-												<th scope="row" class="fw-normal text-body-secondary">Flags</th>
-												<td class="text-break">{list(rom.flags)}</td>
-											</tr>
-										{/if}
-										<tr>
-											<th scope="row" class="fw-normal text-body-secondary">Identified by</th>
-											<td class="text-break">{identifiedBy[rom.identificationMethod]}</td>
-										</tr>
-										{#if rom.datName}
-											<tr>
-												<th scope="row" class="fw-normal text-body-secondary">DAT</th>
-												<td class="text-break">
-													{[rom.datName, rom.datVersion].filter(Boolean).join(' ')}
-												</td>
-											</tr>
-										{/if}
-										{#if rom.datGameName}
-											<tr>
-												<th scope="row" class="fw-normal text-body-secondary">DAT entry</th>
-												<td class="text-break">{rom.datGameName}</td>
-											</tr>
-										{/if}
-										<tr>
-											<th scope="row" class="fw-normal text-body-secondary">Date added</th>
-											<td class="text-break">{formatDateTime(rom.dateAdded)}</td>
-										</tr>
-									</tbody>
-								</table>
-							</div>
-						</div>
-						{#if rom.header || auth.isAdmin}
-							<div class="d-flex flex-wrap gap-2 mt-2">
-								{#if rom.header}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary"
-										onclick={() => showHeader(rom)}
-									>
-										<Icon name="info" /> Header details
-									</button>
-								{/if}
-								{#if auth.isAdmin}
-									<!-- B9: Header details stays left; Move and Delete release sit right. -->
-									<div class="ms-auto d-flex flex-wrap gap-2">
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-secondary"
-											aria-label="Edit release {rom.fileName}"
-											onclick={() => {
-												editRom = rom;
-												editOpen = true;
-											}}
-										>
-											<Icon name="edit" /> Edit release
-										</button>
-										{#if !rom.isPrimary}
-											<button
-												type="button"
-												class="btn btn-sm btn-outline-secondary"
-												aria-label="Make primary {rom.fileName}"
-												onclick={() => (action = { kind: 'primary', rom })}
-											>
-												<Icon name="star" /> Make primary
-											</button>
-										{/if}
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-secondary"
-											aria-label="Move release {rom.fileName}"
-											onclick={() => (action = { kind: 'move', rom })}
-										>
-											<Icon name="move" /> Move release
-										</button>
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-danger"
-											aria-label="Delete release {rom.fileName}"
-											onclick={() => (action = { kind: 'deleteRom', rom })}
-										>
-											<Icon name="delete" /> Delete release
-										</button>
-									</div>
-								{/if}
-							</div>
-						{/if}
-						{#if rom.files?.length}
-							{@const filesOpen = openFiles.has(rom.fileName)}
-							<!-- B20: the main file and the set's other files (cue, tracks); N counts all of them. -->
-							<button
-								type="button"
-								class="btn btn-sm btn-outline-secondary mt-2"
-								aria-expanded={filesOpen}
-								aria-controls="release-{rom.id}-files"
-								onclick={() =>
-									filesOpen ? openFiles.delete(rom.fileName) : openFiles.add(rom.fileName)}
-								><Icon name="chevron" /> {rom.files.length + 1} files</button
-							>
-							<div class="card mt-2" id="release-{rom.id}-files" hidden={!filesOpen}>
-								<div class="table-responsive">
-									<table class="table table-sm table-striped table-hover align-middle mb-0">
-										<caption class="visually-hidden">Files of {rom.fileName}</caption>
-										<thead class="table-dark">
-											<tr>
-												<th scope="col">File</th>
-												<th scope="col" class="text-end">Size</th>
-												<th scope="col">SHA1</th>
-												<th scope="col"><span class="visually-hidden">Actions</span></th>
-											</tr>
-										</thead>
-										<tbody>
-											{#each [{ fileName: rom.fileName, sizeBytes: rom.sizeBytes, sha1: rom.sha1, downloadUrl: rom.downloadUrl }, ...rom.files] as file, index (file.fileName)}
-												<tr>
-													<td class="text-truncate" style="max-width: 32rem" title={file.fileName}
-														>{file.fileName}</td
-													>
-													<td class="text-end text-nowrap"><FileSize bytes={file.sizeBytes} /></td>
-													<td class="text-nowrap">
-														<span class="font-monospace">{file.sha1}</span>
-														<CopyButton value={file.sha1} label="SHA1 of {file.fileName}" />
-													</td>
-													<td class="text-end">
-														<button
-															type="button"
-															class="btn btn-sm btn-outline-primary"
-															aria-label="Download {file.fileName}"
-															onclick={() => download(file.downloadUrl, rom)}
-														>
-															<Icon name="download" />
-														</button>
-														<!-- Row 0 is the main file; the rest are separately downloadable set files (B1). -->
-														{@render bundleButton(
-															bundleEntry(game, rom, index === 0 ? undefined : rom.files[index - 1])
-														)}
-													</td>
-												</tr>
-											{/each}
-										</tbody>
-									</table>
-								</div>
-							</div>
-						{/if}
-					</div>
-				</article>
-			{/each}
-		</div>
+		<ReleaseTable
+			{game}
+			gameId={id}
+			{tab}
+			roms={shownRoms}
+			releaseCount={releases.length}
+			{openReleases}
+			{openFiles}
+			{notes}
+			{pendingNotes}
+			ondownload={download}
+			onnote={showNote}
+			onheader={showHeader}
+			onplay={(rom, discSet) => {
+				playRom = rom;
+				playSet = discSet;
+				playOpen = true;
+			}}
+			onedit={(rom) => {
+				editRom = rom;
+				editOpen = true;
+			}}
+			onaction={(a) => (action = a)}
+			onrefresh={refreshGame}
+		/>
 	</div>
 
 	<!-- Outside both panels (a hidden ancestor would hide it) and before the Images panel: game-admin.test.ts takes
@@ -1220,25 +454,7 @@
 		<ZipBrowser {game} active={tab === 'zip'} bind:selected={zipSelected} expanded={zipExpanded} />
 	</div>
 
-	<ConfirmModal bind:open={headerOpen} title="Header — {headerRom?.fileName ?? ''}" size="lg">
-		{#if headerRom?.header}
-			<table class="table table-sm table-striped table-hover mb-0">
-				<caption class="visually-hidden">Header of {headerRom.fileName}</caption>
-				<tbody>
-					<!-- R3: two pairs per row; an odd last pair leaves the second half empty. -->
-					{#each headerRows(headerRom.header) as pairs (pairs[0][0])}
-						<tr>
-							{#each pairs as [key, value] (key)}
-								<th scope="row" class="fw-normal text-body-secondary">{formatKey(key)}</th>
-								<td>{formatValue(value)}</td>
-							{/each}
-							{#if pairs.length === 1}<td colspan="2"></td>{/if}
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		{/if}
-	</ConfirmModal>
+	<RomHeaderModal bind:open={headerOpen} rom={headerRom} />
 
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 
@@ -1280,33 +496,3 @@
 		system={{ id: game.system, displayName: game.systemName }}
 	/>
 {/if}
-
-<!-- Bundle Creator B1: adds one file to the working cart; shows a check once it's there. -->
-{#snippet bundleButton(entry: BundleEntry)}
-	{@const inCart = bundle.has(entry)}
-	<button
-		type="button"
-		class="btn btn-sm {inCart ? 'btn-primary' : 'btn-outline-primary'}"
-		aria-label={inCart
-			? `${entry.fileName} is in the bundle`
-			: `Add ${entry.fileName} to the bundle`}
-		title={inCart ? 'In the bundle' : 'Add to bundle'}
-		onclick={() => addToBundle(entry)}
-	>
-		<Icon name={inCart ? 'cart-check' : 'cart-add'} />
-	</button>
-{/snippet}
-
-<style>
-	.game-description {
-		white-space: pre-line;
-	}
-	/* P5: two lines until Show more. */
-	.game-description.clamped {
-		display: -webkit-box;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		overflow: hidden;
-	}
-</style>

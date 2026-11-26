@@ -27,22 +27,18 @@ public static class IngestEndpoints
                 }
                 catch (JsonException)
                 {
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["files"] = ["The body isn't valid JSON."] });
+                    return Problems.Validation(ctx, "files", "The body isn't valid JSON.");
                 }
             }
             if (request?.Files is { } files)
             {
                 if (files.Count == 0 || files.Any(f => string.IsNullOrEmpty(f?.System) || string.IsNullOrEmpty(f.Name)))
-                    return Problems.Validation(ctx, new Dictionary<string, string[]>
-                    {
-                        ["files"] = ["Give at least one file, each with a system and a name."],
-                    });
+                    return Problems.Validation(ctx, "files", "Give at least one file, each with a system and a name.");
                 job.Selection = files.Select(f => (f!.System!, f.Name!)).ToHashSet();
             }
             try
             {
-                var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-                return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+                return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
             }
             catch (JobRefusedException ex) when (ex.Code == IngestJob.DatsMissing)
             {
@@ -81,7 +77,7 @@ public static class IngestEndpoints
                 }
                 catch (JsonException)
                 {
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["files"] = ["The body isn't valid JSON."] });
+                    return Problems.Validation(ctx, "files", "The body isn't valid JSON.");
                 }
             }
             var errors = IngestFileDeleter.Validate(request?.Files, systems, paths.Value.Ingest);
@@ -90,7 +86,7 @@ public static class IngestEndpoints
             var result = await deleter.DeleteAsync(request!.Files!.Select(f => f!).ToList(), AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null
                 ? Results.Ok(new { deleted = result.Deleted, failed = result.Failed.Select(f => new { system = f.System, folder = f.Folder, name = f.Name }) })
-                : DatEndpoints.JobRunning(ctx);
+                : JobStart.Running(ctx);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         api.MapPost("/ingest/restore", async (HttpContext ctx, RemovedFileRestorer restorer, JobRunner runner, IngestJob job,
@@ -106,7 +102,7 @@ public static class IngestEndpoints
                 }
                 catch (JsonException)
                 {
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["files"] = ["The body isn't valid JSON."] });
+                    return Problems.Validation(ctx, "files", "The body isn't valid JSON.");
                 }
             }
             var files = request?.Files?.Select(f => f is null ? null : new IngestDeleteRef(f.System, IngestFileDeleter.Removed, f.Name)).ToList();
@@ -115,7 +111,7 @@ public static class IngestEndpoints
                 return Problems.Validation(ctx, errors);
             var result = restorer.Restore(files!.Select(f => f!).ToList(), AuditActor.From(ctx.User));
             if (result.Code is not null)
-                return DatEndpoints.JobRunning(ctx);
+                return JobStart.Running(ctx);
             // After the lock is released: ingest exactly the restored files under their new names. If it can't start, they wait on Ingestion.
             Guid? jobId = null;
             if (result.Restored.Count > 0)
@@ -123,7 +119,7 @@ public static class IngestEndpoints
                 job.Selection = result.Restored.Select(f => (f.System, f.Name)).ToHashSet();
                 try
                 {
-                    jobId = (await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), CancellationToken.None))?.Id;
+                    jobId = (await runner.StartAsync(job, JobTrigger.Manual, EndpointUser.Id(ctx.User), CancellationToken.None))?.Id;
                 }
                 catch (JobRefusedException ex) when (ex.Code == IngestJob.DatsMissing)
                 {
@@ -141,16 +137,3 @@ public static class IngestEndpoints
         return api;
     }
 }
-
-/// <summary><c>POST /api/ingest/restore</c> body (D5).</summary>
-public sealed record IngestRestoreRequest(IReadOnlyList<IngestRestoreRef?>? Files);
-
-public sealed record IngestRestoreRef(string? System, string? Name);
-
-/// <summary><c>POST /api/ingest/delete</c> body (D2).</summary>
-public sealed record IngestDeleteRequest(IReadOnlyList<IngestDeleteRef?>? Files);
-
-/// <summary><c>POST /api/jobs/ingest</c> body (IN1): the pending files to ingest, by system id and top-level file name.</summary>
-public sealed record IngestRequest(IReadOnlyList<IngestFileRef?>? Files);
-
-public sealed record IngestFileRef(string? System, string? Name);

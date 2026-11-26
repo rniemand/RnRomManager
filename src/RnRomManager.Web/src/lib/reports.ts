@@ -1,7 +1,5 @@
 import { resolve } from '$app/paths';
-
-/** A Reports tab: the layout's tab strip and Global Search's Reports group (S1) list the same ones. */
-export type ReportTab = { href: string; label: string; icon: string };
+import type { ReportTab } from '#lib/types/index.js';
 
 /**
  * The report tabs in order; Missing Metadata, Missing IGDB IDs and Activity are Admin-only (B20, M4, R2). Release editing B15:

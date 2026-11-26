@@ -24,7 +24,11 @@ public class HackedGamesQueryTests
         _reports = new ReportRepository(_factory);
     }
 
-    private async Task<Guid> Add(string title, string system, long zipSize, params string[][] flags)
+    private async Task<Guid> Add(
+        string title,
+        string system,
+        long zipSize,
+        params string[][] flags)
     {
         var roms = flags.Select((f, i) => Rom($"{title} {i}.gb", RomBytes(++_seed), isPrimary: i == 0) with { Flags = f }).ToArray();
         var game = Game(title, roms) with { System = system };
@@ -39,8 +43,12 @@ public class HackedGamesQueryTests
     private static readonly string[] HackUpdate = ["Hack", "Update"];
     private static readonly string[] Dlc = ["DLC"];
 
-    private Task<Core.Database.Page<HackedGameItem>> List(HackedGameSort sort = HackedGameSort.Hacks, bool descending = true,
-        string? system = null, int page = 1, int pageSize = 50) =>
+    private Task<Core.Database.Page<HackedGameItem>> List(
+        HackedGameSort sort = HackedGameSort.Hacks,
+        bool descending = true,
+        string? system = null,
+        int page = 1,
+        int pageSize = 50) =>
         _reports.ListHackedGamesAsync(system, sort, descending, page, pageSize, default);
 
     [Test]

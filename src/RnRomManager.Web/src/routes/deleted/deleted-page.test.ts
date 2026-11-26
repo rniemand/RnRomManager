@@ -8,9 +8,6 @@ import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/state', () => ({ page: { params: {}, url: new URL('http://localhost/deleted') } }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 // Toggles `show` so a test can tell an open modal from a closed one.
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {

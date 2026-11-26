@@ -1,74 +1,5 @@
 namespace RnRomManager.Core.Storage;
 
-/// <summary>What a path under a storage root turned out to be.</summary>
-public enum ExternalPathStatus
-{
-    /// <summary>It exists, is the expected kind, and nothing below the root on the way to it is a link.</summary>
-    Found,
-
-    /// <summary>
-    /// Confirmed absent: the entry, or a directory on the way to it, isn't there, and everything that does exist on
-    /// the way is a real directory.
-    /// </summary>
-    Missing,
-
-    /// <summary>
-    /// Not usable: outside the root, a link or reparse point, the wrong kind of entry (a directory, FIFO, socket or
-    /// device where a regular file is expected), or several entries whose names differ only in case.
-    /// </summary>
-    Unsafe,
-
-    /// <summary>An IO or permission failure (a sharing violation included): whether it exists is unknown.</summary>
-    Unreadable,
-
-    /// <summary>
-    /// Only from a checked open that was given the snapshot to expect: a regular file is there, but it is not that
-    /// same, unchanged file (another file identity, length or last write time).
-    /// </summary>
-    Changed,
-}
-
-/// <summary>The result of classifying one path.</summary>
-/// <param name="Path">
-/// The full path with the spelling found on disk for every part that exists (a name is matched ignoring case);
-/// parts that don't exist keep the requested spelling.
-/// </param>
-/// <param name="Snapshot">Set for a <see cref="ExternalPathStatus.Found"/> file.</param>
-/// <param name="Details">Why, for every status but <see cref="ExternalPathStatus.Found"/>.</param>
-public sealed record ExternalPathCheck(ExternalPathStatus Status, string Path, ExternalFileSnapshot? Snapshot = null, string? Details = null);
-
-/// <summary>The result of a checked open. <paramref name="Stream"/> and <paramref name="Snapshot"/> are set only for <see cref="ExternalPathStatus.Found"/>.</summary>
-/// <param name="Path">As <see cref="ExternalPathCheck.Path"/>.</param>
-/// <param name="Stream">The validated read stream itself; the caller disposes it and never reopens the path.</param>
-/// <param name="Snapshot">Read from the open handle, so it describes exactly the file <paramref name="Stream"/> reads.</param>
-public sealed record ExternalOpenResult(
-    ExternalPathStatus Status, string Path, FileStream? Stream = null, ExternalFileSnapshot? Snapshot = null, string? Details = null);
-
-/// <summary>Test seams of <see cref="ExternalRomPath.OpenRead"/>: points where a test swaps an entry mid-open.</summary>
-public sealed class ExternalOpenHooks
-{
-    /// <summary>Runs after the path was classified and before anything is opened.</summary>
-    public Action? AfterClassify { get; init; }
-
-    /// <summary>Runs with each directory's full path right before that directory is opened.</summary>
-    public Action<string>? BeforeDirectoryOpen { get; init; }
-}
-
-/// <summary>A regular file found by <see cref="ExternalRomPath.ScanFolder"/>.</summary>
-/// <param name="RelativePath">Relative to the root, <c>/</c> separators, each name as spelled on disk.</param>
-public sealed record CheckedFile(string RelativePath, string FullPath, ExternalFileSnapshot Snapshot);
-
-/// <summary>Something <see cref="ExternalRomPath.ScanFolder"/> refused to open or walk into.</summary>
-/// <param name="RelativePath">
-/// Relative to the root, <c>/</c> separators. For names that differ only in case it is the first spelling in
-/// ordinal order; everything at or below any of those spellings was skipped.
-/// </param>
-/// <param name="Status"><see cref="ExternalPathStatus.Unsafe"/> or <see cref="ExternalPathStatus.Unreadable"/>.</param>
-/// <param name="IsSpecialFile">True for a FIFO, socket or device: a single entry that can't be a folder. A link, an unreadable entry and case variants may each be or hide one.</param>
-public sealed record CheckedScanProblem(string RelativePath, ExternalPathStatus Status, string Details, bool IsSpecialFile = false);
-
-public sealed record CheckedScan(IReadOnlyList<CheckedFile> Files, IReadOnlyList<CheckedScanProblem> Problems);
-
 /// <summary>
 /// The one place that decides whether a path under a storage root may be used for an external ROM, its metadata ZIP,
 /// an ingest source or a destination folder (spec G4). Below the root every existing component must be a real
@@ -159,8 +90,12 @@ public static class ExternalRomPath
     /// <param name="share">The Windows sharing mode of the returned handle; Linux has none.</param>
     /// <param name="expected">When set, the opened file must be this same, unchanged file, else <see cref="ExternalPathStatus.Changed"/>.</param>
     /// <param name="hooks">Test seams.</param>
-    public static ExternalOpenResult OpenRead(string root, string fullPath, FileShare share = FileShare.Read,
-        ExternalFileSnapshot? expected = null, ExternalOpenHooks? hooks = null)
+    public static ExternalOpenResult OpenRead(
+        string root,
+        string fullPath,
+        FileShare share = FileShare.Read,
+        ExternalFileSnapshot? expected = null,
+        ExternalOpenHooks? hooks = null)
     {
         var check = ClassifyFile(root, fullPath);
         if (check.Status != ExternalPathStatus.Found)
@@ -173,14 +108,14 @@ public static class ExternalRomPath
         return Finish(check.Path, NativeCheckedOpen.OpenRead(fullRoot, components, share, hooks?.BeforeDirectoryOpen), expected);
     }
 
-    private static ExternalOpenResult Finish(string path, NativeCheckedOpen.Result opened, ExternalFileSnapshot? expected)
+    private static ExternalOpenResult Finish(string path, Result opened, ExternalFileSnapshot? expected)
     {
-        if (opened.Outcome != NativeCheckedOpen.Outcome.Opened)
+        if (opened.Outcome != NativeCheckedOpenOutcome.Opened)
         {
             var status = opened.Outcome switch
             {
-                NativeCheckedOpen.Outcome.Missing => ExternalPathStatus.Missing,
-                NativeCheckedOpen.Outcome.Unsafe => ExternalPathStatus.Unsafe,
+                NativeCheckedOpenOutcome.Missing => ExternalPathStatus.Missing,
+                NativeCheckedOpenOutcome.Unsafe => ExternalPathStatus.Unsafe,
                 _ => ExternalPathStatus.Unreadable,
             };
             return new ExternalOpenResult(status, path, Details: opened.Details);
@@ -211,8 +146,12 @@ public static class ExternalRomPath
     /// quadratic). Every other check is the same, and made on the handles opened here.
     /// </summary>
     /// <param name="relativePath">A <see cref="CheckedFile.RelativePath"/>.</param>
-    public static ExternalOpenResult OpenScanned(string root, string relativePath, FileShare share = FileShare.Read,
-        ExternalFileSnapshot? expected = null, ExternalOpenHooks? hooks = null)
+    public static ExternalOpenResult OpenScanned(
+        string root,
+        string relativePath,
+        FileShare share = FileShare.Read,
+        ExternalFileSnapshot? expected = null,
+        ExternalOpenHooks? hooks = null)
     {
         var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
         var components = relativePath.Split('/');
@@ -251,7 +190,11 @@ public static class ExternalRomPath
         return new CheckedScan(files, problems);
     }
 
-    private static void Scan(string directory, string relative, List<CheckedFile> files, List<CheckedScanProblem> problems)
+    private static void Scan(
+        string directory,
+        string relative,
+        List<CheckedFile> files,
+        List<CheckedScanProblem> problems)
     {
         List<string> names;
         try

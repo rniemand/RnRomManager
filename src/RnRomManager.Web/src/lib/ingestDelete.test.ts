@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetClient } from './api/client';
-import type { IngestDeleteEntry } from './api/types';
+import type { IngestDeleteEntry } from '#lib/types/index.js';
 import { deleteIngestFiles, deleteTitle, isArchive } from './ingestDelete';
 import { toasts } from './stores/toasts.svelte';
 

@@ -1,5 +1,6 @@
 import { api } from './api/client';
-import type { GameDetail, RomDetail, SaveItem, SaveKind } from './api/types';
+import type { GameDetail, RomDetail, SaveItem } from '#lib/types/index.js';
+import type { SaveKind } from '#lib/enums/index.js';
 import { canPlay, opensInNewTab } from './emulator';
 
 /** B16 (S2): the release a save plays on in the Play dialog, or null when it can't be played from here. */

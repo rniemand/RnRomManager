@@ -43,10 +43,8 @@ public class LibraryEditorSaveTests
 
     private string Roms => Path.Combine(_factory.Root, "roms");
 
-    private sealed record TestGame(Guid Id, string ZipPath, string Zip, long[] RomIds, string[] FileNames);
-
     /// <summary>A mirrored Game Boy game with one release per name, all inside its ZIP.</summary>
-    private async Task<TestGame> WriteGame(string title, params string[] fileNames)
+    private async Task<LibraryEditorSaveTestGame> WriteGame(string title, params string[] fileNames)
     {
         var seeds = fileNames.Select(_ => ++_seed).ToArray();
         var game = TestLibrary.Game(title, [.. fileNames.Select((f, i) => TestLibrary.Rom(f, TestLibrary.RomBytes(seeds[i]), isPrimary: i == 0))]);
@@ -372,7 +370,7 @@ public class LibraryEditorSaveTests
     /// Adds legacy records (one-byte entries) to a ZIP that the editor already gave a <c>saves.json</c>: the index becomes a
     /// version 1 one (B16: only it can hold an unowned save), with the current saves' bytes copied to their flat entries.
     /// </summary>
-    private void AddSavesToIndex(TestGame game, params GameSave[] records)
+    private void AddSavesToIndex(LibraryEditorSaveTestGame game, params GameSave[] records)
     {
         var current = ReadSaves(game.Zip).Index!.Saves;
         var copies = current.Select(c => ((c with { Legacy = true }).Entry, Entry(game.Zip, c.Entry))).ToList();
@@ -400,7 +398,11 @@ public class LibraryEditorSaveTests
             await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(zip.InfoJson!.Game!, game.ZipPath, file.Length, file.LastWriteTimeUtc), default);
             return (unowned, alices);
         }
-        void AssertVersion2(GameSave unowned, byte[] alicesBytes, string alicesExtension = ".srm", bool unownedKept = true)
+        void AssertVersion2(
+            GameSave unowned,
+            byte[] alicesBytes,
+            string alicesExtension = ".srm",
+            bool unownedKept = true)
         {
             var read = ReadSaves(game.Zip);
             Assert.That(read.State, Is.EqualTo(SavesState.Valid), read.Problem);

@@ -1,7 +1,6 @@
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
-using Microsoft.Extensions.Logging;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Users;
@@ -40,7 +39,11 @@ public class JobRunnerTests
         return (job, started!);
     }
 
-    private Task FinishedWith(Guid id, JobStatus status, string? summary = null, string? error = null) =>
+    private Task FinishedWith(
+        Guid id,
+        JobStatus status,
+        string? summary = null,
+        string? error = null) =>
         _jobs.Received(1).FinishAsync(id, status, Arg.Any<DateTime>(), summary, error, Arg.Any<CancellationToken>());
 
     private int Warnings() =>

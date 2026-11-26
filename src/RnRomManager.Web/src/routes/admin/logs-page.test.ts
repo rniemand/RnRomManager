@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { api } from '#lib/api/client.js';
 import { ApiError } from '#lib/api/errors.js';
-import type { LogEntry } from '#lib/api/types.js';
+import type { LogEntry } from '#lib/types/index.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 
 const { default: LogsPage } = await import('./logs/+page.svelte');

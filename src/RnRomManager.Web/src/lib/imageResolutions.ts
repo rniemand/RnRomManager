@@ -1,5 +1,6 @@
-import type { ImageInfo } from './api/types';
+import type { ImageInfo, ImageResolutionFilter } from '#lib/types/index.js';
 import { remembered } from './remembered';
+import { pageParam } from '#lib/urlState.js';
 
 type ImageType = ImageInfo['type'];
 
@@ -10,15 +11,6 @@ export const imageTypeLabels: Record<ImageType, string> = {
 	TitleScreen: 'Title screen',
 	Other: 'Other'
 };
-
-/** Image Resolutions R9: the report's filter and page, kept in the URL query and remembered in `localStorage`. */
-export interface ImageResolutionFilter {
-	system: string;
-	type: ImageType | '';
-	maxWidth: number | null;
-	maxHeight: number | null;
-	page: number;
-}
 
 export const imageResolutionParams = ['system', 'type', 'maxWidth', 'maxHeight', 'page'] as const;
 
@@ -33,14 +25,12 @@ export function parseImageResolutionFilter(
 	params: Pick<URLSearchParams, 'get'>
 ): ImageResolutionFilter {
 	const type = params.get('type') ?? '';
-	const page = params.get('page') ?? '';
-	const n = Number(page);
 	return {
 		system: params.get('system') ?? '',
 		type: Object.hasOwn(imageTypeLabels, type) ? (type as ImageType) : '',
 		maxWidth: parseLimit(params.get('maxWidth')),
 		maxHeight: parseLimit(params.get('maxHeight')),
-		page: /^\d+$/.test(page) && n > 1 ? n : 1
+		page: pageParam(params, 'page', 'digits')
 	};
 }
 

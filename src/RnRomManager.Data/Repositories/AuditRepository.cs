@@ -15,7 +15,11 @@ public sealed class AuditRepository(IDbConnectionFactory connections) : IAuditRe
         FROM audit_events a LEFT JOIN games g ON g.id = a.game_id
         """;
 
-    public async Task<Page<AuditItem>> ListAsync(AuditQuery query, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<Page<AuditItem>> ListAsync(
+        AuditQuery query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         var clauses = new List<string>();
         if (query.Action is not null) clauses.Add("a.action = @Action");
@@ -29,12 +33,10 @@ public sealed class AuditRepository(IDbConnectionFactory connections) : IAuditRe
         var args = new { query.Action, query.System, query.User, query.From, query.To,
             pattern = query.Q is null ? null : SqlLike.Contains(query.Q), pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
         await using var connection = connections.Create();
-        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM audit_events a {where}", args, cancellationToken: cancellationToken));
-        var rows = await connection.QueryAsync<AuditItem>(new CommandDefinition($"""
-            {Select} {where} ORDER BY a.occurred_at DESC, a.id DESC LIMIT @pageSize OFFSET @offset
-            """, args, cancellationToken: cancellationToken));
-        return new Page<AuditItem>(rows.AsList(), page, pageSize, total);
+        return await connection.QueryPageAsync<AuditItem>(
+            $"SELECT COUNT(*) FROM audit_events a {where}",
+            $"{Select} {where} ORDER BY a.occurred_at DESC, a.id DESC LIMIT @pageSize OFFSET @offset",
+            args, page, pageSize, cancellationToken);
     }
 
     public async Task<IReadOnlyList<AuditItem>> ListRecentAsync(IReadOnlyList<string> actions, int limit, CancellationToken cancellationToken)

@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using Dapper;
-using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using RnRomManager.Core.Audit;
@@ -25,7 +24,11 @@ public partial class ExternalLibraryTests
     private string Backup => Sidecar + ExternalRomName.RepairBackupSuffix;
     private string Duplicates(string name) => Path.Combine(Ingest, "_duplicates", name);
 
-    private async Task<long> InsertIssueAsync(string type, string zipPath, string entryName, Guid? gameId)
+    private async Task<long> InsertIssueAsync(
+        string type,
+        string zipPath,
+        string entryName,
+        Guid? gameId)
     {
         await using var db = Service<IDbConnectionFactory>().Create();
         return await db.ExecuteScalarAsync<long>("""

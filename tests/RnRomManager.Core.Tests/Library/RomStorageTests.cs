@@ -16,8 +16,7 @@ public class RomStorageTests
     [Test]
     public void EmbeddedHandler_IsEmbedded_NeverPending()
     {
-        var gb = Substitute.For<ISystemHandler>();
-        gb.EmbedRomsInZip.Returns(true);
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         Assert.That(RomStorage.IsEmbedded(gb, Game("gb", (string?)null)), Is.True);
         Assert.That(RomStorage.IsPending(gb, Game("gb", (string?)null)), Is.False);
     }

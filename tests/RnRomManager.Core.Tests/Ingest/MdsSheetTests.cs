@@ -86,7 +86,11 @@ public class MdsSheetTests
 
     private static IEnumerable<TestCaseData> PlayErrors()
     {
-        static TestCaseData Case(string name, byte[] mds, string error, long mdfLength = 3000 * Sector) =>
+        static TestCaseData Case(
+            string name,
+            byte[] mds,
+            string error,
+            long mdfLength = 3000 * Sector) =>
             new TestCaseData(mds, mdfLength, error).SetName(name);
         yield return Case("TwoSessions", Mds([new MdsBlock(1)], sessions: 2), "multi-session .mds images aren't supported");
         yield return Case("Subchannel", Mds([new MdsBlock(1), new MdsBlock(2, Sub: 8, SectorSize: 2448, Offset: Sector)]),

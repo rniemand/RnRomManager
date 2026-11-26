@@ -2,42 +2,6 @@ using System.Security.Cryptography;
 
 namespace RnRomManager.Core.Bundles;
 
-/// <summary>A transfer ticket's state (B7). <see cref="Pending"/> and <see cref="Sending"/> hold the owner's slot.</summary>
-public enum BundleTicketState
-{
-    Pending,
-    Sending,
-    Sent,
-    Failed,
-    Expired,
-}
-
-/// <summary>A ticket's poll answer (B7): <see cref="ErrorCode"/> is set only for <see cref="BundleTicketState.Failed"/>.</summary>
-public sealed record BundleTicketStatus(BundleTicketState State, string? ErrorCode);
-
-public enum BundleTicketIssueStatus
-{
-    Issued,
-    /// <summary>The user already has a pending or sending ticket (409 <c>BundleDownloadBusy</c>).</summary>
-    Busy,
-    /// <summary><see cref="BundleDownloadTickets.MaxActive"/> tickets are pending or sending across all users (503).</summary>
-    Full,
-}
-
-public sealed record BundleTicketIssue(BundleTicketIssueStatus Status, string? Ticket = null);
-
-public enum BundleTicketClaimStatus
-{
-    /// <summary>The ticket moved from pending to sending; the caller now streams it and must call Finish.</summary>
-    Claimed,
-    /// <summary>Unknown, evicted or another user's ticket (404).</summary>
-    NotFound,
-    /// <summary>Already claimed, finished or expired (409).</summary>
-    Consumed,
-}
-
-public sealed record BundleTicketClaim(BundleTicketClaimStatus Status, BundleFileIdentity? Identity = null);
-
 /// <summary>
 /// Short-lived, random, caller-owned transfer tickets (Bundle Creator B7), in memory (one app instance). Each user holds
 /// at most one pending or sending ticket, and at most <see cref="MaxActive"/> are pending or sending in all. A pending
@@ -51,16 +15,6 @@ public sealed class BundleDownloadTickets(TimeProvider time)
     public const int MaxTerminal = 2000;
     public static readonly TimeSpan PendingLifetime = TimeSpan.FromSeconds(30);
     public static readonly TimeSpan TerminalLifetime = TimeSpan.FromMinutes(5);
-
-    private sealed class Ticket(string id, int userId, BundleFileIdentity identity, DateTimeOffset issuedAt)
-    {
-        public string Id { get; } = id;
-        public int UserId { get; } = userId;
-        public BundleFileIdentity Identity { get; } = identity;
-        public DateTimeOffset IssuedAt { get; } = issuedAt;
-        public BundleTicketState State { get; set; } = BundleTicketState.Pending;
-        public string? ErrorCode { get; set; }
-    }
 
     private readonly Lock _lock = new();
     private readonly Dictionary<string, Ticket> _tickets = new(StringComparer.Ordinal);

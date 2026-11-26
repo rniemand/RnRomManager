@@ -44,13 +44,8 @@ public class StorageMigrationJobTests
 
     private string Roms => Path.Combine(_factory.Root, "roms");
 
-    private sealed record Legacy(InfoJsonGame Game, string ZipPath, string Zip, byte[][] Roms, byte[] ZipBytes)
-    {
-        public string Folder => Path.GetDirectoryName(Zip)!;
-    }
-
     /// <summary>A mirrored legacy game with <paramref name="romCount"/> releases, a note on the first and a cover image.</summary>
-    private async Task<Legacy> WriteLegacy(string title, int romCount = 1, Func<InfoJsonGame, InfoJsonGame>? change = null)
+    private async Task<StorageMigrationJobLegacy> WriteLegacy(string title, int romCount = 1, Func<InfoJsonGame, InfoJsonGame>? change = null)
     {
         var bytes = Enumerable.Range(0, romCount).Select(_ => TestLibrary.RomBytes(++_seed)).ToArray();
         var image = new InfoJsonImage
@@ -242,11 +237,6 @@ public class StorageMigrationJobTests
         Assert.That(File.Exists(claimed), Is.True);
     }
 
-    private sealed class FakeFreeSpace(Func<string, long?> free) : IFreeSpace
-    {
-        public long? AvailableBytes(string path) => free(path);
-    }
-
     [TestCase(true, TestName = "ShortSpace_IsInsufficientSpace_AndTheNextGameContinues library volume")]
     [TestCase(false, TestName = "ShortSpace_IsInsufficientSpace_AndTheNextGameContinues cache volume")]
     public async Task ShortSpace_IsInsufficientSpace_AndTheNextGameContinues(bool library)
@@ -337,7 +327,7 @@ public class StorageMigrationJobTests
         (await Service<IRomRepository>().ListByGameAsync(gameId, default)).All(r => r.ExternalFileName is null);
 
     /// <summary>A legacy game moved beside its ZIP by a first run, then its system switched to embed.</summary>
-    private async Task<(Legacy Game, string[] Files)> WriteExternalThenEmbed(string title, int romCount = 1)
+    private async Task<(StorageMigrationJobLegacy Game, string[] Files)> WriteExternalThenEmbed(string title, int romCount = 1)
     {
         var legacy = await WriteLegacy(title, romCount);
         await RunAsync(Job(), Guid.NewGuid());
@@ -481,19 +471,13 @@ public class StorageMigrationJobTests
         Assert.That(await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM audit_events WHERE action = 'RomStorageChanged'"), Is.Zero);
     }
 
-    private sealed class FailingMirror(ILibraryMirror inner) : ILibraryMirror
-    {
-        public Task ApplyAsync(IReadOnlyList<MirrorEntry> replace, IReadOnlyCollection<Guid> delete, CancellationToken cancellationToken) =>
-            replace.Count > 0 ? throw new InvalidOperationException("db down") : inner.ApplyAsync(replace, delete, cancellationToken);
-    }
-
     /// <summary>B8: a mirror failure after the publish deletes no file; the resume re-mirrors the game and it leaves the query.</summary>
     [Test]
     public async Task IntoZip_MirrorFailure_KeepsTheFiles_AndTheResumeReMirrors()
     {
         var (legacy, files) = await WriteExternalThenEmbed("Alpha");
         var failing = ActivatorUtilities.CreateInstance<StorageMigrationJob>(_factory.Services,
-            (ILibraryMirror)new FailingMirror(Service<ILibraryMirror>()));
+            (ILibraryMirror)new StorageMigrationJobFailingMirror(Service<ILibraryMirror>()));
         var first = Guid.NewGuid();
 
         await RunAsync(failing, first);

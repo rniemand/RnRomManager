@@ -24,7 +24,11 @@ public sealed class LibraryZip : IDisposable
 
     private readonly ZipArchive _archive;
 
-    private LibraryZip(string path, ZipArchive archive, InfoJsonReadResult? infoJson, ExternalFileSnapshot? snapshot)
+    private LibraryZip(
+        string path,
+        ZipArchive archive,
+        InfoJsonReadResult? infoJson,
+        ExternalFileSnapshot? snapshot)
     {
         Path = path;
         Snapshot = snapshot;
@@ -68,7 +72,11 @@ public sealed class LibraryZip : IDisposable
     /// <param name="path">Where the stream was opened; kept as <see cref="Path"/>, never opened again.</param>
     /// <param name="snapshot">The checked open's snapshot of the file, when the caller has one.</param>
     /// <exception cref="InvalidDataException">Not a readable ZIP (<c>ZipUnreadable</c>).</exception>
-    public static LibraryZip Open(Stream file, string path, InfoJsonReader reader, ExternalFileSnapshot? snapshot = null)
+    public static LibraryZip Open(
+        Stream file,
+        string path,
+        InfoJsonReader reader,
+        ExternalFileSnapshot? snapshot = null)
     {
         ZipArchive archive;
         try

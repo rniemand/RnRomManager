@@ -33,7 +33,7 @@ public static class NeoGeoPocketHeaderReader
             : null;
         var mode = rom[0x23];
         var colour = mode == ColourMode;
-        var title = ReadTitle(rom[0x24..0x30]);
+        var title = HeaderText.ReadAscii(rom[0x24..0x30], trimStart: false);
 
         var fields = new Dictionary<string, object?>
         {
@@ -47,14 +47,5 @@ public static class NeoGeoPocketHeaderReader
         };
 
         return new RomHeader(colour ? NeoGeoPocketColorId : NeoGeoPocketId, title, licence is not null, fields);
-    }
-
-    /// <summary>ASCII up to the first NUL, non-printable → <c>?</c>, trailing spaces trimmed; null when nothing is left.</summary>
-    private static string? ReadTitle(ReadOnlySpan<byte> area)
-    {
-        var end = area.IndexOf((byte)0);
-        var chars = (end < 0 ? area : area[..end]).ToArray().Select(b => b is >= 0x20 and <= 0x7E ? (char)b : '?').ToArray();
-        var title = new string(chars).TrimEnd(' ');
-        return title.Length > 0 ? title : null;
     }
 }

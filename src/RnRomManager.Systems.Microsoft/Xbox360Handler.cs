@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.Microsoft;
 /// </summary>
 public sealed class Xbox360Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.x360.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(Xbox360Handler), "boxart.x360.png");
 
     public string Id => "x360";
     public string DisplayName => "Xbox 360";

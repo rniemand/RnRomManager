@@ -1,36 +1,10 @@
-import type { Role } from './api/types';
+import type { EditableHotkeyId, Bindings, HotkeyAction } from '#lib/types/index.js';
 
 /**
  * B21–B22 hotkey actions and binding rules. Mirrors `RnRomManager.Core/Users/Hotkeys.cs`; keep both in step (the
  * parity cases in `hotkeys.test.ts` match `HotkeysTests.cs`). A binding's canonical form is
  * `Ctrl+Alt+Shift+Meta+<Key>` (modifiers in that order), `<Key>` being `A`–`Z`, `0`–`9` or `F1`–`F12`.
  */
-
-export type HotkeyId =
-	| 'search'
-	| 'nav.library'
-	| 'nav.collections'
-	| 'nav.ingestion'
-	| 'nav.review'
-	| 'review.next'
-	| 'nav.reports'
-	| 'nav.integrity'
-	| 'nav.admin'
-	| 'nav.deleted'
-	| 'reports.missingImage.next'
-	| 'reports.missingMetadata.next'
-	| 'reports.missingIgdbId.next';
-export type EditableHotkeyId = Exclude<HotkeyId, 'search'>;
-export type Bindings = Record<EditableHotkeyId, string | null>;
-
-export interface HotkeyAction {
-	id: HotkeyId;
-	name: string;
-	defaults: string[];
-	editable: boolean;
-	/** null = every signed-in user. */
-	role: Role | null;
-}
 
 /** B21's table, in its order (which also decides which of two duplicates fires). */
 export const actions: readonly HotkeyAction[] = [

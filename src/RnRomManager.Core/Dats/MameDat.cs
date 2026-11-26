@@ -4,13 +4,6 @@ using System.Xml.Linq;
 
 namespace RnRomManager.Core.Dats;
 
-/// <summary>Arcade D2: one ROM of a MAME set. <see cref="Crc32"/> is lower-case hex; null only for a nodump ROM.</summary>
-public sealed record MameRom(string Name, long Size, string? Crc32, string? Merge, string? Bios, bool NoDump);
-
-/// <summary>Arcade D2: one <c>&lt;game&gt;</c> (or <c>&lt;machine&gt;</c>) of a MAME <c>-listxml</c> DAT.</summary>
-public sealed record MameSet(
-    string Name, string Description, string? Year, string? Manufacturer, string? CloneOf, string? RomOf, bool IsBios, IReadOnlyList<MameRom> Roms);
-
 /// <summary>Arcade D2: a MAME <c>-listxml</c> DAT, sets in file order.</summary>
 public sealed record MameDat(IReadOnlyList<MameSet> Sets)
 {

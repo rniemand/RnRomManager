@@ -12,7 +12,7 @@ public sealed class FbneoHandler : ISystemHandler
     /// <summary>S1: the FBNeo store's <c>DatName</c>; also the libretro-thumbnails folder (G6).</summary>
     public const string FbneoDatName = "FBNeo - Arcade Games";
 
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.fbneo.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(FbneoHandler), "boxart.fbneo.png");
 
     public string Id => "fbneo";
     public string DisplayName => "Arcade (FinalBurn Neo)";

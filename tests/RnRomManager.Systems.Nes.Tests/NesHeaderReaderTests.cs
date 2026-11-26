@@ -4,7 +4,15 @@ namespace RnRomManager.Systems.Nes.Tests;
 public class NesHeaderReaderTests
 {
     /// <summary>A 16-byte header with the magic and the given bytes 4–15, followed by <paramref name="body"/> zero bytes.</summary>
-    private static byte[] Header(byte b4 = 2, byte b5 = 1, byte b6 = 0, byte b7 = 0, byte b8 = 0, byte b9 = 0, byte b12 = 0, int body = 0)
+    private static byte[] Header(
+        byte b4 = 2,
+        byte b5 = 1,
+        byte b6 = 0,
+        byte b7 = 0,
+        byte b8 = 0,
+        byte b9 = 0,
+        byte b12 = 0,
+        int body = 0)
     {
         var rom = new byte[16 + body];
         "NES\x1A"u8.CopyTo(rom);
@@ -50,7 +58,11 @@ public class NesHeaderReaderTests
     [TestCase((byte)0x10, (byte)0x40, (byte)0x0F, 0x41, TestName = "iNES ignores byte 8")]
     [TestCase((byte)0x10, (byte)0x48, (byte)0x02, 0x241, TestName = "NES 2.0 mapper adds byte 8")]
     [TestCase((byte)0x10, (byte)0x48, (byte)0x00, 0x41, TestName = "NES 2.0 mapper with byte 8 zero")]
-    public void Mapper(byte b6, byte b7, byte b8, int mapper) =>
+    public void Mapper(
+        byte b6,
+        byte b7,
+        byte b8,
+        int mapper) =>
         Assert.That(Field(Header(b6: b6, b7: b7, b8: b8), "mapper"), Is.EqualTo(mapper));
 
     [Test]

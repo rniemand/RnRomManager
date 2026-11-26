@@ -1,30 +1,9 @@
+import type { LibraryFilters, QueryScope } from '#lib/types/index.js';
+import type { SortDir, LibrarySort } from '#lib/enums/index.js';
+import { parseDir } from '#lib/sort.js';
+import { pageParam } from '#lib/urlState.js';
+
 /** Library filters (spec §11 Library row) ↔ the page URL query ↔ the `GET /api/games` query (§23). */
-
-export type LibrarySort = 'title' | 'year' | 'added' | 'rating';
-export type SortDir = 'asc' | 'desc';
-
-export interface LibraryFilters {
-	system: string | null;
-	/** `#` or `A`–`Z`; null = All. */
-	letter: string | null;
-	region: string | null;
-	/** Trimmed, ≥ 2 chars, or `''`. */
-	q: string;
-	sort: LibrarySort;
-	/** null = the sort's default (§23: asc for title/year, desc for added and rating). */
-	dir: SortDir | null;
-	/** Only favourites (`?favourite=true`). */
-	favourite: boolean;
-	page: number;
-}
-
-/**
- * B24: a collection's page uses the same filters without letter and region, defaulting to added-to-collection
- * newest first; its API calls carry `collection`.
- */
-export interface QueryScope {
-	collection: string;
-}
 
 export const libraryPageSize = 48;
 
@@ -52,7 +31,6 @@ export function parseFilters(
 	const letter = params.get('letter')?.toUpperCase() ?? null;
 	const sort = params.get('sort');
 	const dir = params.get('dir');
-	const page = Number(params.get('page'));
 	return {
 		system: params.get('system') || null,
 		letter: !scope && letter && letters.includes(letter) ? letter : null,
@@ -62,9 +40,9 @@ export function parseFilters(
 			sort === 'title' || sort === 'year' || sort === 'added' || sort === 'rating'
 				? sort
 				: defaultSort(scope),
-		dir: dir === 'asc' || dir === 'desc' ? dir : null,
+		dir: parseDir(dir, null),
 		favourite: params.get('favourite') === 'true',
-		page: Number.isInteger(page) && page > 1 ? page : 1
+		page: pageParam(params, 'page', 'integer')
 	};
 }
 
@@ -99,9 +77,6 @@ export function gamesApiUrl(filters: LibraryFilters, scope?: QueryScope): string
 export function facetsApiUrl(filters: LibraryFilters): string {
 	return `/api/games/facets${toSearch({ ...filters, sort: 'title', dir: null, page: 1 })}`;
 }
-
-/** Facet counts by option key; null while loading or after a failed call. */
-export type FacetCounts = Record<string, number> | null;
 
 export function hasFilters(filters: LibraryFilters): boolean {
 	return !!(filters.system || filters.letter || filters.region || filters.q || filters.favourite);

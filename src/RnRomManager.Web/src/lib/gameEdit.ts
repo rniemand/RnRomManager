@@ -1,29 +1,13 @@
 /** Edit-metadata form (spec §11 Admin, §23 `PATCH /api/games/{id}` rules), checked client-side; the API checks again. */
-import type { GameDetail, IgdbMatch } from './api/types';
-
-export interface GameEditForm {
-	title: string;
-	releaseYear: string;
-	/** One item per line. */
-	developers: string;
-	publishers: string;
-	genres: string;
-	description: string;
-	/** null = not linked, 0 = Not on IGDB, else the IGDB game id. */
-	igdbId: number | null;
-}
-
-export type GameEditErrors = Partial<Record<keyof GameEditForm, string>>;
-
-export interface GamePatch {
-	title: string;
-	releaseYear: number | null;
-	developers: string[];
-	publishers: string[];
-	genres: string[];
-	description: string | null;
-	igdbId: number | null;
-}
+import type {
+	GameDetail,
+	IgdbMatch,
+	GameEditForm,
+	GameEditErrors,
+	GamePatch,
+	CopyField,
+	CopyState
+} from '#lib/types/index.js';
 
 const listRule = 'At most 20 items of 1–255 characters each.';
 
@@ -89,10 +73,6 @@ export const copyFields = [
 	'genres',
 	'description'
 ] as const;
-
-export type CopyField = (typeof copyFields)[number];
-
-export type CopyState = Record<CopyField, { disabled: boolean; checked: boolean }>;
 
 const listFields = ['developers', 'publishers', 'genres'] as const;
 

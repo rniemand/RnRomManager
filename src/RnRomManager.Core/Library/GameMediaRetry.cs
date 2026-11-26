@@ -3,7 +3,6 @@ using Microsoft.Extensions.Options;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Media;
-using RnRomManager.Core.Naming;
 using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
@@ -16,14 +15,27 @@ namespace RnRomManager.Core.Library;
 /// the placeholder, a found snap is added. The game is rewritten (atomic ZIP + DB, §6.1/§14.2) only when that changes
 /// something. The caller holds the job lock.
 /// </summary>
-public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader, ISystemRegistry systems, MediaService media,
-    IOptions<PathsOptions> paths, IAuditLog audit, TimeProvider time, ILogger<GameMediaRetry> logger, IRomStorageSettings? zipSettings = null)
+public sealed class GameMediaRetry(
+    ILibraryMirror mirror,
+    InfoJsonReader reader,
+    ISystemRegistry systems,
+    MediaService media,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    TimeProvider time,
+    ILogger<GameMediaRetry> logger,
+    IRomStorageSettings? zipSettings = null)
 {
     /// <summary>Z4: a writer at the game's system ZIP compression level.</summary>
     private LibraryZipWriter Writer(string systemId) => new(reader, zipSettings?.Compression(systemId) ?? ZipCompression.Med);
     /// <param name="skipManualOnly">The <c>MediaRetry</c> job skips games where every release is <c>Manual</c> (D38).</param>
     /// <param name="actor">AU4: <c>MediaFetched</c> is recorded once the ZIP is written (also when the DB update then fails).</param>
-    public async Task<MediaRetryResult> RetryAsync(GameRow row, CircuitBreaker breaker, bool skipManualOnly, AuditActor actor, CancellationToken ct)
+    public async Task<MediaRetryResult> RetryAsync(
+        GameRow row,
+        CircuitBreaker breaker,
+        bool skipManualOnly,
+        AuditActor actor,
+        CancellationToken ct)
     {
         var target = LibraryTarget.OpenForWrite(paths.Value.Roms, row.ZipPath, reader, systems, row.Id, row.SystemId);
         if (target.Code is not null)

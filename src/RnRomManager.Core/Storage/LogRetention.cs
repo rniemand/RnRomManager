@@ -10,7 +10,11 @@ namespace RnRomManager.Core.Storage;
 /// <c>Logging:RetentionDays</c> days before today (one file per UTC day, so the name carries the age). A file whose
 /// name has no date falls back to its last write time. Run at startup and daily at 00:05 UTC by the scheduler.
 /// </summary>
-public sealed class LogRetention(IOptions<PathsOptions> paths, IOptions<LoggingOptions> logging, TimeProvider time, ILogger<LogRetention> logger)
+public sealed class LogRetention(
+    IOptions<PathsOptions> paths,
+    IOptions<LoggingOptions> logging,
+    TimeProvider time,
+    ILogger<LogRetention> logger)
 {
     public const string FilePattern = "rnrommanager-*.log";
     private const string Prefix = "rnrommanager-";

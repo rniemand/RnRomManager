@@ -5,7 +5,7 @@ namespace RnRomManager.Core.Collections;
 
 /// <summary>
 /// Collection rules (B2–B5, B4a, B8, B10–B11, B13–B14). Every call is scoped to <c>userId</c>: another user's
-/// collection is <see cref="CollectionResult.Failure.NotFound"/>. Never takes the job lock (B12).
+/// collection is <see cref="CollectionResultFailure.NotFound"/>. Never takes the job lock (B12).
 /// </summary>
 public sealed class CollectionService(ICollectionRepository repository, CollectionCovers covers, TimeProvider time)
 {
@@ -16,7 +16,11 @@ public sealed class CollectionService(ICollectionRepository repository, Collecti
     public Task<Collection?> GetAsync(Guid id, int userId, CancellationToken cancellationToken) =>
         repository.GetAsync(id, userId, cancellationToken);
 
-    public async Task<CollectionResult> CreateAsync(int userId, string? name, string? notes, CancellationToken cancellationToken)
+    public async Task<CollectionResult> CreateAsync(
+        int userId,
+        string? name,
+        string? notes,
+        CancellationToken cancellationToken)
     {
         if (ValidateName(ref name) is { } nameError)
             return CollectionResult.Invalid("name", nameError);
@@ -31,13 +35,17 @@ public sealed class CollectionService(ICollectionRepository repository, Collecti
         }
         catch (CollectionNameTakenException)
         {
-            return CollectionResult.Fail(CollectionResult.Failure.NameTaken);
+            return CollectionResult.Fail(CollectionResultFailure.NameTaken);
         }
 
         return CollectionResult.Ok(collection);
     }
 
-    public async Task<CollectionResult> UpdateAsync(Guid id, int userId, CollectionPatch patch, CancellationToken cancellationToken)
+    public async Task<CollectionResult> UpdateAsync(
+        Guid id,
+        int userId,
+        CollectionPatch patch,
+        CancellationToken cancellationToken)
     {
         var name = patch.Name;
         var notes = patch.Notes;
@@ -58,7 +66,7 @@ public sealed class CollectionService(ICollectionRepository repository, Collecti
         }
         catch (CollectionNameTakenException)
         {
-            return CollectionResult.Fail(CollectionResult.Failure.NameTaken);
+            return CollectionResult.Fail(CollectionResultFailure.NameTaken);
         }
     }
 
@@ -72,7 +80,11 @@ public sealed class CollectionService(ICollectionRepository repository, Collecti
     }
 
     /// <summary>B8, B10: replaces the cover with a PNG/JPEG whose dimensions can be read.</summary>
-    public async Task<CollectionResult> SetCoverAsync(Guid id, int userId, byte[] bytes, CancellationToken cancellationToken)
+    public async Task<CollectionResult> SetCoverAsync(
+        Guid id,
+        int userId,
+        byte[] bytes,
+        CancellationToken cancellationToken)
     {
         if (ImageFormats.Detect(bytes) is null)
             return CollectionResult.Invalid("file", "The image must be a PNG or JPEG.");
@@ -130,7 +142,11 @@ public sealed class CollectionService(ICollectionRepository repository, Collecti
     }
 
     /// <summary>B13: 1–<see cref="MaxGameIds"/> ids; unknown games are skipped.</summary>
-    public async Task<CollectionResult> AddGamesAsync(Guid id, int userId, IReadOnlyCollection<Guid>? gameIds, CancellationToken cancellationToken)
+    public async Task<CollectionResult> AddGamesAsync(
+        Guid id,
+        int userId,
+        IReadOnlyCollection<Guid>? gameIds,
+        CancellationToken cancellationToken)
     {
         if (gameIds is null || gameIds.Count is 0 or > MaxGameIds)
             return CollectionResult.Invalid("gameIds", $"Give between 1 and {MaxGameIds} game ids.");
@@ -145,7 +161,11 @@ public sealed class CollectionService(ICollectionRepository repository, Collecti
     }
 
     /// <summary>B14: removing a non-member succeeds too.</summary>
-    public async Task<CollectionResult> RemoveGameAsync(Guid id, int userId, Guid gameId, CancellationToken cancellationToken)
+    public async Task<CollectionResult> RemoveGameAsync(
+        Guid id,
+        int userId,
+        Guid gameId,
+        CancellationToken cancellationToken)
     {
         if (await repository.GetAsync(id, userId, cancellationToken) is not { } collection)
             return CollectionResult.NotFound;

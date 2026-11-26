@@ -1,12 +1,13 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
+	import PullCoverImagesModal from '#lib/components/modals/PullCoverImagesModal.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { AdminActions } from '#lib/api/types.js';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import type { AdminActions } from '#lib/types/index.js';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatCount, formatDateTime } from '#lib/format.js';
 	import { jobLabel } from '#lib/jobs.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
@@ -89,11 +90,8 @@
 						{plural(counts.coversPending, 'game to process', 'games to process')}
 					</p>
 					<div class="mt-auto">
-						<button
-							type="button"
-							class="btn btn-primary"
-							{disabled}
-							onclick={() => (confirmOpen = true)}>Pull Cover Images</button
+						<Button variant="primary" {disabled} onclick={() => (confirmOpen = true)}
+							>Pull Cover Images</Button
 						>
 					</div>
 				</div>
@@ -110,12 +108,11 @@
 							: 'never refreshed'}
 					</p>
 					<div class="mt-auto">
-						<button
-							type="button"
-							class="btn btn-primary"
+						<Button
+							variant="primary"
 							{disabled}
 							onclick={() => void start('IgdbSync', '/api/jobs/igdb-sync')}
-							>Refresh IGDB Ratings</button
+							>Refresh IGDB Ratings</Button
 						>
 					</div>
 				</div>
@@ -124,18 +121,8 @@
 	</div>
 {/if}
 
-<ConfirmModal
+<PullCoverImagesModal
 	bind:open={confirmOpen}
-	title="Pull Cover Images"
-	confirmLabel="Pull Cover Images"
+	count={counts?.coversPending ?? 0}
 	onconfirm={confirmPull}
->
-	<p class="mb-0">
-		{#if counts?.coversPending === 1}
-			This replaces the cover of 1 game with its IGDB cover, including covers you uploaded.
-		{:else}
-			This replaces the cover of {formatCount(counts?.coversPending ?? 0)} games with their IGDB cover,
-			including covers you uploaded.
-		{/if}
-	</p>
-</ConfirmModal>
+/>

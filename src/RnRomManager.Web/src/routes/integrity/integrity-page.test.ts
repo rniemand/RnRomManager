@@ -5,10 +5,6 @@ import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs } from '#lib/stores/jobs.svelte.js';
 import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
-
 const { default: IntegrityPage } = await import('./+page.svelte');
 
 const run = (id: string, type: string, mode: string | null, startedAt: string) => ({

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { createRawSnippet, flushSync } from 'svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { ActivityAuditItem, ActivityReport } from '#lib/api/types.js';
+import type { ActivityAuditItem, ActivityReport } from '#lib/types/index.js';
 import { formatDateTime } from '#lib/format.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
@@ -13,9 +13,6 @@ vi.mock('$app/state', () => ({
 			return testUrl.current;
 		}
 	}
-}));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
 
 const { default: ActivityPage } = await import('./activity/+page.svelte');

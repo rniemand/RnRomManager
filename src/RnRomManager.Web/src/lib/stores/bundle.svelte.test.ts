@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetClient } from '../api/client';
-import type { BundleEntry, Me } from '../api/types';
+import { resetClient } from '#lib/api/client.js';
+import type { BundleEntry, Me } from '#lib/types/index.js';
 import { bundle, cartStorageKey, cleanEntries, entryKey, maxBundleEntries } from './bundle.svelte';
 
 const alice: Me = { id: 7, username: 'alice', roles: [], mustChangePassword: false };

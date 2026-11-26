@@ -11,10 +11,10 @@ Short playbooks for the changes this repo gets most often: where each change mus
 
 ## API endpoint
 - Add it to `src/RnRomManager.Api/Endpoints/<Area>Endpoints.cs`, on the area's `MapGroup`. Admin-only routes use `.RequireAuthorization(AuthSetup.AdminOnly)`, on the group or on the route.
-- Errors are ProblemDetails from `Problems`: `Validation(ctx, errors)` (400, keyed by field), `NotFound`, `Forbidden`, or `Create(ctx, status, code, title)` for a coded error. A busy job lock → `DatEndpoints.JobRunning(ctx)` (409 `JobRunning`).
+- Errors are ProblemDetails from `Problems`: `Validation(ctx, errors)` (400, keyed by field), `NotFound`, `Forbidden`, or `Create(ctx, status, code, title)` for a coded error. A busy job lock → `JobStart.Running(ctx)` (or `JobStart.StartManualAsync(runner, job, ctx, ct)` to start a job by hand) (409 `JobRunning`).
 - A JSON body that needs exact type checks is read as `JsonElement`, as in `PUT /api/admin/rom-storage/{systemId}`.
 - Tests: `tests/RnRomManager.Api.Tests/Integration/<Area>EndpointsTests.cs` (Testcontainers, so Docker must be running), plus a row in `EndpointRoleMatrixTests` for every new route.
-- SPA: add the response type to `lib/api/types.ts` and call it through `lib/api/client.ts`.
+- SPA: add the response type to `lib/types/<Name>.ts` and `lib/types/index.ts`, and call it through `lib/api/client.ts`.
 
 ## Persisted setting
 - Store it in `app_settings` through `ISettingsRepository`. No migration needed; keys are at most 64 characters. `GetAsync` takes exact names; there is no prefix query.
@@ -40,7 +40,7 @@ Short playbooks for the changes this repo gets most often: where each change mus
 ## Report
 - Query: a method on `Core/Reports/IReportRepository.cs`, implemented in `Data/Repositories/ReportRepository.cs` (Dapper). Copy `ListMultipleReleasesAsync` for a sortable, paged list and `ListMissingImagesAsync` / `NextMissingImageAsync` for a list plus a "next" lookup.
 - Endpoint: `Endpoints/ReportEndpoints.cs` (group `/api/reports`; Admin-only reports add `AdminOnly`, like Activity).
-- Page: `routes/reports/<name>/+page.svelte`, with filters, sort and page held in URL state (copy `multiple-releases`). Add a tab in `routes/reports/+layout.svelte` (with its icon in `lib/components/icons.ts`) and wrap an Admin-only page in `AdminOnly`.
+- Page: `routes/reports/<name>/+page.svelte`, with filters, sort and page held in URL state (copy `multiple-releases`). Add a tab in `routes/reports/+layout.svelte` (with its icon in `lib/icons/icons.ts`) and wrap an Admin-only page in `AdminOnly`.
 - Tests: `tests/RnRomManager.Data.Tests/Database/<Name>QueryTests.cs`, `ReportEndpointsTests`, `routes/reports/reports-pages.test.ts`.
 
 ## Admin tab
@@ -53,8 +53,8 @@ Short playbooks for the changes this repo gets most often: where each change mus
 
 ## SPA conventions
 - Numbers: `formatCount` from `lib/format.ts` ("1,234"). Sizes: the `FileSize` component.
-- Icons: `<Icon name=...>`, with the names mapped to Bootstrap Icons classes in `lib/components/icons.ts`. Font Awesome is used for brands only.
-- Confirmations: `ConfirmModal`. Toasts: the `toasts` store (`toasts.jobRunning(err)` handles 409 `JobRunning`). Errors: `ErrorAlert`. Admin gating: `AdminOnly`.
+- Icons: `<Icon name=...>`, with the names mapped to Bootstrap Icons classes in `lib/icons/icons.ts`. Font Awesome is used for brands only.
+- Confirmations: `ConfirmModal` (a title and one plain-text message); anything richer is a `modals/<Name>Modal.svelte` built on `BaseModal`. Toasts: the `toasts` store (`toasts.jobRunning(err)` handles 409 `JobRunning`). Errors: `ErrorAlert`. Admin gating: `AdminOnly`.
 - Watching a job from a page: call `jobs.watch()` and `jobs.onEnded` on mount; disable action buttons while `jobs.current` is set.
 - Tests sit next to their source as `*.test.ts` (rune stores: `*.svelte.test.ts`). Run them with `npx vitest run <files>`, plus `npm run lint` and `npm run check`, all in `src/RnRomManager.Web`.
 

@@ -23,7 +23,12 @@ public class ImageResolutionsQueryTests
         _reports = new ReportRepository(_factory);
     }
 
-    private static InfoJsonImage Image(string fileName, ImageType type, int width, int height, bool isDefault = false) => new()
+    private static InfoJsonImage Image(
+        string fileName,
+        ImageType type,
+        int width,
+        int height,
+        bool isDefault = false) => new()
     {
         FileName = fileName, Type = type, Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceUpload, SourceUrl = null,
         IsDefault = isDefault, IsCover = false, SizeBytes = width * 10L, Sha1 = new string('c', 40), Width = width, Height = height, DateAdded = When,

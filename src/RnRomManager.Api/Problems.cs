@@ -6,13 +6,22 @@ namespace RnRomManager.Api;
 public static class Problems
 {
     /// <param name="extensions">Extra members (e.g. RP8's <c>merged</c>), added next to <c>code</c> and <c>traceId</c>.</param>
-    public static IResult Create(HttpContext ctx, int status, string code, string title,
-        IReadOnlyDictionary<string, object?>? extensions = null, string? detail = null) =>
+    public static IResult Create(
+        HttpContext ctx,
+        int status,
+        string code,
+        string title,
+        IReadOnlyDictionary<string, object?>? extensions = null,
+        string? detail = null) =>
         Results.Problem(statusCode: status, title: title, detail: detail, extensions: Extensions(ctx, code, extensions));
 
     public static IResult Validation(HttpContext ctx, IDictionary<string, string[]> errors,
         IReadOnlyDictionary<string, object?>? extensions = null) =>
         Results.ValidationProblem(errors, extensions: Extensions(ctx, "ValidationFailed", extensions));
+
+    /// <summary>A validation problem with one error message for one field.</summary>
+    public static IResult Validation(HttpContext ctx, string field, string message) =>
+        Validation(ctx, new Dictionary<string, string[]> { [field] = [message] });
 
     private static Dictionary<string, object?> Extensions(HttpContext ctx, string code, IReadOnlyDictionary<string, object?>? extra)
     {

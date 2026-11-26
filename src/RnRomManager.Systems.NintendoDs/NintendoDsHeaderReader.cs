@@ -21,13 +21,13 @@ public static class NintendoDsHeaderReader
         if (rom.Length < HeaderEnd)
             return null;
 
-        var title = ReadTitle(rom[..12]);
+        var title = HeaderText.ReadAscii(rom[..12], trimStart: false);
         var headerChecksumValid = HeaderCrc(rom[..HeaderCrcOffset]) == (rom[HeaderCrcOffset] | rom[HeaderCrcOffset + 1] << 8);
         var fields = new Dictionary<string, object?>
         {
             ["title"] = title,
-            ["gameCode"] = Text(rom.Slice(0x0C, 4)),
-            ["makerCode"] = Text(rom.Slice(0x10, 2)),
+            ["gameCode"] = HeaderText.Printable(rom.Slice(0x0C, 4)),
+            ["makerCode"] = HeaderText.Printable(rom.Slice(0x10, 2)),
             ["unitCode"] = (int)rom[0x12],
             ["romVersion"] = (int)rom[0x1E],
             ["headerChecksumValid"] = headerChecksumValid,
@@ -46,22 +46,5 @@ public static class NintendoDsHeaderReader
                 crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xA001 : crc >> 1;
         }
         return (ushort)crc;
-    }
-
-    /// <summary>Up to the first NUL, trailing spaces trimmed; null when nothing is left.</summary>
-    private static string? ReadTitle(ReadOnlySpan<byte> area)
-    {
-        var end = area.IndexOf((byte)0);
-        var title = Text(end < 0 ? area : area[..end]).TrimEnd(' ');
-        return title.Length > 0 ? title : null;
-    }
-
-    /// <summary>Bytes 0x20–0x7E kept; every other byte becomes <c>?</c>.</summary>
-    private static string Text(ReadOnlySpan<byte> area)
-    {
-        var chars = new char[area.Length];
-        for (var i = 0; i < area.Length; i++)
-            chars[i] = area[i] is >= 0x20 and <= 0x7E ? (char)area[i] : '?';
-        return new string(chars);
     }
 }

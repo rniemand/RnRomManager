@@ -51,8 +51,13 @@ public partial class DatRefreshJobTests
         new(new HttpClient(server), new SourcesOptions { DatBaseUrl = BaseUrl + "/", TitleDbUrl = TitleDbUrl }, _paths, _cache, _systems, _audit,
             time ?? TimeProvider.System, NullLogger<DatRefreshJob>.Instance) { PublicationHooks = hooks };
 
-    private Task<object?> RunTitleDbAsync(StubHttpHandler server, JobProgress? progress = null, CancellationToken ct = default, TimeProvider? time = null,
-        DatPublicationHooks? hooks = null, Guid? id = null) =>
+    private Task<object?> RunTitleDbAsync(
+        StubHttpHandler server,
+        JobProgress? progress = null,
+        CancellationToken ct = default,
+        TimeProvider? time = null,
+        DatPublicationHooks? hooks = null,
+        Guid? id = null) =>
         TitleDbJob(server, time, hooks).RunAsync(new JobContext(id ?? Guid.NewGuid(), progress ?? new JobProgress()), ct);
 
     private static int Files(object? result) => (int)result!.GetType().GetProperty("files")!.GetValue(result)!;
@@ -221,52 +226,5 @@ public partial class DatRefreshJobTests
         Assert.That(Directory.Exists(Path.Combine(_paths.Cache, CrashRecovery.WorkFolder)), Is.False, "no folder made");
         _audit.DidNotReceiveWithAnyArgs().Record(default!);
         AssertStillV1();
-    }
-
-    private sealed class SteppingClock(DateTimeOffset start) : TimeProvider
-    {
-        private long _readings;
-
-        public override DateTimeOffset GetUtcNow() => start.AddSeconds(Interlocked.Increment(ref _readings));
-    }
-
-    /// <summary>A body without a length, served in two chunks; honours the read's token.</summary>
-    private sealed class Chunks(byte[] data, Action? afterFirstChunk = null) : Stream
-    {
-        private int _position;
-
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-        public override long Position { get => _position; set => throw new NotSupportedException(); }
-
-        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
-
-        public override int Read(Span<byte> buffer)
-        {
-            var half = Math.Max(1, data.Length / 2);
-            var n = Math.Min(buffer.Length, Math.Min(data.Length - _position, _position == 0 ? half : data.Length));
-            data.AsSpan(_position, n).CopyTo(buffer);
-            var first = _position == 0;
-            _position += n;
-            if (first)
-                afterFirstChunk?.Invoke();
-            return n;
-        }
-
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return ValueTask.FromResult(Read(buffer.Span));
-        }
-
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
-            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
-
-        public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

@@ -9,16 +9,16 @@
 		Job,
 		Page,
 		SystemInfo
-	} from '#lib/api/types.js';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	} from '#lib/types/index.js';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatDateTime, formatDuration } from '#lib/format.js';
 	import { jobLabel, statusClass } from '#lib/jobs.js';
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
 	/** B20: the extra columns of an audit section, after Time and User. */
@@ -301,22 +301,17 @@
 		days.
 	</p>
 
-	<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
-		{#each tabs as [key, title] (key)}
-			<li class="nav-item" role="presentation">
-				<button
-					type="button"
-					class="nav-link"
-					class:active={selected === key}
-					id="activity-{key}"
-					role="tab"
-					aria-selected={selected === key}
-					aria-controls="activity-{key}-panel"
-					onclick={() => (selected = key)}>{title}</button
-				>
-			</li>
-		{/each}
-	</ul>
+	<NavTabs
+		tabs={tabs.map(([key, title]) => ({
+			id: key,
+			label: title,
+			tabId: `activity-${key}`,
+			controls: `activity-${key}-panel`
+		}))}
+		active={selected}
+		onselect={(key) => (selected = key)}
+		class="mb-3"
+	/>
 
 	{@render section('added', 'Added ROMs', addedBody)}
 

@@ -7,7 +7,11 @@ public class GameImagesTests
 {
     private static readonly DateTimeOffset When = new(2026, 11, 6, 12, 0, 0, TimeSpan.Zero);
 
-    private static InfoJsonImage Image(string name, ImageType type, string source = InfoJsonImage.SourceLibretro, bool cover = false) => new()
+    private static InfoJsonImage Image(
+        string name,
+        ImageType type,
+        string source = InfoJsonImage.SourceLibretro,
+        bool cover = false) => new()
     {
         FileName = name, Type = type, Source = source, IsDefault = source == InfoJsonImage.SourceDefault, IsCover = cover,
         SizeBytes = 1, Sha1 = new string('a', 40), Width = 1, Height = 1, DateAdded = When,

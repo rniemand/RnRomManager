@@ -33,7 +33,12 @@ public partial class DiscoveryRepositoryTests
     }
 
     /// <summary>Inserts a game whose arrays are raw JSON, so tests can store anything MariaDB accepts.</summary>
-    private async Task<Guid> InsertGameAsync(string system, string title, string publishers = "[]", string genres = "[]", string developers = "[]")
+    private async Task<Guid> InsertGameAsync(
+        string system,
+        string title,
+        string publishers = "[]",
+        string genres = "[]",
+        string developers = "[]")
     {
         var id = Guid.NewGuid();
         await using var connection = new MySqlConnection(_cs);

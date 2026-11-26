@@ -1,5 +1,8 @@
 <script lang="ts">
-	import PageTitle from '#lib/components/PageTitle.svelte';
+	import { fromAction } from 'svelte/attachments';
+	import Button from '#lib/components/forms/Button.svelte';
+	import PermanentDeleteModal from '#lib/components/modals/PermanentDeleteModal.svelte';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -10,18 +13,16 @@
 		RemovedRestoreResponse,
 		RemovedSystem,
 		SystemInfo
-	} from '#lib/api/types.js';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
-	import IngestFileTable from '#lib/components/IngestFileTable.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	} from '#lib/types/index.js';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
+	import IngestFileTable from '#lib/components/ingest/IngestFileTable.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatCount } from '#lib/format.js';
-	import { deleteIngestFiles, fileKey as key, modalListSize } from '#lib/ingestDelete.js';
+	import { deleteIngestFiles, fileKey as key } from '#lib/ingestDelete.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { refreshCounts } from '#lib/stores/navCounts.svelte.js';
@@ -157,31 +158,35 @@
 	{:else}
 		<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 			<span class="small text-body-secondary" aria-live="polite">{selectedCount} selected</span>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-secondary"
-				onclick={() => allKeys.forEach((k) => selected.add(k))}>Select all</button
+			<Button
+				variant="secondary"
+				outline
+				size="sm"
+				onclick={() => allKeys.forEach((k) => selected.add(k))}>Select all</Button
 			>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-secondary"
+			<Button
+				variant="secondary"
+				outline
+				size="sm"
 				disabled={selectedCount === 0}
-				onclick={() => selected.clear()}>Clear selection</button
+				onclick={() => selected.clear()}>Clear selection</Button
 			>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-primary"
+			<Button
+				variant="primary"
+				outline
+				size="sm"
+				icon="restore"
 				disabled={disabled || selectedCount === 0}
-				onclick={() => restore(selectedEntries())}
-				><Icon name="restore" /> Restore selected ({selectedCount})</button
+				onclick={() => restore(selectedEntries())}>Restore selected ({selectedCount})</Button
 			>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-danger"
+			<Button
+				variant="danger"
+				outline
+				size="sm"
+				icon="delete"
 				disabled={disabled || selectedCount === 0}
-				use:tooltip={'Delete (Shift+click to skip confirmation)'}
-				onclick={(e) => askDelete(e, selectedEntries())}
-				><Icon name="delete" /> Delete selected ({selectedCount})</button
+				{@attach fromAction(tooltip, () => 'Delete (Shift+click to skip confirmation)')}
+				onclick={(e) => askDelete(e, selectedEntries())}>Delete selected ({selectedCount})</Button
 			>
 		</div>
 		{#each removed as system (system.system)}
@@ -203,22 +208,10 @@
 		{/each}
 	{/if}
 
-	<ConfirmModal
+	<PermanentDeleteModal
 		bind:open={deleteOpen}
-		title="Permanently delete {files(deleteEntries.length)}?"
-		confirmLabel="Delete"
-		confirmClass="btn-danger"
+		entries={deleteEntries}
 		busy={deleting}
 		onconfirm={() => runDelete(deleteEntries)}
-	>
-		<p>This can't be undone.</p>
-		<ul class="mb-0 text-break">
-			{#each deleteEntries.slice(0, modalListSize) as entry (`${entry.system}/${entry.name}`)}
-				<li><code>{entry.system}/{entry.name}</code></li>
-			{/each}
-			{#if deleteEntries.length > modalListSize}
-				<li>and {deleteEntries.length - modalListSize} more</li>
-			{/if}
-		</ul>
-	</ConfirmModal>
+	/>
 </AdminOnly>

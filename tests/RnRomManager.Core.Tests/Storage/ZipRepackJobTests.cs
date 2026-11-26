@@ -36,12 +36,8 @@ public class ZipRepackJobTests
     public void SetUp()
     {
         _dir = new TempDir();
-        _gb = Substitute.For<ISystemHandler>();
-        _gb.Id.Returns("gb");
-        _gb.EmbedRomsInZip.Returns(true);
-        var nes = Substitute.For<ISystemHandler>();
-        nes.Id.Returns("nes");
-        nes.EmbedRomsInZip.Returns(true);
+        _gb = TestHandlers.Fake("gb", embedRomsInZip: true);
+        var nes = TestHandlers.Fake("nes", embedRomsInZip: true);
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns([_gb, nes]);
         _systems.ById("gb").Returns(_gb);

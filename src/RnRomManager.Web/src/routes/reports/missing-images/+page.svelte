@@ -1,13 +1,14 @@
 <script lang="ts">
+	import DataTable from '#lib/components/common/DataTable.svelte';
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
-	import type { Page, SystemInfo } from '#lib/api/types.js';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import type { Page, SystemInfo } from '#lib/types/index.js';
+	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import { formatCount } from '#lib/format.js';
@@ -27,9 +28,6 @@
 	let system = $state('');
 	let pageNumber = $state(1);
 	let systems = $state<SystemInfo[]>([]);
-	let result = $state<Page<MissingImage> | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 
 	$effect(() => {
 		api.get<SystemInfo[]>('/api/systems').then(
@@ -38,21 +36,13 @@
 		);
 	});
 
-	$effect(() => {
+	const report = useAbortableGet<Page<MissingImage>>(() => {
 		let url = `/api/reports/missing-images?page=${pageNumber}&pageSize=${pageSize}`;
 		if (system) url += `&system=${encodeURIComponent(system)}`;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api.get<Page<MissingImage>>(url, { signal: controller.signal }).then(
-			(p) => (result = p),
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
+		return url;
 	});
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 </script>
 
 <svelte:head><title>Missing Images · RnRomManager</title></svelte:head>
@@ -74,7 +64,7 @@
 </div>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !result}
 	<Loading />
 {:else}
@@ -84,37 +74,30 @@
 			{result.total === 1 ? 'game' : 'games'}
 		</p>
 	{/if}
-	<div class="card">
-		<div class="table-responsive">
-			{#if result.items.length === 0}
-				<EmptyState message="Every game has a cover image." />
-			{:else}
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<thead class="table-dark">
-						<tr>
-							<th scope="col">Game</th>
-							<th scope="col">System</th>
-							<th scope="col">Reason</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each result.items as item (item.id)}
-							<tr>
-								<td>
-									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query -->
-									<a href="{resolve('/games/[id]', { id: item.id })}?tab=images"
-										>{item.displayTitle}</a
-									>
-								</td>
-								<td><SystemBadge system={item.system} name={item.systemName} /></td>
-								<td>{reasons[item.reason]}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
-		</div>
-	</div>
+	<DataTable
+		items={result.items}
+		key={(item) => item.id}
+		empty="Every game has a cover image."
+		emptyInCard
+	>
+		{#snippet head()}
+			<tr>
+				<th scope="col">Game</th>
+				<th scope="col">System</th>
+				<th scope="col">Reason</th>
+			</tr>
+		{/snippet}
+		{#snippet row(item)}
+			<tr>
+				<td>
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query -->
+					<a href="{resolve('/games/[id]', { id: item.id })}?tab=images">{item.displayTitle}</a>
+				</td>
+				<td><SystemBadge system={item.system} name={item.systemName} /></td>
+				<td>{reasons[item.reason]}</td>
+			</tr>
+		{/snippet}
+	</DataTable>
 	<Pagination
 		page={pageNumber}
 		pages={pageCount(result.total, pageSize)}

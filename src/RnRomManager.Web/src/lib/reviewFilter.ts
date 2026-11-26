@@ -1,22 +1,15 @@
 import { remembered } from './remembered';
-
-/** RV4: the review queue's filter and page, kept in the URL query and remembered in `localStorage`. */
-export interface ReviewFilter {
-	q: string;
-	system: string;
-	reason: string;
-	page: number;
-}
+import type { ReviewFilter } from '#lib/types/index.js';
+import { pageParam } from '#lib/urlState.js';
 
 export const reviewFilterParams = ['q', 'system', 'reason', 'page'] as const;
 
 export function parseReviewFilter(params: Pick<URLSearchParams, 'get'>): ReviewFilter {
-	const n = Number(params.get('page'));
 	return {
 		q: params.get('q')?.trim() ?? '',
 		system: params.get('system') ?? '',
 		reason: params.get('reason') ?? '',
-		page: Number.isInteger(n) && n > 1 ? n : 1
+		page: pageParam(params, 'page', 'integer')
 	};
 }
 

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using RnRomManager.Api.Endpoints;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 using SharpCompress.Archives.SevenZip;
 using SharpCompress.Readers;
 
@@ -436,20 +437,12 @@ public class BrowserCoreExtensionsTests
 
     private static ISystemHandler Handler(string id, string core, params string[] extensions)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id);
         handler.BrowserCore.Returns(core);
         handler.RomExtensions.Returns(extensions);
         return handler;
     }
 
-    private static string WebRoot() => Path.Combine(RepoRoot(), "src", "RnRomManager.Web");
+    private static string WebRoot() => Path.Combine(RepoPaths.Root(), "src", "RnRomManager.Web");
 
-    private static string RepoRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            if (File.Exists(Path.Combine(dir.FullName, "RnRomManager.slnx")))
-                return dir.FullName;
-        throw new InvalidOperationException("Repository root not found.");
-    }
 }

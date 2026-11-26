@@ -93,7 +93,11 @@ public sealed record SyntheticGbaRomBuilder
         return (byte)(chk - 0x19);
     }
 
-    private static void WriteAscii(byte[] rom, int offset, int length, string? value)
+    private static void WriteAscii(
+        byte[] rom,
+        int offset,
+        int length,
+        string? value)
     {
         var area = rom.AsSpan(offset, length);
         area.Clear();

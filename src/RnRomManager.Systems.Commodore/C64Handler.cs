@@ -12,7 +12,7 @@ namespace RnRomManager.Systems.Commodore;
 /// </summary>
 public sealed class C64Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.c64.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(C64Handler), "boxart.c64.png");
 
     public string Id => "c64";
     public string DisplayName => "Commodore 64";

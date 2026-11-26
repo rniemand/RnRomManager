@@ -51,7 +51,11 @@ public class BundleFileResolutionTests
 
     private static BundleFileIdentity MainOf(InfoJsonGame game, int rom = 0) => new(game.GameId, game.Roms[rom].Metadata.Sha1, null);
 
-    private static BundleFileIdentity MemberOf(InfoJsonGame game, int file, int rom = 0, string? name = null)
+    private static BundleFileIdentity MemberOf(
+        InfoJsonGame game,
+        int file,
+        int rom = 0,
+        string? name = null)
     {
         var f = game.Roms[rom].Files![file];
         return new(game.GameId, game.Roms[rom].Metadata.Sha1, new BundleMember(f.Sha1, name ?? f.FileName));

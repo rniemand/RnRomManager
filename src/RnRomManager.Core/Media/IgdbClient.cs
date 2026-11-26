@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -12,149 +11,16 @@ using RnRomManager.Core.Library;
 
 namespace RnRomManager.Core.Media;
 
-/// <summary>IGDB suggestions S6: one candidate image. <see cref="Width"/>/<see cref="Height"/> are the stored (t_1080p) size.</summary>
-public sealed record ImageSuggestion(string PreviewUrl, string ImageUrl, string GameName, int? Width, int? Height);
-
-/// <summary>The suggestions, or the S8 failure title when IGDB couldn't be used.</summary>
-public sealed record ImageSuggestionResult(IReadOnlyList<ImageSuggestion>? Suggestions, string? FailedTitle)
-{
-    public static ImageSuggestionResult Ok(IReadOnlyList<ImageSuggestion> suggestions) => new(suggestions, null);
-
-    public static ImageSuggestionResult Failed(string title) => new(null, title);
-}
-
-/// <summary>IGDB suggestions: candidate box art and screenshots for a game (S3–S6).</summary>
-public interface IImageSuggestions
-{
-    /// <summary>S1: both <c>Sources:Igdb*</c> keys are set.</summary>
-    bool Configured { get; }
-
-    /// <summary><paramref name="type"/> is <see cref="ImageType.BoxArt"/> or <see cref="ImageType.Snap"/>. Cancellation propagates (S3a).</summary>
-    Task<ImageSuggestionResult> SuggestAsync(string title, string systemId, ImageType type, CancellationToken cancellationToken);
-}
-
-/// <summary>
-/// L4: one IGDB game for <b>Lookup Info</b>, already mapped to the Edit Metadata form's rules. <see cref="CoverUrl"/> is the
-/// list thumbnail (t_cover_small); <see cref="CoverImageUrl"/> is the same cover at the size Suggest Images stores (t_1080p).
-/// </summary>
-public sealed record GameInfoMatch(int IgdbId, string Name, int? ReleaseYear, IReadOnlyList<string> Developers,
-    IReadOnlyList<string> Publishers, IReadOnlyList<string> Genres, string? Description, string? CoverUrl, string? CoverImageUrl, string? Url);
-
-/// <summary>The matches, or the failure title (the image suggestions' titles) when IGDB couldn't be used.</summary>
-public sealed record GameInfoLookupResult(IReadOnlyList<GameInfoMatch>? Matches, string? FailedTitle);
-
-/// <summary>
-/// Timeline T7: the game's IGDB page (<c>https://www.igdb.com/…</c>); both null when IGDB has no such game or page, or
-/// <see cref="FailedTitle"/> when IGDB couldn't be used.
-/// </summary>
-public sealed record GamePageResult(string? Url, string? FailedTitle);
-
-/// <summary>IGDB metadata lookup (L3): up to five games matching a title, for the Edit Metadata modal.</summary>
-public interface IGameInfoLookup
-{
-    /// <summary>Both <c>Sources:Igdb*</c> keys are set.</summary>
-    bool Configured { get; }
-
-    /// <summary><paramref name="title"/> goes through <see cref="IgdbClient.SearchTitle"/>. Cancellation propagates.</summary>
-    Task<GameInfoLookupResult> LookupAsync(string title, string systemId, CancellationToken cancellationToken);
-
-    /// <summary>T7: the IGDB page of game <paramref name="igdbId"/>. Cancellation propagates.</summary>
-    Task<GamePageResult> GamePageUrlAsync(int igdbId, CancellationToken cancellationToken);
-}
-
-/// <summary>P3: one IGDB game's cover and rating; each null when IGDB has none.</summary>
-public sealed record IgdbGameRating(int Id, string? CoverImageId, double? TotalRating, int? TotalRatingCount);
-
-/// <summary>
-/// P3: a cover download. <see cref="Bytes"/> on a 200 within <see cref="ImageFormats.MaxBytes"/>; else <see cref="Status"/>
-/// is the response's status (null for a connection error or timeout) and <see cref="Error"/> says why.
-/// </summary>
-public sealed record IgdbCoverDownload(byte[]? Bytes, int? Status, string? Error);
-
-/// <summary>Pull Cover Images and Refresh IGDB Ratings (P3, R2): batch reads by IGDB id and cover downloads.</summary>
-public interface IIgdbGames
-{
-    /// <summary>Both <c>Sources:Igdb*</c> keys are set.</summary>
-    bool Configured { get; }
-
-    /// <summary>
-    /// The games IGDB returns for <paramref name="ids"/>, queried in batches of <see cref="IgdbClient.MaxBatch"/>. A failure
-    /// throws with one of the <see cref="IgdbClient"/> failure titles as its message; cancellation propagates.
-    /// </summary>
-    Task<IReadOnlyList<IgdbGameRating>> GetGamesAsync(IReadOnlyList<int> ids, CancellationToken cancellationToken);
-
-    /// <summary>The <c>t_1080p</c> cover <paramref name="imageId"/>. Never throws but for cancellation.</summary>
-    Task<IgdbCoverDownload> DownloadCoverAsync(string imageId, CancellationToken cancellationToken);
-}
-
-/// <summary>
-/// T7: IGDB page URLs by game id, per process; found pages and not-found (null) results only, never failures. Cleared
-/// whole when it holds <see cref="MaxEntries"/>.
-/// </summary>
-public sealed class IgdbPageUrlCache
-{
-    public const int MaxEntries = 10_000;
-
-    private readonly ConcurrentDictionary<int, string?> _urls = new();
-
-    public bool TryGet(int igdbId, out string? url) => _urls.TryGetValue(igdbId, out url);
-
-    public void Set(int igdbId, string? url)
-    {
-        if (_urls.Count >= MaxEntries)
-            _urls.Clear();
-        _urls[igdbId] = url;
-    }
-}
-
-/// <summary>
-/// S3: the Twitch app access token, shared by every (transient) <see cref="IgdbClient"/>. Cached until <c>expires_in</c>
-/// minus an hour (minus half the lifetime for a token that lives an hour or less); one token request at a time.
-/// </summary>
-public sealed class IgdbTokenCache(TimeProvider time)
-{
-    private sealed record Entry(string Token, DateTimeOffset Expires);
-
-    private readonly SemaphoreSlim _lock = new(1, 1);
-    private volatile Entry? _entry;
-
-    public async Task<string> GetAsync(Func<CancellationToken, Task<(string Token, int ExpiresIn)>> fetch, CancellationToken cancellationToken)
-    {
-        if (Current() is { } token)
-            return token;
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            if (Current() is { } fresh)
-                return fresh;
-            var (value, expiresIn) = await fetch(cancellationToken).ConfigureAwait(false);
-            var margin = Math.Min(3600, expiresIn / 2);
-            _entry = new Entry(value, time.GetUtcNow().AddSeconds(expiresIn - margin));
-            return value;
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
-    /// <summary>S3: IGDB refused <paramref name="token"/>; the next <see cref="GetAsync"/> fetches a new one.</summary>
-    public void Invalidate(string token)
-    {
-        var entry = _entry;
-        if (entry?.Token == token)
-            _entry = null;
-    }
-
-    private string? Current() => _entry is { } entry && time.GetUtcNow() < entry.Expires ? entry.Token : null;
-}
-
 /// <summary>
 /// IGDB suggestions S3–S7: Twitch client-credentials token, then an IGDB <c>/v4/games</c> search on the game's platform
 /// (and once more without it when nothing matches). Registered by the Api as a typed client with the shared retry policy
 /// and no redirects.
 /// </summary>
-public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, IOptions<SourcesOptions> options, ILogger<IgdbClient> logger)
+public sealed partial class IgdbClient(
+    HttpClient http,
+    IgdbTokenCache tokens,
+    IOptions<SourcesOptions> options,
+    ILogger<IgdbClient> logger)
     : IImageSuggestions, IGameInfoLookup, IIgdbGames
 {
     /// <summary>P3: IGDB's largest page.</summary>
@@ -182,17 +48,15 @@ public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, I
     private const int MaxListItemLength = 255;
     private const int MaxDescriptionLength = 4000;
 
-    private sealed class IgdbFailure(string title) : Exception(title);
-
-    private sealed record IgdbImage(string ImageId, int? Width, int? Height);
-
-    private sealed record IgdbGame(string Name, IgdbImage? Cover, IReadOnlyList<IgdbImage> Screenshots);
-
     private SourcesOptions Sources => options.Value;
 
     public bool Configured => SourcesOptions.IgdbConfigured(Sources);
 
-    public async Task<ImageSuggestionResult> SuggestAsync(string title, string systemId, ImageType type, CancellationToken cancellationToken)
+    public async Task<ImageSuggestionResult> SuggestAsync(
+        string title,
+        string systemId,
+        ImageType type,
+        CancellationToken cancellationToken)
     {
         if (type is not (ImageType.BoxArt or ImageType.Snap))
             throw new ArgumentOutOfRangeException(nameof(type), type, "Only BoxArt and Snap are suggested.");
@@ -334,7 +198,11 @@ public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, I
     public static string SearchBody(string title, int? platform) => SearchBody(title, platform, Fields, false);
 
     /// <summary>L3: <paramref name="excludeVersions"/> adds <c>version_parent = null</c>, dropping editions such as "Gold Edition".</summary>
-    public static string SearchBody(string title, int? platform, string fields, bool excludeVersions)
+    public static string SearchBody(
+        string title,
+        int? platform,
+        string fields,
+        bool excludeVersions)
     {
         var conditions = new List<string>();
         if (excludeVersions)

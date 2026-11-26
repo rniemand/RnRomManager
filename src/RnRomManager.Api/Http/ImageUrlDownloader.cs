@@ -2,24 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using RnRomManager.Core.Library;
-using RnRomManager.Core.Media;
 
 namespace RnRomManager.Api.Http;
-
-/// <summary>U3/U4: which addresses an image-URL download may reach, and how long it may take (tests shorten both).</summary>
-public sealed record ImageUrlPolicy(Func<IPAddress, bool> IsAllowed, TimeSpan Timeout)
-{
-    public static ImageUrlPolicy Default { get; } = new(PublicAddress.IsPublic, TimeSpan.FromSeconds(15));
-}
-
-/// <summary>Thrown by the connect callback when a host resolves to an address the policy refuses (U3).</summary>
-public sealed class BlockedAddressException(string host) : Exception($"{host} resolves to a non-public address.");
-
-/// <summary>
-/// The outcome of <see cref="ImageUrlDownloader.DownloadAsync"/>: the body (at most <see cref="ImageFormats.MaxBytes"/> + 1
-/// bytes, so an oversized image is detectable without reading it all), or a problem to return as is.
-/// </summary>
-public sealed record ImageUrlDownload(byte[]? Bytes, int Status = StatusCodes.Status200OK, string? Code = null, string? Title = null);
 
 /// <summary>
 /// U4: one GET with no retries, one timeout over the headers and the whole body, and a bounded read whatever

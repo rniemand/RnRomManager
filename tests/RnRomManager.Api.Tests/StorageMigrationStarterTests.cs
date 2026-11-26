@@ -1,9 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Systems;
@@ -22,21 +20,7 @@ public class StorageMigrationStarterTests
         InfoSchemaVersion = 6, CreatedAt = DateTime.UnixEpoch, UpdatedAt = DateTime.UnixEpoch,
     };
 
-    /// <summary>Counts created timers, so a test advances time only once the starter's retry delay exists.</summary>
-    private sealed class CountingTimeProvider(DateTimeOffset start) : FakeTimeProvider(start)
-    {
-        private int _timers;
-        public int Timers => Volatile.Read(ref _timers);
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            var timer = base.CreateTimer(callback, state, dueTime, period);
-            Interlocked.Increment(ref _timers);
-            return timer;
-        }
-    }
-
-    private CountingTimeProvider _time = null!;
+    private StorageMigrationStarterCountingTimeProvider _time = null!;
     private CancellationTokenSource _appStarted = null!;
     private JobLock _lock = null!;
     private IJobRepository _jobs = null!;
@@ -48,7 +32,7 @@ public class StorageMigrationStarterTests
     [SetUp]
     public void SetUp()
     {
-        _time = new CountingTimeProvider(new DateTimeOffset(2026, 11, 16, 8, 0, 0, TimeSpan.Zero));
+        _time = new StorageMigrationStarterCountingTimeProvider(new DateTimeOffset(2026, 11, 16, 8, 0, 0, TimeSpan.Zero));
         _appStarted = new CancellationTokenSource();
         _lock = new JobLock();
         _jobs = Substitute.For<IJobRepository>();

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { AdminActions } from '#lib/api/types.js';
+import type { AdminActions } from '#lib/types/index.js';
 import { formatDateTime } from '#lib/format.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs } from '#lib/stores/jobs.svelte.js';
@@ -13,9 +13,6 @@ vi.mock('#lib/bootstrap.js', () => ({
 		hide() {}
 		dispose() {}
 	}
-}));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
 
 const { default: ActionsPage } = await import('./actions/+page.svelte');

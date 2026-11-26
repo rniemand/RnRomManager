@@ -1,5 +1,5 @@
 import { api } from './api/client';
-import type { GameDetail, RomDetail } from './api/types';
+import type { GameDetail, RomDetail, PlaySave } from '#lib/types/index.js';
 
 /**
  * Play B1: the cores that play a release stored outside the ZIP through play-disc: a PlayStation disc, (PSP B2) a
@@ -137,12 +137,6 @@ export function playUrl(
 	if (setName !== null) url += '&set=1';
 	// Saves B17: the library save the play page loads at game start.
 	return save ? `${url}&save=${save.saveId}&saveKind=${save.saveKind}` : url;
-}
-
-/** Saves B17: a library save to load when the game starts. */
-export interface PlaySave {
-	saveId: string;
-	saveKind: 'state' | 'battery';
 }
 
 /**

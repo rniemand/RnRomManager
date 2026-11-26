@@ -17,5 +17,3 @@ public sealed record BackupManifest(
 
     public static string DataEntry(string table) => DataFolder + table + ".jsonl";
 }
-
-public sealed record BackupTable(string Name, long Rows);

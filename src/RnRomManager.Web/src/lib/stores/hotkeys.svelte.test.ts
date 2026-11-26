@@ -1,16 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
-import { resetClient } from '../api/client';
-import type { Me } from '../api/types';
-import { defaultBindings } from '../hotkeys';
+import { resetClient } from '#lib/api/client.js';
+import type { Me } from '#lib/types/index.js';
+import { defaultBindings } from '#lib/hotkeys.js';
 import { auth } from './auth.svelte';
 import { toasts } from './toasts.svelte';
 
 const goto = vi.fn<(url: string) => Promise<void>>(() => Promise.resolve());
 vi.mock('$app/navigation', () => ({ goto: (url: string) => goto(url) }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 
 const { hotkeys, missingIgdbIdMessages, missingImageMessages, missingMetadataMessages } =
 	await import('./hotkeys.svelte');

@@ -1,7 +1,7 @@
-using System.Buffers.Binary;
 using System.Text;
 using RnRomManager.Core.Systems;
 using RnRomManager.Systems.Coleco;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Systems.Sega.Tests;
 
@@ -67,8 +67,8 @@ public class GameGearHandlerTests
     [Test]
     public void ReadHeader_NoSignatureOrEmpty_IsNull()
     {
-        Assert.That(Handler.ReadHeader(new byte[32768]), Is.Null);
-        Assert.That(Handler.ReadHeader(ReadOnlySpan<byte>.Empty), Is.Null);
+        HandlerAsserts.AssertNoHeader(Handler, new byte[32768]);
+        HandlerAsserts.AssertNoHeader(Handler, []);
         Assert.That(Handler.ReadHeader(Rom(32768, 0x7FF0).AsSpan(0, 0x7FF0 + 15)), Is.Null, "too short for the header");
     }
 
@@ -89,7 +89,7 @@ public class GameGearHandlerTests
     {
         var rom = new byte[8192];
         new Random(7).NextBytes(rom);
-        Assert.That(Handler.NormalizeForHashing(rom).ToArray(), Is.EqualTo(rom));
+        HandlerAsserts.AssertNormalizeIsIdentity(Handler, rom);
     }
 
     [Test]
@@ -97,8 +97,7 @@ public class GameGearHandlerTests
     {
         var png = Handler.DefaultBoxArtPng.Span;
 
-        Assert.That(png[..8].ToArray(), Is.EqualTo(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }), "PNG signature");
-        Assert.That((BinaryPrimitives.ReadInt32BigEndian(png[16..]), BinaryPrimitives.ReadInt32BigEndian(png[20..])), Is.EqualTo((512, 512)));
+        HandlerAsserts.AssertBoxArtPng(Handler, 512);
         Assert.That(png.ToArray(), Is.Not.EqualTo(new ColecoVisionHandler().DefaultBoxArtPng.ToArray()));
     }
 }

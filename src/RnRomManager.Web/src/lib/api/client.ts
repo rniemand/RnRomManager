@@ -1,4 +1,5 @@
-import { ApiError, type ProblemDetails } from './errors';
+import { ApiError } from './errors';
+import type { ProblemDetails, Navigate, RequestOptions } from '#lib/types/index.js';
 
 /**
  * The one fetch wrapper (spec §9.2, §11, §23):
@@ -7,18 +8,6 @@ import { ApiError, type ProblemDetails } from './errors';
  * - `401` → `/login?returnUrl=…`, `403 PasswordChangeRequired` → `/change-password`;
  * - any other failure → a typed {@link ApiError} built from the ProblemDetails body.
  */
-
-export type Navigate = (url: string) => void | Promise<void>;
-
-export interface RequestOptions {
-	/** JSON-serialised as the body. */
-	body?: unknown;
-	/** Don't redirect on 401 (the login form and the boot-time `me` check handle it themselves). */
-	noRedirect?: boolean;
-	signal?: AbortSignal;
-	/** Return the response body as text instead of parsing it (GP4: an info.json may not be valid JSON). */
-	raw?: boolean;
-}
 
 const mutations = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 

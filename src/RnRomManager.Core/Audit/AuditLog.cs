@@ -7,7 +7,11 @@ namespace RnRomManager.Core.Audit;
 /// AU2: <see cref="IAuditLog"/> on a bounded in-memory channel. The Api's <c>AuditWriter</c> drains <see cref="Reader"/>
 /// and inserts each event, so synchronous pipeline helpers can record and a cancelled request never loses a queued row.
 /// </summary>
-public sealed class AuditLog(IAuditRepository repository, TimeProvider time, ILogger<AuditLog> logger, int capacity = AuditLog.Capacity)
+public sealed class AuditLog(
+    IAuditRepository repository,
+    TimeProvider time,
+    ILogger<AuditLog> logger,
+    int capacity = AuditLog.Capacity)
     : IAuditLog
 {
     public const int Capacity = 10_000;

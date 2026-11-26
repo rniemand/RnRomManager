@@ -5,31 +5,6 @@ using RnRomManager.Core.Naming;
 
 namespace RnRomManager.Core.Dats;
 
-/// <summary>T4: what a Switch title id is. An application delta is classified as DLC.</summary>
-public enum TitleKind
-{
-    Base,
-    Update,
-    Dlc,
-}
-
-/// <summary>
-/// T4/T5: a ROM matched through titledb. <see cref="Base"/> is the base game's entry (its <see cref="GameName"/> is the
-/// release's <c>datGameName</c>); the release name, languages and file name come from <paramref name="NameEntry"/>
-/// when it has one, else from the base.
-/// </summary>
-/// <param name="TitleId">The id the file carries, kept in its file name.</param>
-/// <param name="NameEntry">The entry whose name the release uses; null when it falls back to the base name.</param>
-/// <param name="BaseTitle">T5 grouping key and game title.</param>
-/// <param name="RomFileName">T5 rom <c>fileName</c>.</param>
-/// <param name="Revision"><c>v&lt;N&gt;</c> when N &gt; 0.</param>
-public sealed record TitleDbMatch(string TitleId, TitleKind Kind, TitleDbRow Base, TitleDbRow? NameEntry, string BaseTitle, string GameName,
-    string RomFileName, string? Revision, IReadOnlyList<string> Flags, IReadOnlyList<string> Languages);
-
-/// <summary>One kept titledb entry, as the compact file stores it (spec T2). <see cref="Name"/> is titledb's own name.</summary>
-public sealed record TitleDbRow(string TitleId, string Name, string? Publisher, string? Developer, int? ReleaseYear,
-    IReadOnlyList<string> Genres, IReadOnlyList<string> Languages, string? BoxArtUrl, string? SnapUrl);
-
 /// <summary>
 /// Spec T2, T3, T5: the blawar/titledb source file (<c>US.en.json</c>), the compact per-system file made from it, and
 /// the pure naming and URL rules the compact rows are validated with.
@@ -94,7 +69,12 @@ public static partial class TitleDb
     /// T5's rom <c>fileName</c>: the cleaned name (dot runs → <c>…</c>, since <c>..</c> isn't allowed), sanitized, then
     /// <c>[&lt;TitleId&gt;][v&lt;N&gt;]</c>, B6's <c>[&lt;releaseVersion&gt;]</c> when given, and the lower-case extension.
     /// </summary>
-    public static string RomFileName(string name, string titleId, uint version, string extension, string? releaseVersion = null) =>
+    public static string RomFileName(
+        string name,
+        string titleId,
+        uint version,
+        string extension,
+        string? releaseVersion = null) =>
         $"{FileNameSanitizer.Sanitize(DotRun().Replace(Normalize(name), "…"))} [{titleId}][v{version}]{(releaseVersion is null ? "" : $"[{releaseVersion}]")}{extension.ToLowerInvariant()}";
 
     /// <summary>T5's <c>N</c>: the first case-sensitive <c>[v&lt;digits&gt;]</c> in the file name; none or overflow → 0.</summary>
@@ -289,10 +269,4 @@ public static partial class TitleDb
 
     [GeneratedRegex(@"\A(The|A|An) (.+)\z", RegexOptions.Singleline)]
     private static partial Regex LeadingArticle();
-
-    /// <summary>Only the upstream fields used; unknown ones (<c>size</c>, <c>version</c>, …) are ignored.</summary>
-    private sealed record UpstreamEntry(string? Id, string? Name, string? Publisher, string? Developer,
-        long? ReleaseDate,
-        IReadOnlyList<string?>? Category, IReadOnlyList<string?>? Languages, string? IconUrl, string? FrontBoxArt,
-        IReadOnlyList<string?>? Screenshots);
 }

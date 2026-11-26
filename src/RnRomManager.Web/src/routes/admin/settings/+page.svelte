@@ -1,8 +1,9 @@
 <script lang="ts">
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { flattenSettings, formatValue } from '#lib/format.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
@@ -35,24 +36,18 @@
 {:else if !settings}
 	<Loading />
 {:else}
-	<div class="card">
-		<div class="table-responsive">
-			<table class="table table-sm table-striped table-hover align-middle mb-0">
-				<thead class="table-dark">
-					<tr class="small text-uppercase text-body-secondary">
-						<th scope="col">Setting</th>
-						<th scope="col">Value</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each settings as [key, value] (key)}
-						<tr>
-							<th scope="row" class="fw-normal text-body-secondary text-nowrap">{key}</th>
-							<td class="text-break font-monospace small">{formatValue(value)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	</div>
+	<DataTable items={settings} key={([key]) => key}>
+		{#snippet head()}
+			<tr class="small text-uppercase text-body-secondary">
+				<th scope="col">Setting</th>
+				<th scope="col">Value</th>
+			</tr>
+		{/snippet}
+		{#snippet row([key, value])}
+			<tr>
+				<th scope="row" class="fw-normal text-body-secondary text-nowrap">{key}</th>
+				<td class="text-break font-monospace small">{formatValue(value)}</td>
+			</tr>
+		{/snippet}
+	</DataTable>
 {/if}

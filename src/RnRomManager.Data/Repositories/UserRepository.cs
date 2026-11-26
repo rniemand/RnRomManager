@@ -116,7 +116,11 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
         return true;
     }
 
-    private static async Task WriteUpdateAsync(DbConnection connection, DbTransaction transaction, User user, CancellationToken cancellationToken)
+    private static async Task WriteUpdateAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        User user,
+        CancellationToken cancellationToken)
     {
         await connection.ExecuteAsync(new CommandDefinition(UpdateSql, UpdateParameters(user), transaction, cancellationToken: cancellationToken));
         await connection.ExecuteAsync(new CommandDefinition(
@@ -125,7 +129,11 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
     }
 
     private static async Task WriteRolesAsync(
-        DbConnection connection, DbTransaction transaction, int userId, IReadOnlySet<string> roles, CancellationToken cancellationToken)
+        DbConnection connection,
+        DbTransaction transaction,
+        int userId,
+        IReadOnlySet<string> roles,
+        CancellationToken cancellationToken)
     {
         if (roles.Count > 0)
             await connection.ExecuteAsync(new CommandDefinition(
@@ -175,7 +183,11 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { id }, cancellationToken: cancellationToken));
     }
 
-    public async Task LockOutAsync(int id, DateTime until, DateTime now, CancellationToken cancellationToken)
+    public async Task LockOutAsync(
+        int id,
+        DateTime until,
+        DateTime now,
+        CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         await connection.ExecuteAsync(new CommandDefinition(

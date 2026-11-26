@@ -80,15 +80,13 @@ public static class AdminEndpoints
             }
             if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("embedRoms", out var value)
                 || value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["embedRoms"] = ["Must be true or false."] });
+                return Problems.Validation(ctx, "embedRoms", "Must be true or false.");
             if (!handler.RomStorageConfigurable)
                 return Problems.Create(ctx, StatusCodes.Status400BadRequest, "NotConfigurable", "This system's ROM storage can't be changed.");
             var embed = value.GetBoolean();
             if (embed == handler.EmbedRomsInZip)
                 return Results.NoContent();
-            var started = await runner.StartAsync(createJob(new RomStorageChange(handler.Id, embed)), JobTrigger.Manual,
-                DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+            return await JobStart.StartManualAsync(runner, createJob(new RomStorageChange(handler.Id, embed)), ctx, ctx.RequestAborted);
         });
 
         // ZIP Compression Z7: the change is applied by the repack job under the job lock, so a busy lock saves nothing.
@@ -108,12 +106,12 @@ public static class AdminEndpoints
             }
             if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("level", out var value) || value.ValueKind != JsonValueKind.String
                 || RomStorageSettings.ParseCompression(value.GetString()) is not { } level)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["level"] = ["Must be Store, Med or High."] });
+                return Problems.Validation(ctx, "level", "Must be Store, Med or High.");
             if (!handler.EmbedRomsInZip)
                 return ZipCompressionNotConfigurable(ctx);
             if (level == romStorage.Compression(handler.Id))
                 return Results.NoContent();
-            return await StartRepackAsync(ctx, runner, createJob(handler.Id, level));
+            return await JobStart.StartManualAsync(runner, createJob(handler.Id, level), ctx, ctx.RequestAborted);
         });
 
         // Z8: rewrites every ZIP of the system at its current level.
@@ -124,7 +122,7 @@ public static class AdminEndpoints
                 return Problems.NotFound(ctx);
             if (!handler.EmbedRomsInZip)
                 return ZipCompressionNotConfigurable(ctx);
-            return await StartRepackAsync(ctx, runner, createJob(handler.Id, null));
+            return await JobStart.StartManualAsync(runner, createJob(handler.Id, null), ctx, ctx.RequestAborted);
         });
 
         // B17: database backups.
@@ -170,11 +168,11 @@ public static class AdminEndpoints
                     Session.IssueAntiforgery(ctx);
                     return Results.Ok(new { restored = result.Restored, safetyBackup = result.SafetyBackup });
                 case BackupRestoreStatus.InvalidName:
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["fileName"] = ["Choose a backup from the list."] });
+                    return Problems.Validation(ctx, "fileName", "Choose a backup from the list.");
                 case BackupRestoreStatus.NotFound:
                     return Problems.NotFound(ctx);
                 case BackupRestoreStatus.JobRunning:
-                    return DatEndpoints.JobRunning(ctx);
+                    return JobStart.Running(ctx);
                 case BackupRestoreStatus.BackupRunning:
                     return Problems.Create(ctx, StatusCodes.Status409Conflict, "BackupRunning", "A backup is already running");
                 case BackupRestoreStatus.TooNew:
@@ -216,11 +214,6 @@ public static class AdminEndpoints
     private static IResult ZipCompressionNotConfigurable(HttpContext ctx) =>
         Problems.Create(ctx, StatusCodes.Status400BadRequest, "NotConfigurable", "This system's ZIP compression can't be changed.");
 
-    private static async Task<IResult> StartRepackAsync(HttpContext ctx, JobRunner runner, IJob job)
-    {
-        var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-        return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
-    }
 
     public static (BackupSettings? Settings, Dictionary<string, string[]> Errors) ParseBackupSettings(JsonElement body)
     {

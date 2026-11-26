@@ -8,7 +8,6 @@ using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Users;
-using RnRomManager.Data.Repositories;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -104,13 +103,11 @@ public class GamePlayedEndpointTests
         return client;
     }
 
-    private sealed record Row(string Action, string? Username, string? SystemId, Guid? GameId, string? Path, string? Details);
-
-    private async Task<List<Row>> PlayedRows()
+    private async Task<List<GamePlayedEndpointRow>> PlayedRows()
     {
         await Service<AuditWriter>().FlushAsync();
         await using var db = Service<IDbConnectionFactory>().Create();
-        return (await db.QueryAsync<Row>("""
+        return (await db.QueryAsync<GamePlayedEndpointRow>("""
             SELECT action AS Action, username AS Username, system_id AS SystemId, game_id AS GameId, path AS Path, details AS Details
             FROM audit_events WHERE action = 'GamePlayed' ORDER BY id
             """)).AsList();
@@ -128,7 +125,7 @@ public class GamePlayedEndpointTests
 
         Assert.That(await PlayedRows(), Is.EqualTo(new[]
         {
-            new Row(AuditActions.GamePlayed, username, "gb", _tetris, AuditPaths.Library(zipPath), "Tetris (World).gb"),
+            new GamePlayedEndpointRow(AuditActions.GamePlayed, username, "gb", _tetris, AuditPaths.Library(zipPath), "Tetris (World).gb"),
         }));
     }
 

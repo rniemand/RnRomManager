@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.Dos;
 /// </summary>
 public sealed class DosHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.dos.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(DosHandler), "boxart.dos.png");
 
     public string Id => "dos";
     public string DisplayName => "MS-DOS";

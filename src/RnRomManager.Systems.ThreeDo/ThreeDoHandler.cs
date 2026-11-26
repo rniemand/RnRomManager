@@ -13,7 +13,7 @@ namespace RnRomManager.Systems.ThreeDo;
 /// </summary>
 public sealed class ThreeDoHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.3do.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(ThreeDoHandler), "boxart.3do.png");
 
     public string Id => "3do";
     public string DisplayName => "3DO";

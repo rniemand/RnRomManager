@@ -2,19 +2,6 @@ using System.IO.Compression;
 
 namespace RnRomManager.Core.Backups;
 
-/// <summary>Why a backup can't be restored (B27.2): from a newer app, or not a usable backup ZIP.</summary>
-public enum BackupCheckFailure
-{
-    TooNew,
-    Invalid,
-}
-
-/// <summary>
-/// The outcome of <see cref="BackupCheck.Open"/>: the open archive and its manifest, or why it can't be restored. The
-/// caller disposes <see cref="Zip"/> when it is set.
-/// </summary>
-public sealed record BackupInspection(ZipArchive? Zip, BackupManifest? Manifest, BackupCheckFailure? Failure, string? Message);
-
 /// <summary>
 /// The restore rules shared by the startup restorer (B19) and the live restore (B27): a bare file name (rule 1) and the
 /// pre-drop checks (rule 3), all run before anything is dropped.

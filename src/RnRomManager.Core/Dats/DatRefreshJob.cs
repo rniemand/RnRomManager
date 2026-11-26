@@ -21,8 +21,14 @@ namespace RnRomManager.Core.Dats;
 /// <c>Sources:MameDatUrl</c>, staged as <c>mame/&lt;DatName&gt;.xml</c>.
 /// </summary>
 public sealed class DatRefreshJob(
-    HttpClient http, SourcesOptions sources, PathsOptions paths, DatCache cache, ISystemRegistry systems, IAuditLog audit,
-    TimeProvider time, ILogger<DatRefreshJob> logger) : IJob
+    HttpClient http,
+    SourcesOptions sources,
+    PathsOptions paths,
+    DatCache cache,
+    ISystemRegistry systems,
+    IAuditLog audit,
+    TimeProvider time,
+    ILogger<DatRefreshJob> logger) : IJob
 {
     /// <summary>The largest DAT is ~1 MiB; anything far bigger is not a DAT.</summary>
     public const long MaxFileBytes = 64L * 1024 * 1024;
@@ -138,7 +144,12 @@ public sealed class DatRefreshJob(
     /// Arcade D4: one capped download of <c>Sources:MameDatUrl</c> (or <c>Sources:FbneoDatUrl</c>, FBNeo D3), parsed in full (a failure keeps the old set) and staged
     /// as <c>mame/&lt;DatName&gt;.xml</c>. The DAT has no version, so the download time (UTC, to the second) is it.
     /// </summary>
-    private async Task<DatManifestEntry> StageMameAsync(ISystemHandler handler, string url, string staged, JobContext context, CancellationToken cancellationToken)
+    private async Task<DatManifestEntry> StageMameAsync(
+        ISystemHandler handler,
+        string url,
+        string staged,
+        JobContext context,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var relative = MameDat.RelativePath(handler.DatName);
@@ -168,8 +179,12 @@ public sealed class DatRefreshJob(
     /// per-attempt timeout ends with the headers), streamed to the work folder and parsed from there once. One UTC
     /// timestamp, taken when the download ends, gives every compact file its version and download time.
     /// </summary>
-    private async Task<IEnumerable<DatManifestEntry>> StageTitleDbAsync(IReadOnlyList<ISystemHandler> handlers, string work, string staged,
-        JobContext context, CancellationToken cancellationToken)
+    private async Task<IEnumerable<DatManifestEntry>> StageTitleDbAsync(
+        IReadOnlyList<ISystemHandler> handlers,
+        string work,
+        string staged,
+        JobContext context,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         context.Progress.SetCurrentItem(TitleDbSourceFile);

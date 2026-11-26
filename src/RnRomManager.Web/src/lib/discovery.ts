@@ -5,11 +5,24 @@
  */
 
 import { api } from './api/client';
-import type { DiscoveryGroup, GameListItem, Page } from './api/types';
+import type {
+	DiscoveryGroup,
+	GameListItem,
+	Page,
+	DiscoveryState,
+	SystemsState
+} from '#lib/types/index.js';
 import { remembered } from './remembered';
-
-export type DiscoveryKind = 'publishers' | 'developers' | 'genres';
-export type CollectionsTab = 'collections' | DiscoveryKind | 'systems';
+import type {
+	DiscoveryKind,
+	CollectionsTab,
+	GroupSort,
+	SortDir,
+	RememberedTab,
+	LogoKind
+} from '#lib/enums/index.js';
+import { parseDir } from '#lib/sort.js';
+import { pageParam } from '#lib/urlState.js';
 
 export const collectionsTabs: readonly { tab: CollectionsTab; label: string }[] = [
 	{ tab: 'collections', label: 'User collections' },
@@ -39,24 +52,6 @@ export const discoveryText: Record<
 	genres: { label: 'Genres', pager: 'Genre pages', singular: 'genre', plural: 'genres' }
 };
 
-/** A discovery tab's URL state; pages are one-based. */
-export interface DiscoveryState {
-	kind: DiscoveryKind;
-	key: string | null;
-	groupPage: number;
-	gamePage: number;
-	/** B16: the list's search text (URL `find`, since `q` is User collections'); absent = none. */
-	find?: string;
-	/** G5: the sort column; absent = `name`. */
-	sort?: GroupSort;
-	/** G5: the direction; absent = the column's default ({@link defaultDir}). */
-	dir?: SortDir;
-}
-
-/** G4: the group and system tables' sort columns and directions. */
-export type GroupSort = 'name' | 'games';
-export type SortDir = 'asc' | 'desc';
-
 /** G4: Name starts ascending, Games descending. */
 export const defaultDir = (sort: GroupSort): SortDir => (sort === 'games' ? 'desc' : 'asc');
 
@@ -79,10 +74,10 @@ function findParam(params: UrlLike['searchParams']): string | undefined {
 /** G5: `sort`/`dir` from exact lowercase values, kept only when not the default, so default states keep their shape. */
 function sortParams(params: UrlLike['searchParams']): { sort?: GroupSort; dir?: SortDir } {
 	const sort: GroupSort = params.get('sort') === 'games' ? 'games' : 'name';
-	const dir = params.get('dir');
+	const dir = parseDir(params.get('dir'), null);
 	return {
 		...(sort === 'games' ? { sort } : {}),
-		...((dir === 'asc' || dir === 'desc') && dir !== defaultDir(sort) ? { dir } : {})
+		...(dir && dir !== defaultDir(sort) ? { dir } : {})
 	};
 }
 
@@ -91,10 +86,6 @@ function setSort(params: URLSearchParams, state: { sort?: GroupSort; dir?: SortD
 	const sort = state.sort ?? 'name';
 	if (sort !== 'name') params.set('sort', sort);
 	if (state.dir && state.dir !== defaultDir(sort)) params.set('dir', state.dir);
-}
-
-function pageParam(params: UrlLike['searchParams'], name: string): number {
-	return Math.max(1, Math.floor(Number(params.get(name))) || 1);
 }
 
 /** The tab a `/collections` URL shows: a bare URL, or any other `tab` value, is User collections. */
@@ -155,17 +146,6 @@ export function tabSearch(tab: CollectionsTab): string {
 	return discoverySearch({ kind: tab, key: null, groupPage: 1, gamePage: 1 });
 }
 
-/** Systems tab B2: the selected system id (as given, case-sensitive) and the one-based games page. */
-export interface SystemsState {
-	system: string | null;
-	gamePage: number;
-	/** B16: the list's search text; absent = none. */
-	find?: string;
-	/** G5: as {@link DiscoveryState}'s. */
-	sort?: GroupSort;
-	dir?: SortDir;
-}
-
 /** The Systems tab's state from its URL; an empty or whitespace-only `system` selects nothing. */
 export function systemsState(url: UrlLike): SystemsState {
 	const system = url.searchParams.get('system');
@@ -186,9 +166,6 @@ export function systemsSearch(state: SystemsState): string {
 	setSort(params, state);
 	return `?${params}`;
 }
-
-/** G8: the tabs whose search and sort are remembered in this browser. */
-export type RememberedTab = DiscoveryKind | 'systems';
 
 const tabMemory = (tab: RememberedTab) => remembered(`rnrm.collections.${tab}`);
 
@@ -417,9 +394,6 @@ export const starterGenres: readonly { alias: string; key: string; file: string 
 		file: 'board-game.svg'
 	}
 ];
-
-/** B13: the lists that can have a shared logo; systems are keyed by their id. */
-export type LogoKind = DiscoveryKind | 'systems';
 
 const starterByKind: Record<LogoKind, Map<string, string>> = {
 	publishers: new Map(starterPublishers.map((p) => [p.key, `/publishers/${p.file}`])),

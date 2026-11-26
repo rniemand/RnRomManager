@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -21,7 +20,7 @@ public class SchedulerTests
     private IJobRepository _jobs = null!;
     private JobLock _lock = null!;
     private TempDir _logs = null!;
-    private ListLogger _log = null!;
+    private SchedulerListLogger _log = null!;
     private IAuditLog _audit = null!;
     private List<NoopTestJob> _created = null!;
     private Scheduler? _scheduler;
@@ -34,7 +33,7 @@ public class SchedulerTests
         _jobs = Substitute.For<IJobRepository>();
         _lock = new JobLock();
         _logs = new TempDir();
-        _log = new ListLogger();
+        _log = new SchedulerListLogger();
         _audit = Substitute.For<IAuditLog>();
         _created = [];
     }
@@ -188,17 +187,5 @@ public class SchedulerTests
 
         await AdvanceTo(new DateTimeOffset(2026, 11, 6, 0, 5, 0, TimeSpan.Zero));
         await Eventually(() => AuditPurges().Count() == 2);
-    }
-
-    private sealed class ListLogger : ILogger<Scheduler>
-    {
-        public ConcurrentQueue<(LogLevel Level, string Message)> Entries { get; } = new();
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Entries.Enqueue((logLevel, formatter(state, exception)));
     }
 }

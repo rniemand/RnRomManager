@@ -27,7 +27,11 @@ public class LogBufferTests
 
     [TestCase(30, 20, "m10", "m29")]
     [TestCase(5, 5, "m0", "m4")]
-    public void Recent_IsTheLastCountOldestFirst(int added, int expected, string first, string last)
+    public void Recent_IsTheLastCountOldestFirst(
+        int added,
+        int expected,
+        string first,
+        string last)
     {
         var buffer = NewBuffer();
         AddMany(buffer, added);

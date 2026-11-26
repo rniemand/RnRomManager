@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { CollectionDetail, CollectionListItem } from '#lib/api/types.js';
+import type { CollectionDetail, CollectionListItem } from '#lib/types/index.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
@@ -15,9 +15,6 @@ vi.mock('$app/state', () => ({
 		}
 	}
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}
@@ -27,7 +24,7 @@ vi.mock('#lib/bootstrap.js', () => ({
 }));
 
 const { default: CollectionsPage } = await import('./+page.svelte');
-const { default: CollectionModal } = await import('#lib/components/CollectionModal.svelte');
+const { default: CollectionModal } = await import('#lib/components/modals/CollectionModal.svelte');
 
 type Answer = { status: number; body?: unknown };
 

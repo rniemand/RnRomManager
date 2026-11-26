@@ -1,6 +1,6 @@
 import { untrack } from 'svelte';
-import { api } from '../api/client';
-import type { Activity } from '../api/types';
+import { api } from '#lib/api/client.js';
+import type { Activity } from '#lib/types/index.js';
 import { idlePollIntervalMs, pollIntervalMs } from './jobs.svelte';
 
 /**

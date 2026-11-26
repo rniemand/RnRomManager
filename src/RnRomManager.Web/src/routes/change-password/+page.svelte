@@ -1,15 +1,12 @@
 <script lang="ts">
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import { navigate } from '#lib/navigation.js';
-	import {
-		maxLength,
-		policyHint,
-		validateChangePassword,
-		type ChangePasswordForm,
-		type FieldErrors
-	} from '#lib/passwordPolicy.js';
+	import { maxLength, policyHint, validateChangePassword } from '#lib/passwordPolicy.js';
+	import type { ChangePasswordForm, FieldErrors } from '#lib/types/index.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
@@ -65,22 +62,20 @@
 		{/if}
 		<form class="card card-body" onsubmit={submit} novalidate>
 			<!-- Lets password managers pair the new password with the account. -->
-			<input
-				type="text"
+			<TextInput
 				class="d-none"
 				autocomplete="username"
 				value={auth.me?.username ?? ''}
 				readonly
-				tabindex="-1"
+				tabindex={-1}
 				aria-hidden="true"
 			/>
 			<div class="mb-3">
 				<label class="form-label" for="current-password">Current password</label>
-				<input
+				<TextInput
+					class={errors.currentPassword ? 'is-invalid' : undefined}
 					id="current-password"
 					type="password"
-					class="form-control"
-					class:is-invalid={errors.currentPassword}
 					autocomplete="current-password"
 					aria-describedby="current-password-error"
 					bind:value={form.currentPassword}
@@ -89,11 +84,10 @@
 			</div>
 			<div class="mb-3">
 				<label class="form-label" for="new-password">New password</label>
-				<input
+				<TextInput
+					class={errors.newPassword ? 'is-invalid' : undefined}
 					id="new-password"
 					type="password"
-					class="form-control"
-					class:is-invalid={errors.newPassword}
 					autocomplete="new-password"
 					maxlength={maxLength}
 					aria-describedby="new-password-hint new-password-error"
@@ -104,11 +98,10 @@
 			</div>
 			<div class="mb-3">
 				<label class="form-label" for="confirm-password">Confirm new password</label>
-				<input
+				<TextInput
+					class={errors.confirmPassword ? 'is-invalid' : undefined}
 					id="confirm-password"
 					type="password"
-					class="form-control"
-					class:is-invalid={errors.confirmPassword}
 					autocomplete="new-password"
 					maxlength={maxLength}
 					aria-describedby="confirm-password-error"
@@ -116,10 +109,10 @@
 				/>
 				<div id="confirm-password-error" class="invalid-feedback">{errors.confirmPassword}</div>
 			</div>
-			<button type="submit" class="btn btn-primary" disabled={busy}>
-				{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-				Change password
-			</button>
+			<Button variant="primary" type="submit" disabled={busy}
+				>{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
+				Change password</Button
+			>
 		</form>
 	</div>
 </div>

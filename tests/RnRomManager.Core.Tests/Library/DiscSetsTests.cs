@@ -7,8 +7,14 @@ public class DiscSetsTests
 {
     private static long _nextId = 1;
 
-    private static RomRow Rom(string fileName, string[] flags, string[]? regions = null, string[]? languages = null,
-        string? revision = null, string? version = null, string baseTitle = "Game") => new()
+    private static RomRow Rom(
+        string fileName,
+        string[] flags,
+        string[]? regions = null,
+        string[]? languages = null,
+        string? revision = null,
+        string? version = null,
+        string baseTitle = "Game") => new()
     {
         Id = _nextId++, GameId = Guid.Empty, SystemId = "psx", FileName = fileName, OriginalFileName = fileName,
         BaseTitle = baseTitle, Regions = regions ?? ["USA"], Languages = languages ?? [], Flags = flags,
@@ -26,7 +32,11 @@ public class DiscSetsTests
 
     private static readonly ILookup<long, RomFileRow> NoFiles = Array.Empty<RomFileRow>().ToLookup(f => f.RomId);
 
-    private static RomRow Disc(int n, string ext = ".chd", string region = "USA", string[]? extra = null) =>
+    private static RomRow Disc(
+        int n,
+        string ext = ".chd",
+        string region = "USA",
+        string[]? extra = null) =>
         Rom($"Game ({region}) (Disc {n}){ext}", [$"Disc {n}", .. extra ?? []], [region]);
 
     [Test]
@@ -198,7 +208,11 @@ public class DiscSetsTests
 
     private static RomRow Disk(string fileName) => Rom(fileName, [], [], baseTitle: "Allo");
 
-    private static string Tosec(int n, int m, string tags = "", string ext = ".adf") =>
+    private static string Tosec(
+        int n,
+        int m,
+        string tags = "",
+        string ext = ".adf") =>
         $"'Allo 'Allo! Cartoon Fun! (1993)(Alternative)(Disk {n} of {m}){tags}{ext}";
 
     [Test]

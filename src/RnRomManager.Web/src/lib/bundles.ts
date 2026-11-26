@@ -1,6 +1,6 @@
 import { api } from './api/client';
 import { isApiError } from './api/errors';
-import type { BundleEntry, BundleQueue, BundleQueueSummary } from './api/types';
+import type { BundleEntry, BundleQueue, BundleQueueSummary } from '#lib/types/index.js';
 
 /** B2: mirrors `BundleQueueLimits` on the server. */
 export const maxQueueNameLength = 100;

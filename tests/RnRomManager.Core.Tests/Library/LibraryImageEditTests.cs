@@ -6,7 +6,6 @@ using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
-using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 using static RnRomManager.TestData.TestLibrary;
@@ -42,9 +41,7 @@ public class LibraryImageEditTests
     {
         _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _dir = new TempDir();
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns("gb");
+        var handler = TestHandlers.Fake("gb", embedRomsInZip: true);
         handler.DatName.Returns("Nintendo - Game Boy");
         handler.DatFolder.Returns(DatKind.NoIntro);
         handler.MetadatKinds.Returns(DatKind.Metadat);
@@ -72,7 +69,12 @@ public class LibraryImageEditTests
 
     private string Abs => _dir.Combine("gb", "T", "Tetris.zip");
 
-    private InfoJsonImage Image(string name, ImageType type, byte[] bytes, bool cover = false, bool isDefault = false) => new()
+    private InfoJsonImage Image(
+        string name,
+        ImageType type,
+        byte[] bytes,
+        bool cover = false,
+        bool isDefault = false) => new()
     {
         FileName = name, Type = type, Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceUpload, IsDefault = isDefault,
         IsCover = cover, SizeBytes = bytes.Length, Sha1 = Convert.ToHexStringLower(SHA1.HashData(bytes)), Width = 1, Height = 1, DateAdded = When,
@@ -106,7 +108,7 @@ public class LibraryImageEditTests
     private IReadOnlyList<InfoJsonImage> Stored()
     {
         using var zip = LibraryZip.Open(Abs, _reader);
-        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), zip.InfoJson.Rule);
+        Assert.That(zip.InfoJson!.Kind, Is.EqualTo(InfoJsonReadResultOutcome.Ok), zip.InfoJson.Rule);
         foreach (var image in zip.InfoJson.Game!.Images)
         {
             using var stream = zip.OpenEntry(LibraryZip.ImageEntry(image.FileName), ImageFormats.MaxBytes);

@@ -45,7 +45,11 @@ public class CloneCdSheetTests
 
     private static string? Error(string text) => CloneCdSheet.Parse(Bytes(text)).Error;
 
-    private static PlaybackCue Play(string text, long imageLength = 2352L * 30000, string? sub = "Game.sub", string prefix = "track-") =>
+    private static PlaybackCue Play(
+        string text,
+        long imageLength = 2352L * 30000,
+        string? sub = "Game.sub",
+        string prefix = "track-") =>
         CloneCdSheet.ForPlayback(Bytes(text), "Game.ccd", "Game.img", imageLength, sub, prefix);
 
     [Test]

@@ -39,9 +39,7 @@ public partial class LibraryMirrorTests
 
         var handlers = new[] { "gb", "gbc" }.Select(id =>
         {
-            var handler = Substitute.For<ISystemHandler>();
-            handler.EmbedRomsInZip.Returns(true);
-            handler.Id.Returns(id);
+            var handler = TestHandlers.Fake(id, embedRomsInZip: true);
             return handler;
         }).Append(new ExternalTestHandler()).Append(new ExternalSetTestHandler()).ToArray();
         var systems = Substitute.For<ISystemRegistry>();
@@ -455,7 +453,11 @@ public partial class LibraryMirrorTests
 
     // --- Arcade P2: romsets by set name ---
 
-    private static InfoJsonRom SetRom(string fileName, int seed, string? setName, bool isPrimary = true) =>
+    private static InfoJsonRom SetRom(
+        string fileName,
+        int seed,
+        string? setName,
+        bool isPrimary = true) =>
         Rom(fileName, RomBytes(seed), isPrimary) with
         {
             ExternalFileName = "x." + fileName,

@@ -1,0 +1,2 @@
+# CodeStyleTests baseline (docs/style-guide.md): existing violations, one "<rule> <path>" per line.
+# It may only shrink: delete the lines you fix; never add new ones.

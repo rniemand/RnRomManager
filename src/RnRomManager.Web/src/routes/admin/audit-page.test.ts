@@ -14,9 +14,6 @@ vi.mock('$app/state', () => ({
 		}
 	}
 }));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
-}));
 const { default: AuditPage } = await import('./audit/+page.svelte');
 const { default: AdminLayout } = await import('./+layout.svelte');
 

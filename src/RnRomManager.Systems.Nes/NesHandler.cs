@@ -8,7 +8,7 @@ namespace RnRomManager.Systems.Nes;
 /// </summary>
 public sealed class NesHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => LoadResource("boxart.nes.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(NesHandler), "boxart.nes.png");
 
     public string Id => NesHeaderReader.NesId;
     public string DisplayName => "Nintendo Entertainment System";
@@ -33,13 +33,4 @@ public sealed class NesHandler : ISystemHandler
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => NesHeaderReader.Read(rom);
-
-    internal static byte[] LoadResource(string name)
-    {
-        using var stream = typeof(NesHandler).Assembly.GetManifestResourceStream($"RnRomManager.Systems.Nes.Resources.{name}")
-            ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");
-        using var copy = new MemoryStream();
-        stream.CopyTo(copy);
-        return copy.ToArray();
-    }
 }

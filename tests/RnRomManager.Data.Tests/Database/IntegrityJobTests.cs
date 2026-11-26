@@ -47,9 +47,7 @@ public partial class IntegrityJobTests
         _jobs = new JobRepository(_factory);
         var handlers = new[] { "gb", "gbc" }.Select(id =>
         {
-            var handler = Substitute.For<ISystemHandler>();
-            handler.EmbedRomsInZip.Returns(true);
-            handler.Id.Returns(id);
+            var handler = TestHandlers.Fake(id, embedRomsInZip: true);
             return handler;
         }).Append(new ExternalTestHandler()).Append(new ExternalSetTestHandler()).Append(new LegacyExternalTestHandler(_romStorage = Substitute.For<IRomStorageSettings>())).ToArray();
         _systems = Substitute.For<ISystemRegistry>();
@@ -91,8 +89,14 @@ public partial class IntegrityJobTests
     };
 
     /// <summary>Writes a valid one-ROM game ZIP with a real (or default, or no) box art; returns its info.json.</summary>
-    private async Task<InfoJsonGame> Write(string zipPath, string title, bool? defaultBoxArt = false, Guid? gameId = null, int? seed = null,
-        byte[]? image = null, Func<InfoJsonGame, InfoJsonGame>? edit = null)
+    private async Task<InfoJsonGame> Write(
+        string zipPath,
+        string title,
+        bool? defaultBoxArt = false,
+        Guid? gameId = null,
+        int? seed = null,
+        byte[]? image = null,
+        Func<InfoJsonGame, InfoJsonGame>? edit = null)
     {
         var romSeed = seed ?? ++_seed;
         var rom = Rom($"{title} (World).gb", RomBytes(romSeed));
@@ -550,7 +554,11 @@ public partial class IntegrityJobTests
         var recentJob = oldJob with { Id = Guid.NewGuid(), StartedAt = now.AddDays(-179) };
         await _jobs.InsertAsync(oldJob, default);
         await _jobs.InsertAsync(recentJob, default);
-        IntegrityIssue Issue(string status, DateTime detected, DateTime? resolved, string zip) => new()
+        IntegrityIssue Issue(
+            string status,
+            DateTime detected,
+            DateTime? resolved,
+            string zip) => new()
         {
             Type = OrphanFile, Severity = IssueSeverity.Warn, ZipPath = zip, Status = status, FirstSeenJobId = oldJob.Id,
             LastSeenJobId = oldJob.Id, DetectedAt = detected, ResolvedAt = resolved,
@@ -683,7 +691,11 @@ public partial class IntegrityJobTests
     public void Severity_FollowsTheSpecTable(string type, string severity) => Assert.That(SeverityOf(type), Is.EqualTo(severity));
 
     /// <summary>An external game: its ZIP lists one ROM by pointer and the file sits beside it (E1).</summary>
-    private async Task<string> WriteExternal(string zipPath, string title, string? pointer = null, int? seed = null)
+    private async Task<string> WriteExternal(
+        string zipPath,
+        string title,
+        string? pointer = null,
+        int? seed = null)
     {
         var bytes = RomBytes(seed ?? ++_seed);
         pointer ??= $"{title}.{title}.nsp";
@@ -938,33 +950,6 @@ public partial class IntegrityJobTests
         }));
     }
 
-    /// <summary>Runs <paramref name="onRead"/> before every read, honouring the token (large ROM import progress tests).</summary>
-    private sealed class ObservedStream(Stream inner, Action onRead) : Stream
-    {
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            onRead();
-            return inner.Read(buffer, offset, count);
-        }
-
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            onRead();
-            cancellationToken.ThrowIfCancellationRequested();
-            return inner.ReadAsync(buffer, cancellationToken);
-        }
-
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => inner.Length;
-        public override long Position { get => inner.Position; set => throw new NotSupportedException(); }
-        public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-    }
-
     [Test]
     public async Task External_DeepHash_ReportsAHashingStep_ThenClearsIt()
     {
@@ -975,7 +960,7 @@ public partial class IntegrityJobTests
 
         await Run(JobMode.Deep, hooks: new IntegrityHooks
         {
-            WrapHashStream = stream => new ObservedStream(stream, () => seen.Add(progress.StepAt(DateTime.UtcNow))),
+            WrapHashStream = stream => new IntegrityJobObservedStream(stream, () => seen.Add(progress.StepAt(DateTime.UtcNow))),
         }, progress: progress);
 
         Assert.That(seen, Is.Not.Empty);
@@ -991,7 +976,7 @@ public partial class IntegrityJobTests
         var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
         ReplaceSameSize(alpha);
 
-        await Run(JobMode.Deep, hooks: new IntegrityHooks { WrapHashStream = stream => new ObservedStream(stream, () => { }) });
+        await Run(JobMode.Deep, hooks: new IntegrityHooks { WrapHashStream = stream => new IntegrityJobObservedStream(stream, () => { }) });
 
         Assert.That(await OpenExternal(), Is.EqualTo(new[] { (HashMismatch, (string?)"ext/A/Alpha.zip", (string?)"Alpha.Alpha.nsp") }));
     }
@@ -1005,7 +990,7 @@ public partial class IntegrityJobTests
 
         await Run(JobMode.Deep, cancel.Token, new IntegrityHooks
         {
-            WrapHashStream = stream => new ObservedStream(stream, cancel.Cancel),
+            WrapHashStream = stream => new IntegrityJobObservedStream(stream, cancel.Cancel),
         }, progress);
 
         Assert.That(cancel.IsCancellationRequested, Is.True);

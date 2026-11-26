@@ -2,7 +2,12 @@ namespace RnRomManager.Core.Integrity;
 
 /// <summary>One problem (or DB repair) an integrity run found; deduplicated on (<c>Type</c>, <c>ZipPath</c>, <c>EntryName</c>).</summary>
 /// <param name="ZipPath">Relative to <c>Paths:Roms</c>, <c>/</c> separators; for <c>OrphanFile</c> the orphan itself.</param>
-public sealed record IntegrityFinding(string Type, string? ZipPath, string? EntryName = null, string? SystemId = null, Guid? GameId = null,
+public sealed record IntegrityFinding(
+    string Type,
+    string? ZipPath,
+    string? EntryName = null,
+    string? SystemId = null,
+    Guid? GameId = null,
     string? Details = null)
 {
     /// <summary>Paths compare case-insensitively (§5); so do external file names (G2a), ZIP entry names don't.</summary>

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests;
 
@@ -16,7 +17,7 @@ public class SystemEmulatorsCatalogTests
         AppHost.AddSystemHandlers(services);
         using var provider = services.BuildServiceProvider();
         var ids = provider.GetServices<ISystemHandler>().Select(h => h.Id).ToList();
-        var path = Path.Combine(RepoRoot(), "src", "RnRomManager.Web", "src", "lib", "systemEmulators.json");
+        var path = Path.Combine(RepoPaths.Root(), "src", "RnRomManager.Web", "src", "lib", "systemEmulators.json");
         using var catalog = JsonDocument.Parse(File.ReadAllText(path));
 
         Assert.That(Problems(catalog.RootElement, ids), Is.Empty);
@@ -104,11 +105,4 @@ public class SystemEmulatorsCatalogTests
             ? value.GetString()
             : null;
 
-    private static string RepoRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            if (File.Exists(Path.Combine(dir.FullName, "RnRomManager.slnx")))
-                return dir.FullName;
-        throw new InvalidOperationException("Repository root not found.");
-    }
 }

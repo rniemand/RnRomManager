@@ -6,12 +6,22 @@ public interface IJobRepository
 {
     Task InsertAsync(Job job, CancellationToken cancellationToken);
 
-    Task FinishAsync(Guid id, JobStatus status, DateTime finishedAt, string? summary, string? error, CancellationToken cancellationToken);
+    Task FinishAsync(
+        Guid id,
+        JobStatus status,
+        DateTime finishedAt,
+        string? summary,
+        string? error,
+        CancellationToken cancellationToken);
 
     Task<Job?> GetAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>Newest first.</summary>
-    Task<Page<Job>> ListAsync(JobType? type, int page, int pageSize, CancellationToken cancellationToken);
+    Task<Page<Job>> ListAsync(
+        JobType? type,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
 
     /// <summary>The most recently started job of this type and mode, or null (§23 <c>/api/integrity/status</c>).</summary>
     Task<Job?> GetLatestAsync(JobType type, JobMode? mode, CancellationToken cancellationToken);
@@ -22,12 +32,4 @@ public interface IJobRepository
 
     /// <summary>Retention (§12.2): deletes finished jobs started before <paramref name="cutoff"/> (their items cascade).</summary>
     Task<int> PurgeAsync(DateTime cutoff, CancellationToken cancellationToken);
-}
-
-public interface IJobItemRepository
-{
-    Task<long> InsertAsync(JobItem item, CancellationToken cancellationToken);
-
-    /// <summary>In insert order.</summary>
-    Task<Page<JobItem>> ListAsync(Guid jobId, string? outcome, int page, int pageSize, CancellationToken cancellationToken);
 }

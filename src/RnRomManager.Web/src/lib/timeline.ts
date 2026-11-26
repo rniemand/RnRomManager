@@ -1,23 +1,10 @@
+import type { YearRange, TimelineState } from '#lib/types/index.js';
+import { pageParam } from '#lib/urlState.js';
+
 /**
  * Timeline T3/T4: the `/timeline` URL state (`?system=&from=&to=&page=`) and the zoom and pan math over the data range
  * (the min and max year `GET /api/timeline` returns for the current system).
  */
-
-/** The years with games for the current system, inclusive. */
-export interface YearRange {
-	min: number;
-	max: number;
-}
-
-export interface TimelineState {
-	/** A registered system id, or null for every system. */
-	system: string | null;
-	/** The shown years, inclusive, always inside the data range with `from <= to`. */
-	from: number;
-	to: number;
-	/** One-based. */
-	page: number;
-}
 
 /** What the helpers read of a URL (SvelteKit's `page.url` has read-only search params). */
 type UrlLike = { readonly searchParams: { get(name: string): string | null } };
@@ -49,7 +36,7 @@ export function timelineState(
 	let from = clamp(year(url.searchParams.get('from')) ?? range.min, range);
 	let to = clamp(year(url.searchParams.get('to')) ?? range.max, range);
 	if (from > to) [from, to] = [to, from];
-	const page = Math.max(1, Math.floor(Number(url.searchParams.get('page'))) || 1);
+	const page = pageParam(url.searchParams);
 	return { system, from, to, page };
 }
 

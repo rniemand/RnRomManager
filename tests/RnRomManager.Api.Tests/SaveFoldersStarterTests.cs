@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Jobs;
@@ -14,21 +13,7 @@ namespace RnRomManager.Api.Tests;
 /// <summary>Release editing B19: the save folder starter runs the job once unless the setting says it already ran.</summary>
 public class SaveFoldersStarterTests
 {
-    /// <summary>Counts created timers, so a test advances time only once the starter's retry delay exists.</summary>
-    private sealed class CountingTimeProvider(DateTimeOffset start) : FakeTimeProvider(start)
-    {
-        private int _timers;
-        public int Timers => Volatile.Read(ref _timers);
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            var timer = base.CreateTimer(callback, state, dueTime, period);
-            Interlocked.Increment(ref _timers);
-            return timer;
-        }
-    }
-
-    private CountingTimeProvider _time = null!;
+    private SaveFoldersStarterCountingTimeProvider _time = null!;
     private CancellationTokenSource _appStarted = null!;
     private JobLock _lock = null!;
     private IJobRepository _jobs = null!;
@@ -38,7 +23,7 @@ public class SaveFoldersStarterTests
     [SetUp]
     public void SetUp()
     {
-        _time = new CountingTimeProvider(new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero));
+        _time = new SaveFoldersStarterCountingTimeProvider(new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero));
         _appStarted = new CancellationTokenSource();
         _lock = new JobLock();
         _jobs = Substitute.For<IJobRepository>();

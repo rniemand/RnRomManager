@@ -1,8 +1,8 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using MySqlConnector;
 using RnRomManager.Core.Naming;
 using RnRomManager.Data.Repositories;
 using RnRomManager.TestData;
-using Microsoft.Extensions.Logging.Abstractions;
-using MySqlConnector;
 
 namespace RnRomManager.Data.Tests.Database;
 
@@ -293,14 +293,23 @@ public class SchemaMigrationTests
         Assert.That((rows["Y[UPD][1.0.1].nsp"], rows["Z[1.0.1].nsp"]), Is.EqualTo(((string?)null, (string?)null)));
     }
 
-    private static Task InsertFlaggedRomAsync(string cs, string gameId, string fileName, string flags, int index) => ExecuteAsync(cs,
+    private static Task InsertFlaggedRomAsync(
+        string cs,
+        string gameId,
+        string fileName,
+        string flags,
+        int index) => ExecuteAsync(cs,
         "INSERT INTO roms (game_id, system_id, file_name, original_file_name, base_title, regions, languages, flags, " +
         "region_key, id_method, size_bytes, crc32, md5, sha1, date_added, date_modified) VALUES " +
         "(@g, 'switch', @f, @f, 'X', '[]', '[]', @fl, '|World|', 'TitleDb', 1, " +
         "'00000000', REPEAT('0', 32), LPAD(@i, 40, '0'), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))",
         ("@g", gameId), ("@f", fileName), ("@fl", flags), ("@i", index.ToString()));
 
-    private static Task InsertRomAsync(string cs, string gameId, string fileName, char hashDigit) => ExecuteAsync(cs,
+    private static Task InsertRomAsync(
+        string cs,
+        string gameId,
+        string fileName,
+        char hashDigit) => ExecuteAsync(cs,
         "INSERT INTO roms (game_id, system_id, file_name, original_file_name, base_title, regions, languages, flags, " +
         "region_key, id_method, size_bytes, crc32, md5, sha1, date_added, date_modified) VALUES " +
         "(@g, 'gb', @f, @f, 'Tetris', '[]', '[]', '[]', '|World|', 'Dat', 32768, " +

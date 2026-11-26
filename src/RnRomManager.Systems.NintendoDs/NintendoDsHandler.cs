@@ -12,7 +12,7 @@ namespace RnRomManager.Systems.NintendoDs;
 /// </summary>
 public sealed class NintendoDsHandler(IRomStorageSettings? settings = null) : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.nds.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(NintendoDsHandler), "boxart.nds.png");
 
     public string Id => NintendoDsHeaderReader.NintendoDsId;
     public string DisplayName => "Nintendo DS";

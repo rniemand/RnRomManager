@@ -32,13 +32,9 @@ public class SaveFoldersJobTests
     public void SetUp()
     {
         _dir = new TempDir();
-        var gb = Substitute.For<ISystemHandler>();
-        gb.Id.Returns("gb");
-        gb.EmbedRomsInZip.Returns(true);
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         // A legacy system whose ROMs should be outside the ZIP: an embedded game is storage-pending.
-        var nds = Substitute.For<ISystemHandler>();
-        nds.Id.Returns("nds");
-        nds.EmbedRomsInZip.Returns(false);
+        var nds = TestHandlers.Fake("nds");
         nds.LegacyEmbeddedRoms.Returns(true);
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns([gb, nds]);
@@ -79,7 +75,11 @@ public class SaveFoldersJobTests
     };
 
     /// <summary>A one-ROM game ZIP (mirrored as a row) with <paramref name="saves"/>: raw bytes for its index and entries.</summary>
-    private async Task<GameRow> Add(string title, string system = "gb", byte[]? index = null, params (string Entry, byte[] Bytes)[] saves)
+    private async Task<GameRow> Add(
+        string title,
+        string system = "gb",
+        byte[]? index = null,
+        params (string Entry, byte[] Bytes)[] saves)
     {
         var bytes = RomBytes(++_seed);
         var game = Game(title, Rom(title + ".gb", bytes)) with { System = system };

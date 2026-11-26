@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { GameDetail } from '#lib/api/types.js';
+import type { GameDetail } from '#lib/types/index.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
@@ -13,9 +13,6 @@ vi.mock('$app/state', () => ({
 			return testUrl.current;
 		}
 	}
-}));
-vi.mock('$app/paths', () => ({
-	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {

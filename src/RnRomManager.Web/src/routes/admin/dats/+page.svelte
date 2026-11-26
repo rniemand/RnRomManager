@@ -1,13 +1,17 @@
 <script lang="ts">
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import FormField from '#lib/components/forms/FormField.svelte';
+	import Switch from '#lib/components/forms/Switch.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { DatRefreshSettings, DatVersion } from '#lib/api/types.js';
-	import AccordionItem from '#lib/components/AccordionItem.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import type { DatRefreshSettings, DatVersion } from '#lib/types/index.js';
+	import AccordionItem from '#lib/components/layout/AccordionItem.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import { jobLabel, percent } from '#lib/jobs.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -118,9 +122,7 @@
 			</div>
 		</div>
 	{:else}
-		<button type="button" class="btn btn-primary" disabled={busy} onclick={refresh}>
-			<Icon name="retry" /> Refresh DATs
-		</button>
+		<Button variant="primary" icon="retry" disabled={busy} onclick={refresh}>Refresh DATs</Button>
 	{/if}
 </div>
 
@@ -136,35 +138,23 @@
 		{:else if !schedule}
 			<Loading />
 		{:else}
-			<div class="form-check form-switch mb-3">
-				<input
-					id="dat-enabled"
-					class="form-check-input"
-					type="checkbox"
-					role="switch"
-					bind:checked={form.enabled}
-				/>
-				<label class="form-check-label" for="dat-enabled">Enabled</label>
-			</div>
+			<Switch id="dat-enabled" label="Enabled" wrapperClass="mb-3" bind:checked={form.enabled} />
 			<div class="mb-3 dat-time">
-				<label class="form-label" for="dat-time">Time (server time, {schedule.timeZone})</label>
-				<input
-					id="dat-time"
-					class="form-control"
-					class:is-invalid={timeError}
-					type="time"
-					bind:value={form.time}
-				/>
+				<FormField label="Time (server time, {schedule.timeZone})" for="dat-time">
+					<TextInput
+						id="dat-time"
+						class={timeError ? 'is-invalid' : undefined}
+						type="time"
+						bind:value={form.time}
+					/>
+				</FormField>
 				{#if timeError}<div class="invalid-feedback">{timeError}</div>{/if}
 			</div>
 			<p class="small text-body-secondary" data-testid="dat-next-run">
 				Next run: {schedule.nextRunAt ? formatDateTime(schedule.nextRunAt) : 'Disabled'}
 			</p>
 			<div>
-				<button type="submit" class="btn btn-primary" disabled={saving}>
-					{#if saving}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-					Save
-				</button>
+				<Button type="submit" variant="primary" busy={saving}>Save</Button>
 			</div>
 		{/if}
 	</form>
@@ -183,39 +173,34 @@
 	{:else if dats.length === 0}
 		<EmptyState message="No DATs downloaded yet. Refresh to download them." />
 	{:else}
-		<div class="card">
-			<div class="table-responsive">
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<thead class="table-dark">
-						<tr class="small text-uppercase text-body-secondary">
-							<th scope="col">DAT</th>
-							<th scope="col">Version</th>
-							<th scope="col">Downloaded</th>
-							<th scope="col"><span class="visually-hidden">Actions</span></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each dats as dat (dat.datName)}
-							<tr>
-								<td>{dat.datName}</td>
-								<td>{dat.version}</td>
-								<td class="text-nowrap">{formatDateTime(dat.downloadedAt)}</td>
-								<td class="text-end">
-									<!-- eslint-disable svelte/no-navigation-without-resolve -- an API download, not a page -->
-									<a
-										class="btn btn-sm btn-outline-secondary"
-										href="/api/admin/dats/{encodeURIComponent(dat.datName)}/download"
-										download
-										aria-label="Download {dat.datName}"><Icon name="download" /></a
-									>
-									<!-- eslint-enable svelte/no-navigation-without-resolve -->
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		</div>
+		<DataTable items={dats} key={(dat) => dat.datName}>
+			{#snippet head()}
+				<tr class="small text-uppercase text-body-secondary">
+					<th scope="col">DAT</th>
+					<th scope="col">Version</th>
+					<th scope="col">Downloaded</th>
+					<th scope="col"><span class="visually-hidden">Actions</span></th>
+				</tr>
+			{/snippet}
+			{#snippet row(dat)}
+				<tr>
+					<td>{dat.datName}</td>
+					<td>{dat.version}</td>
+					<td class="text-nowrap">{formatDateTime(dat.downloadedAt)}</td>
+					<td class="text-end">
+						<Button
+							variant="secondary"
+							outline
+							size="sm"
+							icon="download"
+							href="/api/admin/dats/{encodeURIComponent(dat.datName)}/download"
+							download
+							aria-label="Download {dat.datName}"
+						/>
+					</td>
+				</tr>
+			{/snippet}
+		</DataTable>
 	{/if}
 </AccordionItem>
 

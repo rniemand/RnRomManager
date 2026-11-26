@@ -13,8 +13,15 @@ namespace RnRomManager.Api;
 /// the log and audit purges at startup and daily at 00:05 UTC (§13, AU5). Driven by <see cref="TimeProvider"/>. Runs missed while the
 /// app was down aren't caught up. A quick check that finds the job lock busy is skipped (<c>Info</c>, D20).
 /// </summary>
-public sealed class Scheduler(JobRunner runner, IntegrityJobFactory integrity, LogRetention logs, IAuditLog audit,
-    IOptions<IntegrityOptions> options, TimeZoneInfo zone, TimeProvider time, ILogger<Scheduler> logger) : BackgroundService
+public sealed class Scheduler(
+    JobRunner runner,
+    IntegrityJobFactory integrity,
+    LogRetention logs,
+    IAuditLog audit,
+    IOptions<IntegrityOptions> options,
+    TimeZoneInfo zone,
+    TimeProvider time,
+    ILogger<Scheduler> logger) : BackgroundService
 {
     /// <summary>The next quick check (UTC), or null when <c>QuickCheckTime</c> is empty (disabled).</summary>
     public DateTimeOffset? NextQuickCheckAt() => QuickCheckTime is { } at ? ScheduleCalculator.NextDaily(time.GetUtcNow(), at, zone) : null;

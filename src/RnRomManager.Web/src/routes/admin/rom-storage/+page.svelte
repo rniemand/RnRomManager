@@ -1,13 +1,18 @@
 <script lang="ts">
+	import { fromAction } from 'svelte/attachments';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
+	import RepackZipsModal from '#lib/components/modals/RepackZipsModal.svelte';
+	import ZipCompressionModal from '#lib/components/modals/ZipCompressionModal.svelte';
+	import StorageMigrationModal from '#lib/components/modals/StorageMigrationModal.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
-	import type { RomStorageRow } from '#lib/api/types.js';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import type { RomStorageRow } from '#lib/types/index.js';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatCount } from '#lib/format.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -165,6 +170,30 @@
 			repackStarted(row)
 		);
 	}
+
+	const levelGuide: { level: Level; size: string; icon: string; speed: string; use: string }[] = [
+		{
+			level: 'Store',
+			size: '~100% of the ROM size (no compression)',
+			icon: 'speed-fast',
+			speed: 'Fastest to read and write, almost no CPU',
+			use: "Large ROMs that don't compress well (DS), or when fewer files on disk is the goal"
+		},
+		{
+			level: 'Med',
+			size: 'About 40–90% of the ROM size, depending on the ROM',
+			icon: 'speed-medium',
+			speed: 'Fast',
+			use: "Most systems; today's behaviour"
+		},
+		{
+			level: 'High',
+			size: 'A few percent smaller than Medium',
+			icon: 'speed-slow',
+			speed: 'Writes several times slower, reads like Medium',
+			use: 'Small cartridge ROMs where space matters most'
+		}
+	];
 </script>
 
 <svelte:head><title>ROM Zip Config · Admin · RnRomManager</title></svelte:head>
@@ -185,186 +214,125 @@
 	{/if}
 	{#if pending.length > 0}
 		<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-			<button type="button" class="btn btn-outline-warning" disabled={blocked} onclick={resume}
-				>Resume moves</button
-			>
+			<Button variant="warning" outline disabled={blocked} onclick={resume}>Resume moves</Button>
 			<span class="small text-body-secondary"
 				>Some games still wait to be moved to their system's configured storage.</span
 			>
 		</div>
 	{/if}
-	<div class="card">
-		<div class="table-responsive">
-			<table class="table table-sm table-striped table-hover align-middle mb-0">
-				<thead class="table-dark">
-					<tr>
-						<th scope="colgroup" colspan="3"><span class="visually-hidden">System</span></th>
-						<th scope="colgroup" colspan="3" class="text-center">ROM storage</th>
-						<th scope="colgroup" colspan="2" class="text-center">ZIP compression</th>
-					</tr>
-					<tr>
-						<th scope="col">System</th>
-						<th scope="col">Folder</th>
-						<th scope="col" class="text-end">Games</th>
-						<th scope="col" class="text-center">Default</th>
-						<th scope="col" class="text-center">Configured</th>
-						<th scope="col" class="text-end">Change</th>
-						<th scope="col" class="text-center">Level</th>
-						<th scope="col" class="text-end">Repack</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each rows as row (row.id)}
-						<tr>
-							<td>
-								<a
-									class="text-decoration-none"
-									href="{resolve('/')}?system={encodeURIComponent(row.id)}"
-									use:tooltip={`Show ${row.displayName} in the Library`}
-									><SystemBadge system={row.id} name={row.displayName} /></a
-								>
-							</td>
-							<td>
-								<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-								<code
-									tabindex="0"
-									use:tooltip={`Put ROMs in ingest/${row.id}; stored in roms/${row.id}`}
-									>{row.id}</code
-								>
-							</td>
-							<td class="text-end">{formatCount(row.gameCount)}</td>
-							<td class="text-center">{@render storageIcon(row.defaultEmbedRoms)}</td>
-							<td class="text-center">
-								{@render storageIcon(row.embedRoms)}
-								{#if row.pendingGames > 0}
-									<span class="badge text-bg-warning ms-1"
-										>{row.pendingGames} game{row.pendingGames === 1 ? '' : 's'} still to move</span
-									>
-								{/if}
-							</td>
-							<td class="text-end">
-								{#if row.configurable}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-primary"
-										disabled={blocked}
-										onclick={() => ask(row)}
-										>{row.embedRoms ? 'Store beside ZIP' : 'Store in ZIP'}</button
-									>
-								{/if}
-							</td>
-							<td class="text-center text-nowrap">
-								{#if row.compressionConfigurable}
-									{@render levelBadge(row.zipCompression)}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-primary ms-2"
-										aria-label="Edit ZIP compression of {row.displayName}"
-										use:tooltip={'Edit compression level'}
-										disabled={blocked}
-										onclick={() => askZip(row, false)}><Icon name="edit" /></button
-									>
-								{:else}
-									<span class="text-body-secondary" aria-hidden="true">—</span><span
-										class="visually-hidden">Not applicable: ROMs are beside the ZIP</span
-									>
-								{/if}
-							</td>
-							<td class="text-end">
-								{#if row.compressionConfigurable}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-primary"
-										disabled={blocked}
-										onclick={() => askZip(row, true)}
-										>Repack again&#32;<span class="visually-hidden">{row.displayName} ZIPs</span
-										></button
-									>
-								{/if}
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	</div>
+	<DataTable items={rows} key={(row) => row.id}>
+		{#snippet head()}
+			<tr>
+				<th scope="colgroup" colspan="3"><span class="visually-hidden">System</span></th>
+				<th scope="colgroup" colspan="3" class="text-center">ROM storage</th>
+				<th scope="colgroup" colspan="2" class="text-center">ZIP compression</th>
+			</tr>
+			<tr>
+				<th scope="col">System</th>
+				<th scope="col">Folder</th>
+				<th scope="col" class="text-end">Games</th>
+				<th scope="col" class="text-center">Default</th>
+				<th scope="col" class="text-center">Configured</th>
+				<th scope="col" class="text-end">Change</th>
+				<th scope="col" class="text-center">Level</th>
+				<th scope="col" class="text-end">Repack</th>
+			</tr>
+		{/snippet}
+		{#snippet row(row)}
+			<tr>
+				<td>
+					<a
+						class="text-decoration-none"
+						href="{resolve('/')}?system={encodeURIComponent(row.id)}"
+						use:tooltip={`Show ${row.displayName} in the Library`}
+						><SystemBadge system={row.id} name={row.displayName} /></a
+					>
+				</td>
+				<td>
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+					<code tabindex="0" use:tooltip={`Put ROMs in ingest/${row.id}; stored in roms/${row.id}`}
+						>{row.id}</code
+					>
+				</td>
+				<td class="text-end">{formatCount(row.gameCount)}</td>
+				<td class="text-center">{@render storageIcon(row.defaultEmbedRoms)}</td>
+				<td class="text-center">
+					{@render storageIcon(row.embedRoms)}
+					{#if row.pendingGames > 0}
+						<span class="badge text-bg-warning ms-1"
+							>{row.pendingGames} game{row.pendingGames === 1 ? '' : 's'} still to move</span
+						>
+					{/if}
+				</td>
+				<td class="text-end">
+					{#if row.configurable}
+						<Button variant="primary" outline size="sm" disabled={blocked} onclick={() => ask(row)}
+							>{row.embedRoms ? 'Store beside ZIP' : 'Store in ZIP'}</Button
+						>
+					{/if}
+				</td>
+				<td class="text-center text-nowrap">
+					{#if row.compressionConfigurable}
+						{@render levelBadge(row.zipCompression)}
+						<Button
+							variant="primary"
+							outline
+							size="sm"
+							class="ms-2"
+							icon="edit"
+							aria-label="Edit ZIP compression of {row.displayName}"
+							{@attach fromAction(tooltip, () => 'Edit compression level')}
+							disabled={blocked}
+							onclick={() => askZip(row, false)}
+						/>
+					{:else}
+						<span class="text-body-secondary" aria-hidden="true">—</span><span
+							class="visually-hidden">Not applicable: ROMs are beside the ZIP</span
+						>
+					{/if}
+				</td>
+				<td class="text-end">
+					{#if row.compressionConfigurable}
+						<Button
+							variant="primary"
+							outline
+							size="sm"
+							disabled={blocked}
+							onclick={() => askZip(row, true)}
+							>Repack again&#32;<span class="visually-hidden">{row.displayName} ZIPs</span></Button
+						>
+					{/if}
+				</td>
+			</tr>
+		{/snippet}
+	</DataTable>
 	<h2 class="h6 mt-4">ZIP compression levels</h2>
-	<div class="card">
-		<div class="table-responsive">
-			<table class="table table-sm table-striped table-hover align-middle mb-0">
-				<thead class="table-dark">
-					<tr>
-						<th scope="col">Level</th>
-						<th scope="col">Typical size</th>
-						<th scope="col">Speed</th>
-						<th scope="col">Use for</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr>
-						<th scope="row">{@render levelBadge('Store')}</th>
-						<td>~100% of the ROM size (no compression)</td>
-						<td><Icon name="speed-fast" class="me-1" />Fastest to read and write, almost no CPU</td>
-						<td
-							>Large ROMs that don't compress well (DS), or when fewer files on disk is the goal</td
-						>
-					</tr>
-					<tr>
-						<th scope="row">
-							{@render levelBadge('Med')}<span class="badge rounded-pill text-bg-light border ms-1"
-								>Default</span
-							>
-						</th>
-						<td>About 40–90% of the ROM size, depending on the ROM</td>
-						<td><Icon name="speed-medium" class="me-1" />Fast</td>
-						<td>Most systems; today's behaviour</td>
-					</tr>
-					<tr>
-						<th scope="row">{@render levelBadge('High')}</th>
-						<td>A few percent smaller than Medium</td>
-						<td
-							><Icon name="speed-slow" class="me-1" />Writes several times slower, reads like Medium</td
-						>
-						<td>Small cartridge ROMs where space matters most</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
-	</div>
+	<DataTable items={levelGuide} key={(guide) => guide.level}>
+		{#snippet head()}
+			<tr>
+				<th scope="col">Level</th>
+				<th scope="col">Typical size</th>
+				<th scope="col">Speed</th>
+				<th scope="col">Use for</th>
+			</tr>
+		{/snippet}
+		{#snippet row(guide)}
+			<tr>
+				<th scope="row">
+					{@render levelBadge(guide.level)}{#if guide.level === 'Med'}<span
+							class="badge rounded-pill text-bg-light border ms-1">Default</span
+						>{/if}
+				</th>
+				<td>{guide.size}</td>
+				<td><Icon name={guide.icon} class="me-1" />{guide.speed}</td>
+				<td>{guide.use}</td>
+			</tr>
+		{/snippet}
+	</DataTable>
 	<p class="small text-body-secondary mt-2">These numbers are typical estimates, not guarantees.</p>
 {/if}
 
-<ConfirmModal
-	bind:open={confirmOpen}
-	title={target
-		? `${target.embedRoms ? 'Store beside ZIP' : 'Store in ZIP'}: ${target.displayName}`
-		: ''}
-	confirmLabel="Start moving"
-	confirmClass="btn-warning"
-	onconfirm={confirm}
->
-	{#if target}
-		<p>
-			Every game of {target.displayName} is rewritten, one at a time. This takes a long time (hours for
-			a large library) and is heavy on disk and CPU. Free space of about one game's ROMs plus its ZIP
-			is needed.
-		</p>
-		<p>
-			Until it ends, no other job (ingest, integrity, scheduled checks) can run and no game of any
-			system can be edited. Games it doesn't reach (cancelled or failed) stay read-only until they
-			are moved. You can cancel it from the Jobs page and resume it later; games already moved stay
-			moved.
-		</p>
-		{#if target.embedRoms}
-			<p class="mb-0">Each ROM becomes a separate file next to its ZIP.</p>
-		{:else}
-			<p class="mb-0">
-				Saving a game state or battery save for this system then rewrites the whole ZIP, including
-				its ROM (up to 512 MiB), so saves get slower.
-			</p>
-		{/if}
-	{/if}
-</ConfirmModal>
+<StorageMigrationModal bind:open={confirmOpen} row={target} onconfirm={confirm} />
 
 {#snippet levelBadge(value: Level)}
 	<span class="badge {level(value).badge}">{level(value).label}</span>
@@ -378,46 +346,12 @@
 	>
 {/snippet}
 
-{#snippet repackWarning(name: string)}
-	<p>
-		Every game ZIP of {name} is rewritten, one at a time. On a large library this takes a long time and
-		uses a lot of disk and CPU. No other job runs and no game can be edited until it ends.
-	</p>
-	<p>If you cancel, some ZIPs keep the old level. They still play; use Repack again to finish.</p>
-	<p class="mb-0">
-		Each game needs free space about the size of its uncompressed ROMs while it's rewritten.
-	</p>
-{/snippet}
-
-<ConfirmModal
+<ZipCompressionModal
 	bind:open={zipOpen}
-	title={zipTarget ? `ZIP compression: ${zipTarget.displayName}` : ''}
-	confirmLabel="Change and repack"
-	confirmClass="btn-warning"
-	confirmDisabled={zipLevel === zipTarget?.zipCompression}
+	row={zipTarget}
+	bind:level={zipLevel}
+	{levels}
 	onconfirm={confirmZip}
->
-	{#if zipTarget}
-		<div class="mb-3">
-			<label for="zip-compression-level" class="form-label">Compression level</label>
-			<select id="zip-compression-level" class="form-select" bind:value={zipLevel}>
-				{#each levels as level (level.value)}
-					<option value={level.value}>{level.label}</option>
-				{/each}
-			</select>
-		</div>
-		{@render repackWarning(zipTarget.displayName)}
-	{/if}
-</ConfirmModal>
+/>
 
-<ConfirmModal
-	bind:open={repackOpen}
-	title={zipTarget ? `Repack ${zipTarget.displayName} ZIPs` : ''}
-	confirmLabel="Repack again"
-	confirmClass="btn-warning"
-	onconfirm={confirmRepack}
->
-	{#if zipTarget}
-		{@render repackWarning(zipTarget.displayName)}
-	{/if}
-</ConfirmModal>
+<RepackZipsModal bind:open={repackOpen} row={zipTarget} onconfirm={confirmRepack} />

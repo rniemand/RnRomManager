@@ -10,7 +10,12 @@ namespace RnRomManager.Core.Jobs;
 /// the job off the request with its progress in memory, and records the end status. The lock is always released,
 /// even when the final row update fails (the row then stays <c>Running</c> until startup marks it <c>Aborted</c>).
 /// </summary>
-public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserRepository users, TimeProvider time, ILogger<JobRunner> logger)
+public sealed class JobRunner(
+    IJobRepository jobs,
+    JobLock jobLock,
+    IUserRepository users,
+    TimeProvider time,
+    ILogger<JobRunner> logger)
 {
     private static readonly JsonSerializerOptions SummaryJson = new(JsonSerializerDefaults.Web);
 
@@ -21,7 +26,11 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserReposit
     /// <returns>The started job, or null when the lock is busy (<c>409 JobRunning</c>).</returns>
     /// <exception cref="JobRefusedException"><see cref="IJob.Preflight"/> refused; the lock is released.</exception>
     /// <exception cref="Exception">The <c>jobs</c> insert failed; the lock is released.</exception>
-    public async Task<StartedJob?> StartAsync(IJob job, JobTrigger trigger, int? requestedBy, CancellationToken cancellationToken)
+    public async Task<StartedJob?> StartAsync(
+        IJob job,
+        JobTrigger trigger,
+        int? requestedBy,
+        CancellationToken cancellationToken)
     {
         var release = jobLock.TryAcquire(job.Type.ToString(), job.Type);
         if (release is null)
@@ -159,25 +168,4 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserReposit
             release.Dispose();
         }
     }
-
-    private sealed class RunningJob(Job row, bool cancellable)
-    {
-        public Job Row { get; } = row;
-        public bool Cancellable { get; } = cancellable;
-        public JobProgress Progress { get; } = new();
-
-        // Not disposed: Cancel() may race the job's end, and a CTS without timers holds nothing to free.
-        public CancellationTokenSource Cancellation { get; } = new();
-
-        public Task? Completion { get; set; }
-
-        public JobSnapshot Snapshot(DateTime nowUtc) => new(
-            Row.Id, Row.Type, Row.Mode, JobStatus.Running, Progress.Current, Progress.Total, Progress.CurrentItem, Row.StartedAt,
-            Progress.StepAt(nowUtc));
-    }
 }
-
-public enum CancelResult { NotFound, Cancelled, NotCancellable }
-
-/// <param name="Completion">Ends when the job's row is final (tests and shutdown wait on it).</param>
-public sealed record StartedJob(Guid Id, Task Completion);

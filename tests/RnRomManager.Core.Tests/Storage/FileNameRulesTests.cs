@@ -1,16 +1,22 @@
 using RnRomManager.Core.Storage;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Storage;
 
 public class FileNameRulesTests
 {
+    private TempDir _temp = null!;
     private string _dir = null!;
 
     [SetUp]
-    public void SetUp() => _dir = Directory.CreateTempSubdirectory("rnrm-names-").FullName;
+    public void SetUp()
+    {
+        _temp = new TempDir();
+        _dir = _temp.Path;
+    }
 
     [TearDown]
-    public void TearDown() => Directory.Delete(_dir, recursive: true);
+    public void TearDown() => _temp.Dispose();
 
     [TestCase("Tetris.zip", 2, "Tetris (2).zip")]
     [TestCase("Tetris (World) (Rev 1).gb", 3, "Tetris (World) (Rev 1) (3).gb")]

@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using RnRomManager.Core.Systems;
 using RnRomManager.Systems.GameBoy;
 using RnRomManager.TestData;
@@ -25,8 +24,7 @@ public class Nintendo64HandlerTests
     {
         var png = Handler.DefaultBoxArtPng.Span;
 
-        Assert.That(png[..8].ToArray(), Is.EqualTo(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }), "PNG signature");
-        Assert.That((BinaryPrimitives.ReadInt32BigEndian(png[16..]), BinaryPrimitives.ReadInt32BigEndian(png[20..])), Is.EqualTo((512, 512)));
+        HandlerAsserts.AssertBoxArtPng(Handler, 512);
         ISystemHandler[] others = [new GameBoyHandler(), new GameBoyColorHandler(), new GameBoyAdvanceHandler()];
         Assert.That(others.Select(h => h.DefaultBoxArtPng.ToArray()), Has.None.EqualTo(png.ToArray()));
     }

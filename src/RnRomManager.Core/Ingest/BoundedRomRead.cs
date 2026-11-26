@@ -3,22 +3,6 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>How a <see cref="BoundedRomRead"/> ended.</summary>
-public enum BoundedReadStatus
-{
-    /// <summary>Exactly the handle's length was read into <see cref="BoundedReadResult.Bytes"/>.</summary>
-    Read,
-
-    /// <summary>The open handle's length is outside the limits; nothing was allocated.</summary>
-    OutOfRange,
-
-    /// <summary>The file ended before the handle's length, or grew past it, while it was read.</summary>
-    Changed,
-}
-
-/// <param name="Length">The open handle's length.</param>
-public sealed record BoundedReadResult(BoundedReadStatus Status, long Length, byte[]? Bytes = null, string? Details = null);
-
 /// <summary>
 /// The one whole-ROM read of an embedded source, shared by ingest and Review. It checks the open handle's length
 /// against the limits before allocating, reads exactly that length into one array, detects early EOF or growth, and
@@ -28,7 +12,11 @@ public static class BoundedRomRead
 {
     /// <summary>Open or read failures throw (<see cref="IOException"/>, <see cref="UnauthorizedAccessException"/>).</summary>
     /// <param name="wrap">A test seam: wraps the read stream (the length check uses the real handle).</param>
-    public static async Task<BoundedReadResult> ReadAsync(string path, long minBytes, long maxBytes, Func<Stream, Stream>? wrap,
+    public static async Task<BoundedReadResult> ReadAsync(
+        string path,
+        long minBytes,
+        long maxBytes,
+        Func<Stream, Stream>? wrap,
         CancellationToken cancellationToken)
     {
         // bufferSize 0: no FileStream buffer, so an out-of-range file allocates next to nothing.

@@ -10,7 +10,7 @@ public sealed class TurboGrafx16Handler : ISystemHandler
 {
     private const int CopierHeaderBytes = 512;
 
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => LoadResource("boxart.tg16.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(TurboGrafx16Handler), "boxart.tg16.png");
 
     public string Id => "tg16";
     public string DisplayName => "TurboGrafx-16 / PC Engine";
@@ -42,14 +42,4 @@ public sealed class TurboGrafx16Handler : ISystemHandler
     /// </summary>
     public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) =>
         rom.Length % 8192 == CopierHeaderBytes ? rom[CopierHeaderBytes..] : rom;
-
-    /// <summary>An embedded resource of this assembly by its path under <c>Resources/</c>, e.g. <c>boxart.tg16.png</c>.</summary>
-    internal static byte[] LoadResource(string name)
-    {
-        using var stream = typeof(TurboGrafx16Handler).Assembly.GetManifestResourceStream($"RnRomManager.Systems.Nec.Resources.{name}")
-            ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");
-        using var copy = new MemoryStream();
-        stream.CopyTo(copy);
-        return copy.ToArray();
-    }
 }

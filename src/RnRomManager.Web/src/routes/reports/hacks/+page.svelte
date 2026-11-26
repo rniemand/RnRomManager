@@ -1,17 +1,21 @@
 <script lang="ts">
+	import DataTable from '#lib/components/common/DataTable.svelte';
+	import SortHeader from '#lib/components/common/SortHeader.svelte';
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
+	import { pageParam } from '#lib/urlState.js';
+	import { parseDir } from '#lib/sort.js';
+	import type { SortDir } from '#lib/enums/index.js';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { Page, SystemInfo } from '#lib/api/types.js';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import type { Page, SystemInfo } from '#lib/types/index.js';
+	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import { formatCount } from '#lib/format.js';
@@ -28,18 +32,18 @@
 	}
 
 	type Sort = 'name' | 'system' | 'hacks' | 'releases' | 'size';
-	type Dir = 'asc' | 'desc';
 	interface View {
 		system: string;
 		sort: Sort;
-		dir: Dir;
+		dir: SortDir;
 		page: number;
 	}
 
 	const pageSize = 50;
 	const defaultSort: Sort = 'hacks';
 	/** Text columns start ascending, numbers descending. */
-	const defaultDir = (sort: Sort): Dir => (sort === 'name' || sort === 'system' ? 'asc' : 'desc');
+	const defaultDir = (sort: Sort): SortDir =>
+		sort === 'name' || sort === 'system' ? 'asc' : 'desc';
 
 	const columns: { sort: Sort; label: string; numeric: boolean }[] = [
 		{ sort: 'name', label: 'Game', numeric: false },
@@ -50,21 +54,12 @@
 	];
 
 	const system = $derived(page.url.searchParams.get('system') ?? '');
-	const pageNumber = $derived.by(() => {
-		const value = page.url.searchParams.get('page');
-		return value !== null && /^\d+$/.test(value) && Number(value) >= 1 ? Number(value) : 1;
-	});
+	const pageNumber = $derived(pageParam(page.url.searchParams, 'page', 'digits'));
 	const sort = $derived(
 		columns.find((c) => c.sort === page.url.searchParams.get('sort'))?.sort ?? defaultSort
 	);
-	const dir = $derived.by<Dir>(() => {
-		const value = page.url.searchParams.get('dir');
-		return value === 'asc' || value === 'desc' ? value : defaultDir(sort);
-	});
+	const dir = $derived(parseDir(page.url.searchParams.get('dir'), defaultDir(sort)));
 
-	let result = $state<Page<HackedGame> | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 	let systems = $state<SystemInfo[]>([]);
 
 	$effect(() => {
@@ -103,27 +98,17 @@
 		});
 	}
 
-	$effect(() => {
-		let url = `/api/reports/hacks?sort=${sort}&dir=${dir}&page=${pageNumber}&pageSize=${pageSize}`;
-		if (system) url += `&system=${encodeURIComponent(system)}`;
-		const current = view;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api.get<Page<HackedGame>>(url, { signal: controller.signal }).then(
-			(p) => {
-				// A page past the last one goes to the last page instead.
-				if (p.items.length === 0 && p.total > 0)
-					show({ ...current, page: pageCount(p.total, pageSize) });
-				else result = p;
-			},
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
-	});
+	const report = useAbortableGet<Page<HackedGame>>(
+		() => {
+			let url = `/api/reports/hacks?sort=${sort}&dir=${dir}&page=${pageNumber}&pageSize=${pageSize}`;
+			if (system) url += `&system=${encodeURIComponent(system)}`;
+			return url;
+		},
+		// A page past the last one goes to the last page instead.
+		(p) => show({ ...view, page: pageCount(p.total, pageSize) })
+	);
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 </script>
 
 <svelte:head><title>Games With Hacks · RnRomManager</title></svelte:head>
@@ -142,7 +127,7 @@
 </div>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !result}
 	<Loading />
 {:else}
@@ -152,56 +137,34 @@
 			{result.total === 1 ? 'game' : 'games'}
 		</p>
 	{/if}
-	<div class="card">
-		<div class="table-responsive">
-			{#if result.total === 0}
-				<EmptyState message="No games have hacked releases." />
-			{:else}
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<thead class="table-dark">
-						<tr>
-							{#each columns as column (column.sort)}
-								<th
-									scope="col"
-									class={column.numeric ? 'text-end' : undefined}
-									aria-sort={column.sort === sort
-										? dir === 'asc'
-											? 'ascending'
-											: 'descending'
-										: undefined}
-								>
-									<button
-										type="button"
-										class="btn btn-link p-0 text-reset text-decoration-none fw-semibold"
-										onclick={() => sortBy(column.sort)}
-										>{column.label}
-										{#if column.sort === sort}<Icon
-												name={dir === 'asc' ? 'sort-asc' : 'sort-desc'}
-											/>{/if}</button
-									>
-								</th>
-							{/each}
-						</tr>
-					</thead>
-					<tbody>
-						{#each result.items as item (item.id)}
-							<tr>
-								<td>
-									<a href="{resolve('/games/[id]', { id: item.id })}?tab=releases"
-										>{item.displayTitle}</a
-									>
-								</td>
-								<td><SystemBadge system={item.system} name={item.systemName} /></td>
-								<td class="text-end text-nowrap">{item.hackCount}</td>
-								<td class="text-end text-nowrap">{item.releaseCount}</td>
-								<td class="text-end text-nowrap"><FileSize bytes={item.bytes} /></td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
-		</div>
-	</div>
+	<DataTable
+		items={result.items}
+		key={(item) => item.id}
+		empty="No games have hacked releases."
+		emptyInCard
+	>
+		{#snippet head()}
+			<tr>
+				<SortHeader
+					columns={columns.map((c) => ({ ...c, class: c.numeric ? 'text-end' : undefined }))}
+					{sort}
+					{dir}
+					onsort={sortBy}
+				/>
+			</tr>
+		{/snippet}
+		{#snippet row(item)}
+			<tr>
+				<td>
+					<a href="{resolve('/games/[id]', { id: item.id })}?tab=releases">{item.displayTitle}</a>
+				</td>
+				<td><SystemBadge system={item.system} name={item.systemName} /></td>
+				<td class="text-end text-nowrap">{item.hackCount}</td>
+				<td class="text-end text-nowrap">{item.releaseCount}</td>
+				<td class="text-end text-nowrap"><FileSize bytes={item.bytes} /></td>
+			</tr>
+		{/snippet}
+	</DataTable>
 	<Pagination
 		page={pageNumber}
 		pages={pageCount(result.total, pageSize)}
