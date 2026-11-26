@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
 	import type { About } from '#lib/types/index.js';
 	import BaseModal from './BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
@@ -63,10 +64,10 @@
 
 		<h2 class="h5 mt-4">Licences</h2>
 		<label class="visually-hidden" for="about-licence-search">Search licences</label>
-		<input
+		<SearchInput
+			size="sm"
+			class="mb-2"
 			id="about-licence-search"
-			type="search"
-			class="form-control form-control-sm mb-2"
 			placeholder="Search licences"
 			bind:value={search}
 		/>

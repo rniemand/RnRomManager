@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -21,16 +22,13 @@
 <div class="accordion mb-3">
 	<div class="accordion-item">
 		<h2 class="accordion-header" id={headingId}>
-			<button
-				type="button"
-				class="accordion-button"
-				class:collapsed={!open}
+			<Button
 				aria-expanded={open}
 				aria-controls={id}
 				onclick={() => (open = !open)}
+				class={['accordion-button', !open && 'collapsed'].filter(Boolean).join(' ')}
+				>{@render header()}</Button
 			>
-				{@render header()}
-			</button>
 		</h2>
 		<div {id} class="accordion-collapse collapse" class:show={open} aria-labelledby={headingId}>
 			<div class="accordion-body" class:p-0={flush}>

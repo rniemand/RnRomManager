@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import type { Snippet } from 'svelte';
 	import JsonTree from './JsonTree.svelte';
 
@@ -51,11 +52,9 @@
 {#if depth === 0}
 	<div class="font-monospace small" bind:this={container}>
 		<div class="d-flex gap-2 mb-2">
-			<button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => setAll(true)}
-				>Expand all</button
-			>
-			<button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => setAll(false)}
-				>Collapse all</button
+			<Button variant="secondary" outline size="sm" onclick={() => setAll(true)}>Expand all</Button>
+			<Button variant="secondary" outline size="sm" onclick={() => setAll(false)}
+				>Collapse all</Button
 			>
 			{#if actions}<div class="ms-auto">{@render actions()}</div>{/if}
 		</div>

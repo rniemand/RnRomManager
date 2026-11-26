@@ -1,4 +1,8 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
+	import Textarea from '#lib/components/forms/Textarea.svelte';
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { untrack } from 'svelte';
 	import type {
 		GameDetail,
@@ -290,25 +294,16 @@
 <!-- M1: Lookup Info's actions sit in the modal footer, left of Cancel and Edit Metadata. -->
 {#snippet lookupFooter()}
 	{#if lookupChosen}
-		<button
-			type="button"
-			class="btn btn-success"
-			disabled={busy}
-			onclick={() => lookup?.useMatch(false)}>Use this match</button
+		<Button variant="success" disabled={busy} onclick={() => lookup?.useMatch(false)}
+			>Use this match</Button
 		>
-		<button
-			type="button"
-			class="btn btn-success"
-			disabled={busy}
-			onclick={() => lookup?.useMatch(true)}>Use this match and save</button
+		<Button variant="success" disabled={busy} onclick={() => lookup?.useMatch(true)}
+			>Use this match and save</Button
 		>
 	{/if}
 	{#if !lookupNotConfigured}
-		<button
-			type="button"
-			class="btn btn-outline-warning"
-			disabled={busy}
-			onclick={() => lookup?.notOnIgdb()}>Not on IGDB</button
+		<Button variant="warning" outline disabled={busy} onclick={() => lookup?.notOnIgdb()}
+			>Not on IGDB</Button
 		>
 	{/if}
 {/snippet}
@@ -377,11 +372,10 @@
 					<div class="row g-3">
 						<div class="col-12 col-md-9">
 							<label class="form-label" for="edit-title">Title</label>
-							<input
+							<TextInput
+								class={errors.title ? 'is-invalid' : undefined}
 								id="edit-title"
-								class="form-control"
-								class:is-invalid={errors.title}
-								maxlength="255"
+								maxlength={255}
 								bind:value={form.title}
 							/>
 							{#if errors.title}<div class="invalid-feedback">{errors.title}</div>{/if}
@@ -389,10 +383,9 @@
 						</div>
 						<div class="col-12 col-md-3">
 							<label class="form-label" for="edit-year">Release year</label>
-							<input
+							<TextInput
+								class={errors.releaseYear ? 'is-invalid' : undefined}
 								id="edit-year"
-								class="form-control"
-								class:is-invalid={errors.releaseYear}
 								inputmode="numeric"
 								bind:value={form.releaseYear}
 							/>
@@ -401,13 +394,13 @@
 						{#each [['developers', 'Developers'], ['publishers', 'Publishers'], ['genres', 'Genres']] as const as [field, label] (field)}
 							<div class="col-12 col-md-4">
 								<label class="form-label" for="edit-{field}">{label}</label>
-								<textarea
+								<Textarea
+									class={errors[field] ? 'is-invalid' : undefined}
 									id="edit-{field}"
-									class="form-control"
-									class:is-invalid={errors[field]}
-									rows="3"
+									rows={3}
 									aria-describedby="edit-lists-help"
-									bind:value={form[field]}></textarea>
+									bind:value={form[field]}
+								/>
 								{#if errors[field]}<div class="invalid-feedback">{errors[field]}</div>{/if}
 							</div>
 						{/each}
@@ -416,13 +409,13 @@
 						</div>
 						<div class="col-12">
 							<label class="form-label" for="edit-description">Description</label>
-							<textarea
+							<Textarea
+								class={errors.description ? 'is-invalid' : undefined}
 								id="edit-description"
-								class="form-control"
-								class:is-invalid={errors.description}
-								rows="4"
-								maxlength="4000"
-								bind:value={form.description}></textarea>
+								rows={4}
+								maxlength={4000}
+								bind:value={form.description}
+							/>
 							{#if errors.description}<div class="invalid-feedback">{errors.description}</div>{/if}
 						</div>
 						<div class="col-12">
@@ -434,13 +427,12 @@
 										: `linked (#${form.igdbId})`}</span
 							>
 							{#if form.igdbId !== null}
-								<button
-									type="button"
+								<Button
 									class="btn btn-link btn-sm p-0 ms-1 align-baseline"
 									onclick={() => {
 										form.igdbId = null;
 										pendingCover = null;
-									}}>Unlink</button
+									}}>Unlink</Button
 								>
 							{/if}
 							{#if errors.igdbId}<div class="invalid-feedback d-block">{errors.igdbId}</div>{/if}
@@ -488,16 +480,19 @@
 				<p class="form-label mb-1" id="merge-suggested">Suggested</p>
 				<div class="list-group" role="group" aria-labelledby="merge-suggested">
 					{#each suggestions as suggestion (suggestion.id)}
-						<button
-							type="button"
-							class="list-group-item list-group-item-action"
-							class:active={target?.id === suggestion.id}
+						<Button
 							aria-pressed={target?.id === suggestion.id}
 							onclick={() => typeahead?.select(suggestion)}
+							class={[
+								'list-group-item list-group-item-action',
+								target?.id === suggestion.id && 'active'
+							]
+								.filter(Boolean)
+								.join(' ')}
+							>{suggestion.displayTitle}
+							{#if suggestion.releaseYear}<span class="small">({suggestion.releaseYear})</span
+								>{/if}</Button
 						>
-							{suggestion.displayTitle}
-							{#if suggestion.releaseYear}<span class="small">({suggestion.releaseYear})</span>{/if}
-						</button>
 					{/each}
 				</div>
 			</div>
@@ -536,26 +531,14 @@
 		<p>Move {action.rom.fileName} to:</p>
 		<fieldset class="mb-3">
 			<legend class="visually-hidden">Destination</legend>
-			<div class="form-check">
-				<input
-					id="move-existing"
-					class="form-check-input"
-					type="radio"
-					value="existing"
-					bind:group={moveTo}
-				/>
-				<label class="form-check-label" for="move-existing">An existing game</label>
-			</div>
-			<div class="form-check">
-				<input
-					id="move-new"
-					class="form-check-input"
-					type="radio"
-					value="new"
-					bind:group={moveTo}
-				/>
-				<label class="form-check-label" for="move-new">A new game</label>
-			</div>
+			<Checkbox
+				type="radio"
+				id="move-existing"
+				label="An existing game"
+				value="existing"
+				bind:group={moveTo}
+			/>
+			<Checkbox type="radio" id="move-new" label="A new game" value="new" bind:group={moveTo} />
 		</fieldset>
 		{#if moveTo === 'existing'}
 			<GameTypeahead
@@ -568,11 +551,10 @@
 			/>
 		{:else}
 			<label class="form-label" for="move-title">New game title</label>
-			<input
+			<TextInput
+				class={newTitleError ? 'is-invalid' : undefined}
 				id="move-title"
-				class="form-control"
-				class:is-invalid={newTitleError}
-				maxlength="255"
+				maxlength={255}
 				bind:value={newTitle}
 			/>
 			{#if newTitleError}<div class="invalid-feedback">{newTitleError}</div>{/if}

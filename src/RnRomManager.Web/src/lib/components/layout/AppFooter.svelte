@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
@@ -8,7 +9,6 @@
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import type { About, Me } from '#lib/types/index.js';
 	import AboutModal from '#lib/components/modals/AboutModal.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * B10–B12: the signed-in footer, fixed to the bottom: About (U2: the app logo), the version (a link to the releases) and the keyboard
@@ -60,8 +60,7 @@
 <footer class="app-footer fixed-bottom bg-body-tertiary border-top small">
 	<!-- Release editing B28: one row that never wraps; below sm the labels are visually hidden, the icons stay. -->
 	<div class="container d-flex flex-nowrap align-items-center gap-3 py-1 overflow-hidden">
-		<button
-			type="button"
+		<Button
 			class="btn btn-link btn-sm p-0 footer-action link-body-emphasis text-decoration-none"
 			aria-label="About"
 			title="About"
@@ -72,7 +71,7 @@
 				width="16"
 				height="16"
 				class="footer-logo"
-			/></button
+			/></Button
 		>
 		<a
 			class="link-body-emphasis text-decoration-none"
@@ -125,42 +124,40 @@
 			</span>
 		{/if}
 		{#if showAdmin}
-			<button
-				type="button"
+			<Button
+				icon="report-missing-images"
 				class="btn btn-link btn-sm p-0 footer-action {job || held
 					? ''
 					: 'ms-auto'} link-body-emphasis"
 				aria-label="Next missing image"
 				title="Next missing image"
 				onclick={() => void hotkeys.run('reports.missingImage.next')}
-				><Icon name="report-missing-images" /></button
-			>
-			<button
-				type="button"
+			/>
+			<Button
+				icon="report-missing-igdb"
 				class="btn btn-link btn-sm p-0 footer-action link-body-emphasis"
 				aria-label="Next missing IGDB ID"
 				title="Next missing IGDB ID"
 				onclick={() => void hotkeys.run('reports.missingIgdbId.next')}
-				><Icon name="report-missing-igdb" /></button
-			>
-			<button
-				type="button"
+			/>
+			<Button
+				icon="review"
 				class="btn btn-link btn-sm p-0 footer-action link-body-emphasis"
 				aria-label="Open the first review item"
 				title="Open the first review item"
-				onclick={() => void hotkeys.run('review.next')}><Icon name="review" /></button
-			>
+				onclick={() => void hotkeys.run('review.next')}
+			/>
 		{/if}
 		{#if !me.mustChangePassword}
-			<button
-				type="button"
+			<Button
+				icon="keyboard"
 				class="btn btn-link btn-sm p-0 footer-action {job || held || showAdmin
 					? ''
 					: 'ms-auto'} link-body-emphasis"
 				aria-label="Shortcuts"
 				title="Keyboard Shortcuts"
-				onclick={onhotkeys}><Icon name="keyboard" /></button
-			>
+				onclick={onhotkeys}
+			/>
 		{/if}
 	</div>
 </footer>
@@ -175,7 +172,7 @@
 
 	/* Below sm the icon buttons are bigger, easier tap targets (the footer height grows to match in app.css). */
 	@media (max-width: 575.98px) {
-		.footer-action {
+		:global(.footer-action) {
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;

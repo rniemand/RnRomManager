@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { ApiError } from '#lib/api/errors.js';
 	import Icon from '#lib/icons/Icon.svelte';
 
@@ -22,11 +23,9 @@
 	<Icon name="error" />
 	<span class="me-auto">{title}</span>
 	{#if onretry}
-		<button type="button" class="btn btn-sm btn-outline-danger" onclick={onretry}>
-			<Icon name="retry" /> Retry
-		</button>
+		<Button variant="danger" outline size="sm" icon="retry" onclick={onretry}>Retry</Button>
 	{/if}
 	{#if ondismiss}
-		<button type="button" class="btn-close" aria-label="Dismiss" onclick={ondismiss}></button>
+		<Button class="btn-close" aria-label="Dismiss" onclick={ondismiss} />
 	{/if}
 </div>

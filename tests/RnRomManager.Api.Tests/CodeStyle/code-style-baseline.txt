@@ -1,24 +1,5 @@
 # CodeStyleTests baseline (docs/style-guide.md): existing violations, one "<rule> <path>" per line.
 # It may only shrink: delete the lines you fix; never add new ones.
-SV4 src/RnRomManager.Web/src/lib/components/common/ErrorAlert.svelte
-SV4 src/RnRomManager.Web/src/lib/components/common/JsonTree.svelte
-SV4 src/RnRomManager.Web/src/lib/components/common/Pagination.svelte
-SV4 src/RnRomManager.Web/src/lib/components/layout/AccordionItem.svelte
-SV4 src/RnRomManager.Web/src/lib/components/layout/AppFooter.svelte
-SV4 src/RnRomManager.Web/src/lib/components/layout/Navbar.svelte
-SV4 src/RnRomManager.Web/src/lib/components/layout/ToastHost.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/AboutModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/BaseModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/CollectionModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/CollectionPickerModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/EditReleaseModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/EmulatorModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/GameAdminModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/GameCollectionsModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/GlobalSearch.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/HotkeysModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/LogoModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/ReleaseNoteModal.svelte
 SV6 src/RnRomManager.Web/src/lib/components/bundles/BundleDownload.svelte
 SV6 src/RnRomManager.Web/src/lib/components/bundles/SavedBundleQueues.svelte
 SV6 src/RnRomManager.Web/src/lib/components/common/JobStepProgress.svelte

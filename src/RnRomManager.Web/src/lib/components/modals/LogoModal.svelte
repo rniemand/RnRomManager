@@ -1,4 +1,8 @@
 <script lang="ts">
+	import RadioButtons from '#lib/components/forms/RadioButtons.svelte';
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import FileInput from '#lib/components/forms/FileInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { isApiError } from '#lib/api/errors.js';
 	import {
 		discoveryText,
@@ -10,7 +14,6 @@
 	import type { LogoKind } from '#lib/enums/index.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import BaseModal from './BaseModal.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
 	 * B19: replace or remove a publisher's, developer's, genre's or system's shared logo (Admins only; audited, shown for everyone),
@@ -117,37 +120,27 @@
 			<div class="small text-body-secondary">{source}</div>
 		</div>
 
-		<div class="btn-group mb-3" role="radiogroup" aria-label="Logo source">
-			<input
-				type="radio"
-				class="btn-check"
-				name="logo-mode-{uid}"
-				id="logo-mode-url-{uid}"
-				value="url"
-				bind:group={mode}
-				onchange={() => (error = null)}
-			/>
-			<label class="btn btn-outline-secondary btn-sm" for="logo-mode-url-{uid}">URL</label>
-			<input
-				type="radio"
-				class="btn-check"
-				name="logo-mode-{uid}"
-				id="logo-mode-file-{uid}"
-				value="file"
-				bind:group={mode}
-				onchange={() => (error = null)}
-			/>
-			<label class="btn btn-outline-secondary btn-sm" for="logo-mode-file-{uid}">File</label>
-		</div>
+		<RadioButtons
+			class="mb-3"
+			role="radiogroup"
+			aria-label="Logo source"
+			name="logo-mode-{uid}"
+			size="sm"
+			options={[
+				{ value: 'url', label: 'URL', id: `logo-mode-url-${uid}` },
+				{ value: 'file', label: 'File', id: `logo-mode-file-${uid}` }
+			]}
+			bind:value={mode}
+			onchange={() => (error = null)}
+		/>
 
 		{#if mode === 'url'}
 			<label class="form-label" for="logo-url-{uid}">Logo image URL</label>
-			<input
+			<TextInput
+				class={error ? 'is-invalid' : undefined}
 				id="logo-url-{uid}"
 				type="url"
-				class="form-control"
-				class:is-invalid={error}
-				maxlength="1024"
+				maxlength={1024}
 				placeholder="https://"
 				aria-describedby="logo-help-{uid}"
 				bind:value={url}
@@ -155,14 +148,12 @@
 			/>
 		{:else}
 			<label class="form-label" for="logo-file-{uid}">Logo image file</label>
-			<input
+			<FileInput
+				class={error ? 'is-invalid' : undefined}
 				id="logo-file-{uid}"
-				type="file"
-				class="form-control"
-				class:is-invalid={error}
 				accept="image/png,image/jpeg,image/webp"
 				aria-describedby="logo-help-{uid}"
-				bind:this={fileInput}
+				bind:ref={fileInput}
 				onchange={() => (error = null)}
 			/>
 		{/if}
@@ -173,11 +164,14 @@
 		</div>
 
 		{#if item.logoUrl}
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-danger mt-3"
+			<Button
+				variant="danger"
+				outline
+				size="sm"
+				class="mt-3"
+				icon="delete"
 				disabled={busy}
-				onclick={remove}><Icon name="delete" /> Remove shared logo</button
+				onclick={remove}>Remove shared logo</Button
 			>
 		{/if}
 	{/if}

@@ -4,6 +4,9 @@
 </script>
 
 <script lang="ts">
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import NumberInput from '#lib/components/forms/NumberInput.svelte';
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
 	import { untrack } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
@@ -229,18 +232,16 @@
 		<fieldset class="mb-3">
 			<legend class="form-label fs-6">Kind</legend>
 			{#each kinds as [value, label] (value)}
-				<div class="form-check form-check-inline">
-					<input
-						class="form-check-input"
-						class:is-invalid={errors.kind}
-						type="radio"
-						name="{id}-kind"
-						id="{id}-kind-{value}"
-						{value}
-						bind:group={form.kind}
-					/>
-					<label class="form-check-label" for="{id}-kind-{value}">{label}</label>
-				</div>
+				<Checkbox
+					type="radio"
+					class={errors.kind ? 'is-invalid' : undefined}
+					name="{id}-kind"
+					id="{id}-kind-{value}"
+					{label}
+					inline
+					{value}
+					bind:group={form.kind}
+				/>
 			{/each}
 			{#if errors.kind}<div class="invalid-feedback d-block">{errors.kind}</div>{/if}
 		</fieldset>
@@ -250,9 +251,7 @@
 			<div class="border rounded p-2 overflow-auto regions" class:border-danger={errors.regions}>
 				{#each shownRegions as region (region)}
 					<div class="form-check">
-						<input
-							class="form-check-input"
-							type="checkbox"
+						<Checkbox
 							id="{id}-region-{region}"
 							checked={form.regions.includes(region)}
 							onchange={(e) => toggleRegion(region, e.currentTarget.checked)}
@@ -266,10 +265,9 @@
 
 		<div class="mb-3">
 			<label class="form-label" for="{id}-languages">Languages</label>
-			<input
+			<TextInput
+				class={errors.languages ? 'is-invalid' : undefined}
 				id="{id}-languages"
-				class="form-control"
-				class:is-invalid={errors.languages}
 				placeholder="En,Fr,De"
 				bind:value={form.languages}
 			/>
@@ -278,11 +276,10 @@
 
 		<div class="mb-3">
 			<label class="form-label" for="{id}-revision">Revision</label>
-			<input
+			<TextInput
+				class={errors.revision ? 'is-invalid' : undefined}
 				id="{id}-revision"
-				class="form-control"
-				class:is-invalid={errors.revision}
-				maxlength="32"
+				maxlength={32}
 				placeholder="Rev 1"
 				bind:value={form.revision}
 			/>
@@ -292,11 +289,9 @@
 		{#if fileSets}
 			<div class="mb-3">
 				<label class="form-label" for="{id}-disc">Disc</label>
-				<input
+				<NumberInput
+					class={errors.disc ? 'is-invalid' : undefined}
 					id="{id}-disc"
-					class="form-control"
-					class:is-invalid={errors.disc}
-					type="number"
 					min="1"
 					max="99"
 					bind:value={form.disc}
@@ -306,10 +301,8 @@
 		{/if}
 
 		<div class="form-check form-switch">
-			<input
-				class="form-check-input"
-				class:is-invalid={errors.hack}
-				type="checkbox"
+			<Checkbox
+				class={errors.hack ? 'is-invalid' : undefined}
 				role="switch"
 				id="{id}-hack"
 				bind:checked={form.hack}
@@ -318,10 +311,8 @@
 			{#if errors.hack}<div class="invalid-feedback">{errors.hack}</div>{/if}
 		</div>
 		<div class="form-check form-switch mb-3">
-			<input
-				class="form-check-input"
-				class:is-invalid={errors.translated}
-				type="checkbox"
+			<Checkbox
+				class={errors.translated ? 'is-invalid' : undefined}
 				role="switch"
 				id="{id}-translated"
 				bind:checked={form.translated}
@@ -333,10 +324,9 @@
 		{#if form.kind === 'update'}
 			<div class="mb-3">
 				<label class="form-label" for="{id}-version">Version</label>
-				<input
+				<TextInput
+					class={errors.version ? 'is-invalid' : undefined}
 					id="{id}-version"
-					class="form-control"
-					class:is-invalid={errors.version}
 					placeholder="1.0.1"
 					bind:value={form.version}
 				/>

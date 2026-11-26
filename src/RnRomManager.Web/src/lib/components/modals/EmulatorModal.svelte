@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { untrack } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
@@ -9,7 +11,6 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import BaseModal from './BaseModal.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 
 	/**
@@ -382,34 +383,34 @@
 	{#snippet footer()}
 		{#if open && rom && core}
 			{#if !discSet}
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-primary"
+				<Button
+					variant="primary"
+					outline
+					size="sm"
+					icon="download"
 					disabled={exporting}
-					onclick={() => saveToLibrary('state')}
+					onclick={() => saveToLibrary('state')}>Save state to library</Button
 				>
-					<Icon name="download" /> Save state to library
-				</button>
 			{/if}
 			{#if batteryExport}
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-primary"
+				<Button
+					variant="primary"
+					outline
+					size="sm"
+					icon="download"
 					disabled={exporting}
-					onclick={() => saveToLibrary('battery')}
+					onclick={() => saveToLibrary('battery')}>Save battery to library</Button
 				>
-					<Icon name="download" /> Save battery to library
-				</button>
 			{/if}
 			{#if auth.isAdmin}
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-primary"
+				<Button
+					variant="primary"
+					outline
+					size="sm"
+					icon="screenshot"
 					disabled={exporting}
-					onclick={screenshot}
+					onclick={screenshot}>Screenshot</Button
 				>
-					<Icon name="screenshot" /> Screenshot
-				</button>
 			{/if}
 		{/if}
 	{/snippet}
@@ -431,25 +432,15 @@
 					{#if preview.trimmed}
 						<!-- Release editing B26: only when the border was trimmed. -->
 						<div class="form-check">
-							<input
-								class="form-check-input"
-								type="checkbox"
-								id="screenshot-keep-border"
-								bind:checked={keepBorder}
-							/>
+							<Checkbox id="screenshot-keep-border" bind:checked={keepBorder} />
 							<label class="form-check-label" for="screenshot-keep-border">Keep border</label>
 						</div>
 					{/if}
 					<div class="d-flex gap-2">
-						<button
-							type="button"
-							class="btn btn-sm btn-primary"
-							disabled={uploading}
-							onclick={saveSnap}>Save as Snap</button
+						<Button variant="primary" size="sm" disabled={uploading} onclick={saveSnap}
+							>Save as Snap</Button
 						>
-						<button type="button" class="btn btn-sm btn-outline-secondary" onclick={discard}
-							>Discard</button
-						>
+						<Button variant="secondary" outline size="sm" onclick={discard}>Discard</Button>
 					</div>
 				</div>
 			{/if}

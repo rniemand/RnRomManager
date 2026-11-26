@@ -1,4 +1,7 @@
 <script lang="ts">
+	import RadioButtons from '#lib/components/forms/RadioButtons.svelte';
+	import Textarea from '#lib/components/forms/Textarea.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { untrack } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
@@ -154,31 +157,28 @@
 	{:else}
 		{#if error}<ErrorAlert {error} ondismiss={() => (error = null)} />{/if}
 
-		{#if editable}<div class="btn-group btn-group-sm mb-3" role="group" aria-label="Note mode">
-				{#each modes as [value, label] (value)}
-					<input
-						type="radio"
-						class="btn-check"
-						name={groupName}
-						id="{groupName}-{value}"
-						autocomplete="off"
-						{value}
-						bind:group={mode}
-						disabled={value === 'view' && !exists}
-					/>
-					<label class="btn btn-outline-secondary" for="{groupName}-{value}">{label}</label>
-				{/each}
-			</div>{/if}
+		{#if editable}<RadioButtons
+				class="btn-group-sm mb-3"
+				role="group"
+				aria-label="Note mode"
+				name={groupName}
+				options={modes.map(([value, label]) => ({
+					value,
+					label,
+					disabled: value === 'view' && !exists
+				}))}
+				bind:value={mode}
+			/>{/if}
 
 		{#if mode === 'edit'}
 			<label class="visually-hidden" for="{groupName}-text">Note (Markdown)</label>
-			<textarea
+			<Textarea
+				class={['font-monospace', over && 'is-invalid'].filter(Boolean).join(' ')}
 				id="{groupName}-text"
-				class="form-control font-monospace"
-				class:is-invalid={over}
-				rows="12"
+				rows={12}
 				aria-describedby={counterId}
-				bind:value={text}></textarea>
+				bind:value={text}
+			/>
 			<div id={counterId} class="form-text" class:text-danger={over}>
 				{bytes.toLocaleString('en-US')} / {maxNoteBytes.toLocaleString('en-US')} bytes
 			</div>
@@ -200,21 +200,21 @@
 			<div class="d-flex align-items-center gap-2 mt-3">
 				{#if confirmingDelete}
 					<span>Delete this note?</span>
-					<button type="button" class="btn btn-sm btn-danger" disabled={busy} onclick={remove}
-						>Yes</button
-					>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
+					<Button variant="danger" size="sm" disabled={busy} onclick={remove}>Yes</Button>
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
 						disabled={busy}
-						onclick={() => (confirmingDelete = false)}>No</button
+						onclick={() => (confirmingDelete = false)}>No</Button
 					>
 				{:else}
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-danger"
+					<Button
+						variant="danger"
+						outline
+						size="sm"
 						disabled={busy}
-						onclick={() => (confirmingDelete = true)}>Delete note</button
+						onclick={() => (confirmingDelete = true)}>Delete note</Button
 					>
 				{/if}
 			</div>

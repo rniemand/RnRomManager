@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -94,27 +95,23 @@
 		</a>
 		{#if onsearch && !me.mustChangePassword}
 			<!-- Release editing B30: below lg, search sits outside the collapsed menu. -->
-			<button
-				type="button"
-				class="btn btn-link nav-link ms-auto me-2 d-lg-none"
+			<Button
+				variant="link"
+				class="nav-link ms-auto me-2 d-lg-none"
+				icon="search"
 				aria-label="Search"
 				title="Search (Ctrl+K)"
 				onclick={onsearch}
-			>
-				<Icon name="search" />
-			</button>
+			/>
 		{/if}
-		<button
+		<Button
 			class="navbar-toggler"
-			type="button"
 			data-bs-toggle="collapse"
 			data-bs-target="#main-nav"
 			aria-controls="main-nav"
 			aria-expanded="false"
-			aria-label="Toggle navigation"
+			aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></Button
 		>
-			<span class="navbar-toggler-icon"></span>
-		</button>
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (delegated from its links) -->
 		<div class="collapse navbar-collapse" id="main-nav" bind:this={collapse} onclick={onMenuClick}>
 			<ul class="navbar-nav me-auto">
@@ -143,27 +140,24 @@
 				{#if onsearch && !me.mustChangePassword}
 					<li class="nav-item d-none d-lg-block">
 						<!-- B4: Ctrl+K is reserved for search (hotkeys.ts), so the hint names it. -->
-						<button
-							type="button"
-							class="btn btn-link nav-link d-flex align-items-center"
+						<Button
+							variant="link"
+							class="nav-link d-flex align-items-center"
+							icon="search"
 							aria-label="Search"
 							title="Search (Ctrl+K)"
 							onclick={onsearch}
-						>
-							<Icon name="search" />
-						</button>
+						/>
 					</li>
 				{/if}
 				<li class="nav-item dropdown user-menu">
-					<button
-						type="button"
-						class="btn btn-link nav-link dropdown-toggle d-flex align-items-center gap-1"
+					<Button
+						variant="link"
+						class="nav-link dropdown-toggle d-flex align-items-center gap-1"
+						icon="user"
 						data-bs-toggle="dropdown"
-						aria-expanded="false"
+						aria-expanded="false">{me.username}</Button
 					>
-						<Icon name="user" />
-						{me.username}
-					</button>
 					<ul class="dropdown-menu dropdown-menu-end">
 						<!-- Release editing B31: below lg the menu shows inline, under the username. -->
 						<li class="d-lg-none">
@@ -188,16 +182,17 @@
 						<li><h6 class="dropdown-header">Theme</h6></li>
 						{#each themes as option (option.value)}
 							<li>
-								<button
-									type="button"
-									class="dropdown-item d-flex align-items-center gap-2"
-									class:active={theme.choice === option.value}
+								<Button
+									icon="theme-{option.value}"
 									aria-pressed={theme.choice === option.value}
 									onclick={() => theme.set(option.value)}
+									class={[
+										'dropdown-item d-flex align-items-center gap-2',
+										theme.choice === option.value && 'active'
+									]
+										.filter(Boolean)
+										.join(' ')}>{option.label}</Button
 								>
-									<Icon name="theme-{option.value}" />
-									{option.label}
-								</button>
 							</li>
 						{/each}
 						<li><hr class="dropdown-divider" /></li>
@@ -211,13 +206,11 @@
 						</li>
 						<li><hr class="dropdown-divider" /></li>
 						<li>
-							<button
-								type="button"
+							<Button
+								icon="logout"
 								class="dropdown-item d-flex align-items-center gap-2"
-								onclick={onlogout}
+								onclick={onlogout}>Logout</Button
 							>
-								<Icon name="logout" /> Logout
-							</button>
 						</li>
 					</ul>
 				</li>

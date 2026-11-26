@@ -4,7 +4,7 @@
 	interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'class' | 'onchange'> {
 		/** The radios' shared `name`; each `id` defaults to `{name}-{value}`. */
 		name: string;
-		options: { value: T; label: string; id?: string }[];
+		options: { value: T; label: string; id?: string; disabled?: boolean }[];
 		value?: T;
 		size?: 'sm' | 'lg';
 		/** Disables every radio. */
@@ -37,7 +37,7 @@
 			{id}
 			value={option.value}
 			autocomplete="off"
-			{disabled}
+			disabled={disabled || option.disabled}
 			checked={value === option.value}
 			onchange={() => {
 				value = option.value;

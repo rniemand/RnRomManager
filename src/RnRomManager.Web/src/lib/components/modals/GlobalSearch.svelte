@@ -1,4 +1,6 @@
 <script lang="ts">
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -261,8 +263,7 @@
 		<div class="modal-content">
 			<div class="modal-header">
 				<h2 class="modal-title fs-5" id="global-search-title">Search</h2>
-				<button type="button" class="btn-close" aria-label="Close" onclick={() => (open = false)}
-				></button>
+				<Button class="btn-close" aria-label="Close" onclick={() => (open = false)} />
 			</div>
 			<div class="modal-body">
 				<label class="visually-hidden" for="global-search-input"
@@ -270,14 +271,12 @@
 				>
 				<div class="input-group">
 					<span class="input-group-text"><Icon name="search" /></span>
-					<input
-						bind:this={input}
+					<SearchInput
+						bind:ref={input}
 						id="global-search-input"
-						type="search"
-						class="form-control"
 						placeholder="Search games, collections and reports"
 						autocomplete="off"
-						maxlength="255"
+						maxlength={255}
 						role="combobox"
 						aria-expanded={results.length > 0}
 						aria-controls={listId}

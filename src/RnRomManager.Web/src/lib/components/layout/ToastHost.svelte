@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
 	const background = {
@@ -58,13 +59,13 @@
 						<!-- eslint-enable svelte/no-navigation-without-resolve -->
 					{/if}
 				</div>
-				<button
-					type="button"
-					class="btn-close me-2 m-auto"
-					class:btn-close-white={toast.kind !== 'warning'}
+				<Button
 					aria-label="Close"
 					onclick={() => toasts.dismiss(toast.id)}
-				></button>
+					class={['btn-close me-2 m-auto', toast.kind !== 'warning' && 'btn-close-white']
+						.filter(Boolean)
+						.join(' ')}
+				/>
 			</div>
 		</div>
 	{/each}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { tick, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { isApiError } from '#lib/api/errors.js';
@@ -17,7 +18,6 @@
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import BaseModal from './BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 
 	/** B25: the user's global hotkeys; edits are pending until Save. */
 	interface Props {
@@ -192,9 +192,7 @@
 	{#if saveError}<ErrorAlert error={saveError} ondismiss={() => (saveError = null)} />{/if}
 	{#if !pending}
 		<p class="text-body-secondary">Your shortcuts couldn't be loaded.</p>
-		<button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => hotkeys.load()}
-			>Retry</button
-		>
+		<Button variant="secondary" outline size="sm" onclick={() => hotkeys.load()}>Retry</Button>
 	{:else}
 		{#if runBlocked}
 			<p class="small text-body-secondary">Save or cancel your changes to run a shortcut</p>
@@ -236,21 +234,22 @@
 						</td>
 						<!-- At 320px Run and Edit stack instead of overflowing; each stays on one line. -->
 						<td class="text-end">
-							<button
-								type="button"
-								class="btn btn-sm btn-outline-primary text-nowrap"
-								class:me-1={action.editable}
+							<Button
+								variant="primary"
+								outline
+								size="sm"
+								class={['text-nowrap', action.editable && 'me-1'].filter(Boolean).join(' ')}
+								icon="play"
 								aria-label="Run {action.name}"
 								disabled={runBlocked}
-								onclick={() => run(action)}><Icon name="play" /> Run</button
+								onclick={() => run(action)}>Run</Button
 							>
 							{#if action.editable}
-								<button
-									type="button"
+								<Button
+									variant={capturing === id ? 'primary' : 'secondary'}
+									outline={capturing !== id}
+									size="sm"
 									id="hotkey-edit-{id}"
-									class="btn btn-sm"
-									class:btn-outline-secondary={capturing !== id}
-									class:btn-primary={capturing === id}
 									aria-label={capturing === id
 										? `Cancel editing ${action.name}`
 										: `Edit ${action.name}`}
@@ -259,7 +258,7 @@
 									{@attach captureKeys(id)}
 								>
 									{capturing === id ? 'Cancel' : 'Edit'}
-								</button>
+								</Button>
 							{/if}
 						</td>
 					</tr>
@@ -269,8 +268,6 @@
 		<p class="small text-body-secondary">
 			Edit, then press the new keys. Backspace or Delete clears a shortcut; Escape stops editing.
 		</p>
-		<button type="button" class="btn btn-sm btn-outline-secondary" onclick={reset}
-			>Reset to defaults</button
-		>
+		<Button variant="secondary" outline size="sm" onclick={reset}>Reset to defaults</Button>
 	{/if}
 </BaseModal>

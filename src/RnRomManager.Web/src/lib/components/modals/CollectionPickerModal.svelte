@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
 	import type { CollectionListItem } from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -57,11 +58,12 @@
 	<CollectionChooser active={open}>
 		{#snippet item(collection)}
 			<label class="list-group-item d-flex align-items-center gap-2">
-				<input
+				<Checkbox
 					type="radio"
-					class="form-check-input m-0"
+					class="m-0"
 					name={group}
-					checked={chosen?.id === collection.id}
+					group={chosen?.id}
+					value={collection.id}
 					onchange={() => (chosen = collection)}
 				/>
 				<span class="text-truncate">{collection.name}</span>

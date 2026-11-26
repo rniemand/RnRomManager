@@ -54,4 +54,16 @@ describe('RadioButtons', () => {
 		const radios = screen.getAllByRole('radio') as HTMLInputElement[];
 		expect(radios.every((r) => r.disabled)).toBe(true);
 	});
+
+	it('an option can be disabled on its own', () => {
+		render(RadioButtons, {
+			name: 'mode',
+			options: [
+				{ value: 'edit', label: 'Edit' },
+				{ value: 'view', label: 'View', disabled: true }
+			]
+		});
+		const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+		expect(radios.map((r) => r.disabled)).toEqual([false, true]);
+	});
 });

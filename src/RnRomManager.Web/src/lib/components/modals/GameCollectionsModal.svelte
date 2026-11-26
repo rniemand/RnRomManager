@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { CollectionListItem, CollectionRef } from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
@@ -54,9 +55,8 @@
 	<CollectionChooser active={open}>
 		{#snippet item(collection)}
 			<label class="list-group-item d-flex align-items-center gap-2">
-				<input
-					type="checkbox"
-					class="form-check-input m-0"
+				<Checkbox
+					class="m-0"
 					checked={memberOf.some((c) => c.id === collection.id)}
 					aria-busy={pending[collection.id] ?? false}
 					onchange={(e) => toggle(e.currentTarget, collection)}

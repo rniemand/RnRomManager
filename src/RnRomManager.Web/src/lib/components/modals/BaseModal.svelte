@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import type { Snippet } from 'svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { Modal } from '#lib/bootstrap.js';
@@ -117,13 +118,7 @@
 		<div class="modal-content">
 			<div class="modal-header">
 				<h2 class="modal-title fs-5 text-break" id="{id}-title">{title}</h2>
-				<button
-					type="button"
-					class="btn-close"
-					aria-label="Close"
-					onclick={requestClose}
-					disabled={closing}
-				></button>
+				<Button class="btn-close" aria-label="Close" onclick={requestClose} disabled={closing} />
 			</div>
 			{#if scrollable}
 				<!-- U2: a scrolling body needs keyboard access (axe scrollable-region-focusable): it takes focus itself. -->
@@ -138,22 +133,18 @@
 				{#if footer}
 					<div class="d-flex flex-wrap gap-2 me-auto">{@render footer()}</div>
 				{/if}
-				<button
-					type="button"
-					class="btn btn-secondary"
-					onclick={requestClose}
-					disabled={busy || closing}>{onconfirm ? 'Cancel' : 'Close'}</button
+				<Button variant="secondary" onclick={requestClose} disabled={busy || closing}
+					>{onconfirm ? 'Cancel' : 'Close'}</Button
 				>
 				{#if onconfirm}
-					<button
-						type="button"
+					<Button
 						class="btn {confirmClass}"
 						onclick={onconfirm}
 						disabled={busy || confirmDisabled || closing}
+						>{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"
+							></span>{/if}
+						{confirmLabel}</Button
 					>
-						{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-						{confirmLabel}
-					</button>
 				{/if}
 			</div>
 		</div>

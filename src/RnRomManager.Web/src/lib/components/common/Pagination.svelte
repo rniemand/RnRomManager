@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { pageSizes } from '#lib/pageSize.js';
 
 	interface Props {
@@ -22,33 +24,35 @@
 		aria-label={label}
 	>
 		{#if pages > 1}
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-secondary"
+			<Button
+				variant="secondary"
+				outline
+				size="sm"
 				disabled={page <= 1}
-				onclick={() => onpage(page - 1)}>Previous</button
+				onclick={() => onpage(page - 1)}>Previous</Button
 			>
 			<span class="small">Page {page} of {pages}</span>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-secondary"
+			<Button
+				variant="secondary"
+				outline
+				size="sm"
 				disabled={page >= pages}
-				onclick={() => onpage(page + 1)}>Next</button
+				onclick={() => onpage(page + 1)}>Next</Button
 			>
 		{/if}
 		{#if onpagesize}
 			<div class="d-flex align-items-center gap-2">
 				<label class="small text-body-secondary text-nowrap" for={id}>Rows per page</label>
-				<select
+				<Select
+					size="sm"
+					class="w-auto"
 					{id}
-					class="form-select form-select-sm w-auto"
 					value={pageSize}
 					onchange={(e) => onpagesize(Number(e.currentTarget.value))}
-				>
-					{#each pageSizes as size (size)}
+					>{#each pageSizes as size (size)}
 						<option value={size}>{size}</option>
-					{/each}
-				</select>
+					{/each}</Select
+				>
 			</div>
 		{/if}
 	</nav>

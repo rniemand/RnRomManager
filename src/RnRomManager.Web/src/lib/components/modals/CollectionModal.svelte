@@ -1,4 +1,9 @@
 <script lang="ts">
+	import RadioButtons from '#lib/components/forms/RadioButtons.svelte';
+	import Textarea from '#lib/components/forms/Textarea.svelte';
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import FileInput from '#lib/components/forms/FileInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -190,10 +195,9 @@
 
 	<div class="mb-3">
 		<label class="form-label" for="collection-name-{uid}">Name</label>
-		<input
+		<TextInput
+			class={nameMessage ? 'is-invalid' : undefined}
 			id="collection-name-{uid}"
-			class="form-control"
-			class:is-invalid={nameMessage}
 			maxlength={maxNameLength * 2}
 			aria-describedby={nameMessage ? `collection-name-error-${uid}` : undefined}
 			bind:value={name}
@@ -210,33 +214,29 @@
 	<div class="mb-3">
 		<div class="d-flex align-items-center justify-content-between mb-2">
 			<span class="form-label mb-0" id="collection-notes-label-{uid}">Notes (Markdown)</span>
-			<div class="btn-group btn-group-sm" role="group" aria-label="Notes mode">
-				{#each modes as [value, label] (value)}
-					<input
-						type="radio"
-						class="btn-check"
-						name="collection-notes-mode-{uid}"
-						id="collection-notes-{value}-{uid}"
-						autocomplete="off"
-						{value}
-						bind:group={mode}
-						disabled={value === 'view' && !collection?.notes}
-					/>
-					<label class="btn btn-outline-secondary" for="collection-notes-{value}-{uid}"
-						>{label}</label
-					>
-				{/each}
-			</div>
+			<RadioButtons
+				class="btn-group-sm"
+				role="group"
+				aria-label="Notes mode"
+				name="collection-notes-mode-{uid}"
+				options={modes.map(([value, label]) => ({
+					value,
+					label,
+					id: `collection-notes-${value}-${uid}`,
+					disabled: value === 'view' && !collection?.notes
+				}))}
+				bind:value={mode}
+			/>
 		</div>
 		{#if mode === 'edit'}
-			<textarea
-				class="form-control font-monospace"
-				class:is-invalid={notesMessage}
-				rows="8"
+			<Textarea
+				class={['font-monospace', notesMessage && 'is-invalid'].filter(Boolean).join(' ')}
+				rows={8}
 				aria-labelledby="collection-notes-label-{uid}"
 				aria-describedby="collection-notes-bytes-{uid}"
 				bind:value={notes}
-				oninput={() => (notesServerError = undefined)}></textarea>
+				oninput={() => (notesServerError = undefined)}
+			/>
 			<div
 				id="collection-notes-bytes-{uid}"
 				class="form-text"
@@ -272,44 +272,36 @@
 				{/if}
 			</div>
 			<div class="flex-grow-1">
-				<div class="btn-group btn-group-sm mb-2" role="group" aria-label="Cover source">
-					<input
-						type="radio"
-						class="btn-check"
-						id="cover-file-{uid}"
-						value="file"
-						bind:group={coverSource}
-					/>
-					<label class="btn btn-outline-secondary" for="cover-file-{uid}">File</label>
-					<input
-						type="radio"
-						class="btn-check"
-						id="cover-url-{uid}"
-						value="url"
-						bind:group={coverSource}
-					/>
-					<label class="btn btn-outline-secondary" for="cover-url-{uid}">URL</label>
-				</div>
+				<RadioButtons
+					class="btn-group-sm mb-2"
+					role="group"
+					aria-label="Cover source"
+					name="cover-source-{uid}"
+					options={[
+						{ value: 'file', label: 'File', id: `cover-file-${uid}` },
+						{ value: 'url', label: 'URL', id: `cover-url-${uid}` }
+					]}
+					bind:value={coverSource}
+				/>
 				{#if coverSource === 'file'}
 					<label class="visually-hidden" for="cover-input-file-{uid}">Cover image file</label>
-					<input
+					<FileInput
+						size="sm"
+						class={coverError ? 'is-invalid' : undefined}
 						id="cover-input-file-{uid}"
-						type="file"
-						class="form-control form-control-sm"
-						class:is-invalid={coverError}
 						accept="image/png,image/jpeg,image/webp"
-						bind:this={fileInput}
+						bind:ref={fileInput}
 						onchange={() => (coverError = undefined)}
 					/>
 				{:else}
 					<label class="visually-hidden" for="cover-input-url-{uid}">Cover image URL</label>
-					<input
+					<TextInput
+						size="sm"
+						class={coverError ? 'is-invalid' : undefined}
 						id="cover-input-url-{uid}"
 						type="url"
-						class="form-control form-control-sm"
-						class:is-invalid={coverError}
 						placeholder="https://…"
-						maxlength="1024"
+						maxlength={1024}
 						bind:value={coverUrlInput}
 						oninput={() => (coverError = undefined)}
 					/>
@@ -317,18 +309,22 @@
 				{#if coverError}<div class="invalid-feedback d-block" role="alert">{coverError}</div>{/if}
 				{#if editing}
 					<div class="d-flex gap-2 mt-2">
-						<button
-							type="button"
-							class="btn btn-sm btn-outline-primary"
+						<Button
+							variant="primary"
+							outline
+							size="sm"
+							icon="upload"
 							disabled={busy}
-							onclick={() => applyCover('set')}><Icon name="upload" /> Set cover</button
+							onclick={() => applyCover('set')}>Set cover</Button
 						>
 						{#if coverPreview}
-							<button
-								type="button"
-								class="btn btn-sm btn-outline-danger"
+							<Button
+								variant="danger"
+								outline
+								size="sm"
+								icon="delete"
 								disabled={busy}
-								onclick={() => applyCover('remove')}><Icon name="delete" /> Remove cover</button
+								onclick={() => applyCover('remove')}>Remove cover</Button
 							>
 						{/if}
 					</div>
