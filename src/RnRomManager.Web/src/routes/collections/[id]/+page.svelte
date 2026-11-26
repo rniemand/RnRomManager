@@ -5,7 +5,13 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { CollectionDetail, GameListItem, Page, SystemInfo } from '#lib/types/index.js';
+	import type {
+		CollectionDetail,
+		GameListItem,
+		Page,
+		SystemInfo,
+		LibraryFilters
+	} from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
 	import CollectionModal from '#lib/components/CollectionModal.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
@@ -22,11 +28,10 @@
 		libraryPageSize,
 		normaliseSearch,
 		parseFilters,
-		toSearch,
-		type LibraryFilters,
-		type LibrarySort
+		toSearch
 	} from '#lib/libraryQuery.js';
-	import { readLibraryView, saveLibraryView, type LibraryView } from '#lib/libraryFilter.js';
+	import type { LibrarySort, LibraryView } from '#lib/enums/index.js';
+	import { readLibraryView, saveLibraryView } from '#lib/libraryFilter.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { renderMarkdown } from '#lib/markdown.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';

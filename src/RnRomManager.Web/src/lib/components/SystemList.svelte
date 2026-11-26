@@ -2,7 +2,8 @@
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { SystemInfo } from '#lib/types/index.js';
-	import { defaultDir, maxFind, systemsSearch, type GroupSort, type SortDir } from '../discovery';
+	import { defaultDir, maxFind, systemsSearch } from '../discovery';
+	import type { GroupSort, SortDir } from '#lib/enums/index.js';
 	import { formatCount } from '../format';
 	import { auth } from '../stores/auth.svelte';
 	import EmptyState from './EmptyState.svelte';

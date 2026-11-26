@@ -12,15 +12,14 @@
 		CollectionRef,
 		GameDetail,
 		ReleaseFile,
-		RomDetail
+		RomDetail,
+		AdminAction,
+		AdminOutcome
 	} from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import CopyButton from '#lib/components/CopyButton.svelte';
-	import GameAdminModal, {
-		type AdminAction,
-		type AdminOutcome
-	} from '#lib/components/GameAdminModal.svelte';
+	import GameAdminModal from '#lib/components/GameAdminModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import GameImages from '#lib/components/GameImages.svelte';
 	import GameSaves from '#lib/components/GameSaves.svelte';
@@ -35,7 +34,8 @@
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import GameTitle from '#lib/components/GameTitle.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
-	import EditReleaseModal, { type ReleaseKind } from '#lib/components/EditReleaseModal.svelte';
+	import EditReleaseModal from '#lib/components/EditReleaseModal.svelte';
+	import type { ReleaseKind, AddResult } from '#lib/enums/index.js';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
 	import {
 		canPlay,
@@ -51,7 +51,7 @@
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { renderMarkdown } from '#lib/markdown.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
-	import { bundle, maxBundleEntries, type AddResult } from '#lib/stores/bundle.svelte.js';
+	import { bundle, maxBundleEntries } from '#lib/stores/bundle.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import {
 		compareDlc,

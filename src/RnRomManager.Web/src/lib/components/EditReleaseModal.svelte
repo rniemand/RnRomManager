@@ -1,20 +1,19 @@
 <script lang="ts" module>
 	/** Release editing B11: the region list, loaded once per page load. */
 	let regionList: Promise<string[]> | null = null;
-
-	export type ReleaseKind = 'release' | 'update' | 'dlc';
 </script>
 
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { RomDetail } from '#lib/types/index.js';
-	import { editReleaseFileName, type ReleaseTags } from '../releaseName';
+	import type { RomDetail, ReleaseTags } from '#lib/types/index.js';
+	import { editReleaseFileName } from '../releaseName';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import Loading from './Loading.svelte';
+	import type { ReleaseKind } from '#lib/enums/index.js';
 
 	/** Release editing B2–B3: an Admin edits a release's tags; the server renames it to match (B7, B8). */
 	interface Props {

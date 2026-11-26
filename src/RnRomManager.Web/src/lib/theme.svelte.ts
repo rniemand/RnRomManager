@@ -1,10 +1,10 @@
+import type { ThemeChoice } from '#lib/enums/index.js';
+
 /**
  * Theme toggle (spec §11, D13): Light / Dark / Auto, stored in `localStorage` as `theme`. `static/theme.js` applies
  * the stored choice before first paint; this module keeps `data-bs-theme` in sync afterwards, and in Auto follows
  * `prefers-color-scheme` live.
  */
-
-export type ThemeChoice = 'light' | 'dark' | 'auto';
 
 const storageKey = 'theme';
 const query = '(prefers-color-scheme: dark)';

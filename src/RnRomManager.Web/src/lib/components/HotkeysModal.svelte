@@ -2,7 +2,7 @@
 	import { tick, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { isApiError } from '../api/errors';
-	import type { Me } from '#lib/types/index.js';
+	import type { Me, Bindings, EditableHotkeyId, HotkeyAction } from '#lib/types/index.js';
 	import {
 		actions,
 		allowedFor,
@@ -11,10 +11,7 @@
 		fromEvent,
 		ruleError,
 		toSave,
-		validate,
-		type Bindings,
-		type EditableHotkeyId,
-		type HotkeyAction
+		validate
 	} from '../hotkeys';
 	import { hotkeys } from '../stores/hotkeys.svelte';
 	import { toasts } from '../stores/toasts.svelte';

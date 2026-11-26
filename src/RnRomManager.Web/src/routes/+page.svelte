@@ -6,10 +6,18 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { GameFacets, GameListItem, Page, SystemInfo } from '#lib/types/index.js';
+	import type {
+		GameFacets,
+		GameListItem,
+		Page,
+		SystemInfo,
+		FilterOption,
+		FacetCounts,
+		LibraryFilters
+	} from '#lib/types/index.js';
 	import CollectionPickerModal from '#lib/components/CollectionPickerModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
-	import FilterDropdown, { type FilterOption } from '#lib/components/FilterDropdown.svelte';
+	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import GameResults from '#lib/components/GameResults.svelte';
@@ -23,19 +31,16 @@
 		letters,
 		libraryPageSize,
 		normaliseSearch,
-		type FacetCounts,
 		parseFilters,
-		toSearch,
-		type LibraryFilters,
-		type LibrarySort
+		toSearch
 	} from '#lib/libraryQuery.js';
+	import type { LibrarySort, LibraryView } from '#lib/enums/index.js';
 	import {
 		libraryFilterParams,
 		readLibraryView,
 		readSavedLibraryFilter,
 		saveLibraryFilter,
-		saveLibraryView,
-		type LibraryView
+		saveLibraryView
 	} from '#lib/libraryFilter.js';
 	import { formatCount } from '#lib/format.js';
 	import { pageCount } from '#lib/pageSize.js';

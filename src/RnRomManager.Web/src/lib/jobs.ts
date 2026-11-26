@@ -1,5 +1,5 @@
 /** Display helpers for jobs (spec §3.1 statuses, §7.2 outcomes). */
-import type { CurrentJob, JobStep } from '#lib/types/index.js';
+import type { CurrentJob, JobStep, SummaryTable } from '#lib/types/index.js';
 import type { JobStatus } from '#lib/enums/index.js';
 import { formatSize } from './format';
 
@@ -83,14 +83,6 @@ export function formatSummaryValue(value: unknown): string {
 	return typeof value === 'string' || typeof value === 'number'
 		? String(value)
 		: JSON.stringify(value);
-}
-
-/** A summary entry shown as a two-column table rather than a badge. */
-export interface SummaryTable {
-	key: string;
-	title: string;
-	columns: [string, string];
-	rows: [string, string][];
 }
 
 const summaryTableLabels: Record<string, { title: string; columns: [string, string] }> = {

@@ -1,28 +1,6 @@
 /** Review "manual entry" form (spec §7.5, §23 resolve `Manual`), checked client-side; the API checks again. */
 import { titleError } from './gameEdit';
-
-export interface ManualForm {
-	title: string;
-	/** Comma-separated (No-Intro region and language names contain no commas). */
-	regions: string;
-	languages: string;
-	revision: string;
-	flags: string;
-	/** B17: an optional disc number (disc systems only); null when empty. */
-	disc: number | null;
-}
-
-export type ManualErrors = Partial<Record<keyof ManualForm, string>>;
-
-export interface ManualRequest {
-	action: 'Manual';
-	title: string;
-	regions: string[];
-	languages: string[];
-	revision: string | null;
-	flags: string[];
-	disc?: number;
-}
+import type { ManualForm, ManualErrors, ManualRequest } from '#lib/types/index.js';
 
 export const emptyManualForm = (): ManualForm => ({
 	title: '',

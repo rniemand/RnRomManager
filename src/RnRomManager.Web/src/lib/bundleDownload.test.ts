@@ -1,15 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from './api/errors';
-import type { BundleEntry, BundleTicketStatus } from '#lib/types/index.js';
+import type { BundleEntry, BundleTicketStatus, DownloadDeps, RunView } from '#lib/types/index.js';
 import type { BundleTicketState } from '#lib/enums/index.js';
-import {
-	BundleDownloadRun,
-	clickDownload,
-	pollIntervalMs,
-	runItemLabel,
-	type DownloadDeps,
-	type RunView
-} from './bundleDownload';
+import { BundleDownloadRun, clickDownload, pollIntervalMs, runItemLabel } from './bundleDownload';
 
 const gameA = '8c0f3b55-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
 const gameB = '1d2e3f40-5a6b-4c7d-8e9f-a0b1c2d3e4f5';

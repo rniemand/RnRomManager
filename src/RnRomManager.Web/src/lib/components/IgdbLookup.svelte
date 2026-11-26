@@ -2,16 +2,14 @@
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { GameDetail, IgdbMatch } from '#lib/types/index.js';
-	import {
-		applyMatch,
-		copyFields,
-		defaultCopyFields,
-		toList,
-		type CopyField,
-		type CopyState,
-		type GameEditForm
-	} from '../gameEdit';
+	import type {
+		GameDetail,
+		IgdbMatch,
+		CopyField,
+		CopyState,
+		GameEditForm
+	} from '#lib/types/index.js';
+	import { applyMatch, copyFields, defaultCopyFields, toList } from '../gameEdit';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import Icon from './Icon.svelte';
 

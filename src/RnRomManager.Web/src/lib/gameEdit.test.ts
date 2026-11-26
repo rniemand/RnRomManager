@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GameDetail, IgdbMatch } from '#lib/types/index.js';
+import type { GameDetail, IgdbMatch, GameEditForm } from '#lib/types/index.js';
 import {
 	applyMatch,
 	defaultCopyFields,
@@ -7,8 +7,7 @@ import {
 	toForm,
 	toList,
 	toPatch,
-	validateGameEdit,
-	type GameEditForm
+	validateGameEdit
 } from './gameEdit';
 
 const form = (changes: Partial<GameEditForm> = {}): GameEditForm => ({

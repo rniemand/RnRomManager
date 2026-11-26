@@ -2,9 +2,9 @@
 	import { untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { RomDetail, SaveItem } from '#lib/types/index.js';
+	import type { RomDetail, SaveItem, PlaySave } from '#lib/types/index.js';
 	import type { SaveKind } from '#lib/enums/index.js';
-	import { playUrl, recordPlay, trimScreenshot, type PlaySave } from '../emulator';
+	import { playUrl, recordPlay, trimScreenshot } from '../emulator';
 	import { kindLabels, maxSaveBytes, savesApi } from '../saves';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';

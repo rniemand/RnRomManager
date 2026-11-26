@@ -1,5 +1,13 @@
 import { api } from '../api/client';
-import type { BundleEntry, BundleMember, BundleResolvedItem, Me } from '#lib/types/index.js';
+import type {
+	BundleEntry,
+	BundleMember,
+	BundleResolvedItem,
+	Me,
+	BundleIdentity,
+	CartItem
+} from '#lib/types/index.js';
+import type { AddResult } from '#lib/enums/index.js';
 
 /** B2: the most files a cart or saved queue holds. */
 export const maxBundleEntries = 500;
@@ -19,9 +27,6 @@ export const codePoints = (s: string) => [...s].length;
 /** Cuts a label to `maxBundleText` code points. */
 export const capText = (s: string) =>
 	codePoints(s) > maxBundleText ? [...s].slice(0, maxBundleText).join('') : s;
-
-/** The identity part of an entry: what the server resolves and what duplicates are judged by. */
-export type BundleIdentity = Pick<BundleEntry, 'gameId' | 'releaseSha1' | 'member'>;
 
 /**
  * The key two identities share exactly when they name the same file (B1): main and set files differ, set-file names
@@ -94,20 +99,6 @@ export function cleanEntries(input: unknown): BundleEntry[] {
 	}
 	return out;
 }
-
-/** A cart row: the entry, its availability after the last refresh and the names to show. */
-export interface CartItem {
-	key: string;
-	entry: BundleEntry;
-	/** `unknown` until a refresh answers for this entry. */
-	status: 'unknown' | 'available' | 'unavailable';
-	/** The current names when available, else the last-known labels. */
-	gameTitle: string;
-	fileName: string;
-	downloadUrl: string | null;
-}
-
-export type AddResult = 'added' | 'duplicate' | 'full' | 'signedOut' | 'invalid';
 
 /**
  * B1–B3, B5: the signed-in user's working cart. It lives in this browser's `localStorage` under the user's id and is

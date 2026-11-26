@@ -2,10 +2,16 @@
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '../api/client';
-	import type { GameDetail, GameListItem, RomDetail, SaveItem } from '#lib/types/index.js';
+	import type {
+		GameDetail,
+		GameListItem,
+		RomDetail,
+		SaveItem,
+		PlaySave
+	} from '#lib/types/index.js';
 	import { formatCount } from '../format';
 	import { tooltip } from '../tooltip';
-	import { opensInNewTab, playLinkEvents, playUrl, usesPlayDisc, type PlaySave } from '../emulator';
+	import { opensInNewTab, playLinkEvents, playUrl, usesPlayDisc } from '../emulator';
 	import { playableRom, savesApi } from '../saves';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';

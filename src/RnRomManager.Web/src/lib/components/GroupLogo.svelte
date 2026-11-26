@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import { logoSources, type LogoKind } from '../discovery';
+	import { logoSources } from '../discovery';
+	import type { LogoKind } from '#lib/enums/index.js';
 
 	/**
 	 * B16: a publisher's, genre's or system's logo: the first source that loads (shared logo, then starter art), else a

@@ -4,11 +4,11 @@
 	import { resolve } from '$app/paths';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { CollectionListItem, GameListItem, Page } from '#lib/types/index.js';
+	import type { CollectionListItem, GameListItem, Page, ReportTab } from '#lib/types/index.js';
 	import { Modal } from '../bootstrap';
 	import { opensInNewTab, playUrl, recordPlay } from '../emulator';
 	import { releaseModal } from '../modal';
-	import { reportTabs, type ReportTab } from '../reports';
+	import { reportTabs } from '../reports';
 	import { auth } from '../stores/auth.svelte';
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';

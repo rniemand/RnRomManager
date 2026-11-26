@@ -1,14 +1,6 @@
 import catalog from './systemEmulators.json';
-
-/** Operating systems an emulator can have an official build for (Systems tab B7/B9). */
-export type EmulatorOs = 'windows' | 'macos' | 'linux' | 'android' | 'ios';
-
-export interface Emulator {
-	name: string;
-	url: string;
-	os: EmulatorOs[];
-	note?: string;
-}
+import type { Emulator } from '#lib/types/index.js';
+import type { EmulatorOs } from '#lib/enums/index.js';
 
 /** Known emulators per system id; the keys are checked against the handlers by `SystemEmulatorsCatalogTests`. */
 export const systemEmulators = catalog as Record<string, Emulator[]>;

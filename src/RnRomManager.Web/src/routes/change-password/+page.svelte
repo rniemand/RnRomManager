@@ -3,13 +3,8 @@
 	import { isApiError } from '#lib/api/errors.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import { navigate } from '#lib/navigation.js';
-	import {
-		maxLength,
-		policyHint,
-		validateChangePassword,
-		type ChangePasswordForm,
-		type FieldErrors
-	} from '#lib/passwordPolicy.js';
+	import { maxLength, policyHint, validateChangePassword } from '#lib/passwordPolicy.js';
+	import type { ChangePasswordForm, FieldErrors } from '#lib/types/index.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 

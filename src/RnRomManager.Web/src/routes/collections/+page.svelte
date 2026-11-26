@@ -6,7 +6,13 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { CollectionListItem, Page, SystemInfo } from '#lib/types/index.js';
+	import type {
+		CollectionListItem,
+		Page,
+		SystemInfo,
+		DiscoveryState,
+		SystemsState
+	} from '#lib/types/index.js';
 	import { collectionsApi, collectionsSearch } from '#lib/collections.js';
 	import {
 		collectionsTab,
@@ -23,9 +29,7 @@
 		saveCollectionsTab,
 		systemsSearch,
 		systemsState,
-		tabSearch,
-		type DiscoveryState,
-		type SystemsState
+		tabSearch
 	} from '#lib/discovery.js';
 	import CollectionModal from '#lib/components/CollectionModal.svelte';
 	import DiscoveryGames from '#lib/components/DiscoveryGames.svelte';

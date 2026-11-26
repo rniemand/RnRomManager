@@ -1,4 +1,4 @@
-import type { ImageInfo } from '#lib/types/index.js';
+import type { ImageInfo, ImageResolutionFilter } from '#lib/types/index.js';
 import { remembered } from './remembered';
 
 type ImageType = ImageInfo['type'];
@@ -10,15 +10,6 @@ export const imageTypeLabels: Record<ImageType, string> = {
 	TitleScreen: 'Title screen',
 	Other: 'Other'
 };
-
-/** Image Resolutions R9: the report's filter and page, kept in the URL query and remembered in `localStorage`. */
-export interface ImageResolutionFilter {
-	system: string;
-	type: ImageType | '';
-	maxWidth: number | null;
-	maxHeight: number | null;
-	page: number;
-}
 
 export const imageResolutionParams = ['system', 'type', 'maxWidth', 'maxHeight', 'page'] as const;
 

@@ -1,4 +1,5 @@
 import { remembered } from './remembered';
+import type { LibraryView } from '#lib/enums/index.js';
 
 /** L7: the Library's filter, sort and page, remembered in `localStorage` as `toSearch`'s query string. */
 
@@ -21,8 +22,6 @@ export const readSavedLibraryFilter = filter.read;
 
 /** Saves `search` (removes the key when empty); ignored when storage is unavailable. */
 export const saveLibraryFilter = filter.save;
-
-export type LibraryView = 'grid' | 'list';
 
 const view = remembered('libraryView');
 

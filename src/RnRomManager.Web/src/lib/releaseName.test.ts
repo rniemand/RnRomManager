@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { editReleaseFileName, type ReleaseTags } from './releaseName';
+import { editReleaseFileName } from './releaseName';
+import type { ReleaseTags } from '#lib/types/index.js';
 
 const none: ReleaseTags = {
 	regions: [],

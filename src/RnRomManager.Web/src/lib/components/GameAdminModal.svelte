@@ -1,35 +1,18 @@
-<script lang="ts" module>
-	import type { GameDetail, RomDetail } from '#lib/types/index.js';
-
-	export type AdminAction =
-		| { kind: 'edit'; lookup?: boolean }
-		| { kind: 'retry' }
-		| { kind: 'merge' }
-		| { kind: 'deleteGame' }
-		| { kind: 'move'; rom: RomDetail }
-		| { kind: 'primary'; rom: RomDetail }
-		| { kind: 'deleteRom'; rom: RomDetail };
-
-	/** What the detail page does next: show this game, go to another game (null = Library), or reload. */
-	export type AdminOutcome =
-		| { game: GameDetail; message: string; warning?: boolean }
-		| { goTo: string | null; message: string }
-		| { reload: true; message?: string; warning?: boolean };
-</script>
-
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import type {
+		GameDetail,
+		GameListItem,
+		IgdbMatch,
+		Page,
+		GameEditErrors,
+		GameEditForm,
+		AdminAction,
+		AdminOutcome
+	} from '#lib/types/index.js';
 	import { api } from '../api/client';
 	import { ApiError, isApiError } from '../api/errors';
-	import type { GameListItem, IgdbMatch, Page } from '#lib/types/index.js';
-	import {
-		titleError,
-		toForm,
-		toPatch,
-		validateGameEdit,
-		type GameEditErrors,
-		type GameEditForm
-	} from '../gameEdit';
+	import { titleError, toForm, toPatch, validateGameEdit } from '../gameEdit';
 	import { activity } from '../stores/activity.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';

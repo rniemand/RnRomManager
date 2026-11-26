@@ -1,19 +1,8 @@
-<script lang="ts" module>
-	/** One menu row; `search` adds texts the filter input also matches (e.g. a system's short name). */
-	export interface FilterOption {
-		value: string;
-		label: string;
-		/** System menu (L3): a `SystemBadge` before the label. */
-		badge?: { system: string; name: string };
-		search?: string[];
-	}
-</script>
-
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { Dropdown } from '#lib/bootstrap.js';
 	import { formatCount } from '#lib/format.js';
-	import type { FacetCounts } from '#lib/libraryQuery.js';
+	import type { FacetCounts, FilterOption } from '#lib/types/index.js';
 	import SystemBadge from './SystemBadge.svelte';
 
 	interface Props {

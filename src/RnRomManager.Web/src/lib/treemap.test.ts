@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { squarify, type TreemapRect } from './treemap';
+import { squarify } from './treemap';
+import type { TreemapRect } from '#lib/types/index.js';
 
 const items = (...values: number[]) => values.map((value, i) => ({ id: i, value }));
 

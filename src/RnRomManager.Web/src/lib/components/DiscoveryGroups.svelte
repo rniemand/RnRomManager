@@ -2,17 +2,9 @@
 	import { untrack } from 'svelte';
 	import { auth } from '../stores/auth.svelte';
 	import { resolve } from '$app/paths';
-	import type { DiscoveryGroup, Page } from '#lib/types/index.js';
-	import {
-		defaultDir,
-		discoveryApi,
-		discoverySearch,
-		discoveryText,
-		maxFind,
-		type DiscoveryState,
-		type GroupSort,
-		type SortDir
-	} from '../discovery';
+	import type { DiscoveryGroup, Page, DiscoveryState } from '#lib/types/index.js';
+	import { defaultDir, discoveryApi, discoverySearch, discoveryText, maxFind } from '../discovery';
+	import type { GroupSort, SortDir } from '#lib/enums/index.js';
 	import { formatCount } from '../format';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
 	import EmptyState from './EmptyState.svelte';

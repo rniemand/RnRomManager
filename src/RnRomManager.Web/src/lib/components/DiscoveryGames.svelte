@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { ApiError } from '../api/errors';
-	import type { GameListItem, Page } from '#lib/types/index.js';
-	import { discoveryApi, discoverySearch, discoveryText, type DiscoveryState } from '../discovery';
+	import type { GameListItem, Page, DiscoveryState } from '#lib/types/index.js';
+	import { discoveryApi, discoverySearch, discoveryText } from '../discovery';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
 	import EmptyState from './EmptyState.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';

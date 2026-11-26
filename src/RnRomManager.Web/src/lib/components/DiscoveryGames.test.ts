@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
-import type { GameListItem } from '#lib/types/index.js';
-import type { DiscoveryState } from '../discovery';
+import type { GameListItem, DiscoveryState } from '#lib/types/index.js';
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')

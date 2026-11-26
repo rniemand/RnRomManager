@@ -4,7 +4,12 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { ImageResolutionItem, Page, SystemInfo } from '#lib/types/index.js';
+	import type {
+		ImageResolutionItem,
+		Page,
+		SystemInfo,
+		ImageResolutionFilter
+	} from '#lib/types/index.js';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
@@ -21,8 +26,7 @@
 		parseImageResolutionFilter,
 		parseLimit,
 		readSavedImageResolutionFilter,
-		saveImageResolutionFilter,
-		type ImageResolutionFilter
+		saveImageResolutionFilter
 	} from '#lib/imageResolutions.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';

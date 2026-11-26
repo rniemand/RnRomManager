@@ -1,5 +1,4 @@
-import type { SystemInfo } from '#lib/types/index.js';
-import type { FilterOption } from './components/FilterDropdown.svelte';
+import type { SystemInfo, FilterOption } from '#lib/types/index.js';
 
 /** The System menu's options (Games page L3, reports F1): systems with ROMs, plus the selected one so it shows. */
 export function systemFilterOptions(

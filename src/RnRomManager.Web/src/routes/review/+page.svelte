@@ -6,7 +6,13 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { Page, ReviewDetail, ReviewListItem, SystemInfo } from '#lib/types/index.js';
+	import type {
+		Page,
+		ReviewDetail,
+		ReviewListItem,
+		SystemInfo,
+		ReviewFilter
+	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -30,8 +36,7 @@
 		reviewApiUrl,
 		reviewFilterParams,
 		reviewFilterSearch,
-		saveReviewFilter,
-		type ReviewFilter
+		saveReviewFilter
 	} from '#lib/reviewFilter.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { tooltip } from '#lib/tooltip.js';

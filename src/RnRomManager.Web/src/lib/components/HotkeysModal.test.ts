@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
-import type { Me } from '#lib/types/index.js';
-import { defaultBindings, type Bindings } from '../hotkeys';
+import type { Me, Bindings } from '#lib/types/index.js';
+import { defaultBindings } from '../hotkeys';
 import { toasts } from '../stores/toasts.svelte';
 
 const modal = vi.hoisted(() => ({ hides: 0 }));

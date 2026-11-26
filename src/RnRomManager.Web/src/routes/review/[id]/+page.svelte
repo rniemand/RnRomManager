@@ -6,7 +6,13 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { DatSearchResult, GameListItem, ReviewDetail } from '#lib/types/index.js';
+	import type {
+		DatSearchResult,
+		GameListItem,
+		ReviewDetail,
+		ManualErrors,
+		ManualForm
+	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import CopyButton from '#lib/components/CopyButton.svelte';
@@ -27,9 +33,7 @@
 		manualFileStem,
 		titleFromFileName,
 		toManualRequest,
-		validateManual,
-		type ManualErrors,
-		type ManualForm
+		validateManual
 	} from '#lib/reviewForm.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';

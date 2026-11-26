@@ -1,13 +1,7 @@
 <script lang="ts">
 	import { isApiError } from '../api/errors';
-	import {
-		discoveryText,
-		logoApi,
-		logoFileError,
-		logoSources,
-		logoUrlError,
-		type LogoKind
-	} from '../discovery';
+	import { discoveryText, logoApi, logoFileError, logoSources, logoUrlError } from '../discovery';
+	import type { LogoKind } from '#lib/enums/index.js';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import Icon from './Icon.svelte';

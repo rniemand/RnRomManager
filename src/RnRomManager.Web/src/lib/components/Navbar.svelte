@@ -6,7 +6,8 @@
 	import type { Me } from '#lib/types/index.js';
 	import { formatCount } from '../format';
 	import Icon from './Icon.svelte';
-	import { theme, type ThemeChoice } from '../theme.svelte';
+	import { theme } from '../theme.svelte';
+	import type { ThemeChoice } from '#lib/enums/index.js';
 	import { romTools } from './RomToolsTabs.svelte';
 
 	interface Props {

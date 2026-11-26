@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import '#lib/bootstrap.js'; // the real data API: open/close and keyboard come from Bootstrap
-import FilterDropdown, { type FilterOption } from './FilterDropdown.svelte';
+import FilterDropdown from './FilterDropdown.svelte';
+import type { FilterOption } from '#lib/types/index.js';
 
 const systems: FilterOption[] = [
 	{ value: 's32x', label: 'Sega 32X', badge: { system: 's32x', name: '32X' }, search: ['32X'] },

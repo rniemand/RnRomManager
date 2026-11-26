@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
-import type { GameDetail, IgdbMatch } from '#lib/types/index.js';
-import type { GameEditForm } from '../gameEdit';
+import type { GameDetail, IgdbMatch, GameEditForm } from '#lib/types/index.js';
 import IgdbLookup from './IgdbLookup.svelte';
 
 const game = (changes: Partial<GameDetail> = {}) =>
