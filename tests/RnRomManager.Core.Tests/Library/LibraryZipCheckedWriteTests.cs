@@ -28,9 +28,7 @@ public class LibraryZipCheckedWriteTests
         _folder = Path.Combine(_root, "ext", "O");
         Directory.CreateDirectory(_folder);
         _target = Path.Combine(_folder, "Orbit.zip");
-        var gb = Substitute.For<ISystemHandler>();
-        gb.EmbedRomsInZip.Returns(true);
-        gb.Id.Returns("gb");
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         ISystemHandler[] handlers = [gb, new ExternalTestHandler(), new ExternalSetTestHandler()];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);

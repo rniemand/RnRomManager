@@ -48,9 +48,7 @@ public class CrashRecoveryTests
     {
         var handlers = new[] { "gb", "gbc", "ext" }.Select(id =>
         {
-            var handler = Substitute.For<ISystemHandler>();
-            handler.Id.Returns(id);
-            handler.EmbedRomsInZip.Returns(id != "ext");
+            var handler = TestHandlers.Fake(id, embedRomsInZip: id != "ext");
             return handler;
         }).ToArray();
         var systems = Substitute.For<ISystemRegistry>();

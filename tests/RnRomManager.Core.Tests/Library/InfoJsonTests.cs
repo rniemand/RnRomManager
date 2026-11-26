@@ -18,8 +18,7 @@ public class InfoJsonTests
 
     private static InfoJsonReader Reader(params IInfoJsonUpgrader[] upgraders)
     {
-        var zipRoms = Substitute.For<ISystemHandler>();
-        zipRoms.Id.Returns("zipx");
+        var zipRoms = TestHandlers.Fake("zipx");
         zipRoms.RomExtensions.Returns([".dosz", ".zip"]);
         zipRoms.MaxRomSizeBytes.Returns(1L << 30);
         ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler(), new ExternalSetTestHandler(), new LegacyExternalTestHandler(), zipRoms];
@@ -30,9 +29,7 @@ public class InfoJsonTests
 
     private static ISystemHandler Handler(string id)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id, embedRomsInZip: true);
         return handler;
     }
 

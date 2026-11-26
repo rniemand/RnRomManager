@@ -35,9 +35,7 @@ public class LibraryZipTests
 
     private static InfoJsonReader Reader(params IInfoJsonUpgrader[] upgraders)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns("gb");
+        var handler = TestHandlers.Fake("gb", embedRomsInZip: true);
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([handler]);
         return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), new InfoJsonUpgraderV5(), new InfoJsonUpgraderV6(), new InfoJsonUpgraderV7(), .. upgraders], registry);

@@ -41,9 +41,7 @@ public class PullCoversJobTests
     public void SetUp()
     {
         _dir = new TempDir();
-        _gb = Substitute.For<ISystemHandler>();
-        _gb.EmbedRomsInZip.Returns(true);
-        _gb.Id.Returns("gb");
+        _gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns([_gb]);
         _systems.ById("gb").Returns(_gb);
@@ -227,8 +225,7 @@ public class PullCoversJobTests
         _igdb.DownloadCoverAsync("c6", Arg.Any<CancellationToken>()).Returns(new IgdbCoverDownload(null, 404, "IGDB returned HTTP 404."));
         _igdb.DownloadCoverAsync("c7", Arg.Any<CancellationToken>()).Returns(new IgdbCoverDownload([1, 2, 3], 200, null));
         // Only the first game asked about is pending: a legacy system whose embedded games wait to be moved out.
-        var legacy = Substitute.For<ISystemHandler>();
-        legacy.Id.Returns("gb");
+        var legacy = TestHandlers.Fake("gb");
         legacy.LegacyEmbeddedRoms.Returns(true);
         _systems.ById("gb").Returns(legacy, _gb);
 

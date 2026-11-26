@@ -43,9 +43,7 @@ public partial class MediaRetryJobTests
         _dir = new TempDir();
         _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _jobId = Guid.NewGuid();
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns("gb");
+        var handler = TestHandlers.Fake("gb", embedRomsInZip: true);
         handler.DatName.Returns("Nintendo - Game Boy");
         handler.DefaultBoxArtPng.Returns(DefaultArt);
         _systems = Substitute.For<ISystemRegistry>();

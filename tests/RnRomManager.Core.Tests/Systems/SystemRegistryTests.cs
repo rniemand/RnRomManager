@@ -1,5 +1,6 @@
 using NSubstitute;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Systems;
 
@@ -7,9 +8,8 @@ public class SystemRegistryTests
 {
     private static ISystemHandler Handler(string id, string family, params string[] extensions)
     {
-        var handler = Substitute.For<ISystemHandler>();
+        var handler = TestHandlers.Fake(id);
         Embed(handler, true);
-        handler.Id.Returns(id);
         handler.Family.Returns(family);
         handler.RomExtensions.Returns(extensions);
         return handler;

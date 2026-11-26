@@ -24,9 +24,7 @@ public class TitleDbCacheTests
     public void SetUp()
     {
         _dir = new TempDir();
-        var gb = Substitute.For<ISystemHandler>();
-        gb.EmbedRomsInZip.Returns(true);
-        gb.Id.Returns("gb");
+        var gb = TestHandlers.Fake("gb", embedRomsInZip: true);
         gb.DatName.Returns(Gb);
         gb.DatFolder.Returns(DatKind.NoIntro);
         gb.MetadatKinds.Returns(DatKind.Metadat);

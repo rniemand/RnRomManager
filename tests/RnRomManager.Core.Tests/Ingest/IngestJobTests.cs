@@ -57,9 +57,7 @@ public class IngestJobTests
 
     private static ISystemHandler Handler(string id, string datName)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id, embedRomsInZip: true);
         handler.DatName.Returns(datName);
         handler.DatFolder.Returns(DatKind.NoIntro);
         handler.MetadatKinds.Returns(DatKind.Metadat);

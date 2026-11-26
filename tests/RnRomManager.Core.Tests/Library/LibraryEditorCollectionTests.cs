@@ -38,9 +38,7 @@ public class LibraryEditorCollectionTests
     public void SetUp()
     {
         _dir = new TempDir();
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns("gb");
+        var handler = TestHandlers.Fake("gb", embedRomsInZip: true);
         handler.DatName.Returns("Nintendo - Game Boy");
         handler.RomExtensions.Returns([".gb"]);
         handler.DatFolder.Returns(DatKind.NoIntro);

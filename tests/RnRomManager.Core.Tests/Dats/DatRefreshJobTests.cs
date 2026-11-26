@@ -47,9 +47,7 @@ public partial class DatRefreshJobTests
 
     private static ISystemHandler Handler(string id, string datName)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id, embedRomsInZip: true);
         handler.DatName.Returns(datName);
         handler.DatFolder.Returns(DatKind.NoIntro);
         handler.MetadatKinds.Returns(DatKind.Metadat);
@@ -115,8 +113,7 @@ public partial class DatRefreshJobTests
     [Test]
     public async Task ANoneHandler_DownloadsNothing_AndTheRefreshSucceeds()
     {
-        var none = Substitute.For<ISystemHandler>();
-        none.Id.Returns("dos");
+        var none = TestHandlers.Fake("dos");
         none.DatName.Returns("DOS");
         none.DatSource.Returns(DatSource.None);
         ISystemHandler[] handlers = [.. _systems.All, none];

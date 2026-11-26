@@ -32,9 +32,7 @@ public partial class MediaServiceTests
     [SetUp]
     public void SetUp()
     {
-        _handler = Substitute.For<ISystemHandler>();
-        _handler.EmbedRomsInZip.Returns(true);
-        _handler.Id.Returns("gb");
+        _handler = TestHandlers.Fake("gb", embedRomsInZip: true);
         _handler.DatName.Returns("Nintendo - Game Boy");
         _handler.DatFolder.Returns(DatKind.NoIntro);
         _handler.MetadatKinds.Returns(DatKind.Metadat);

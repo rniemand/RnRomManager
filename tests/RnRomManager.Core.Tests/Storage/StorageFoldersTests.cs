@@ -99,9 +99,7 @@ public class StorageFoldersTests
 
     private static ISystemHandler Handler(string id, bool embed = true)
     {
-        var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(embed);
-        handler.Id.Returns(id);
+        var handler = TestHandlers.Fake(id, embedRomsInZip: embed);
         return handler;
     }
 
