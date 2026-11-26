@@ -7,13 +7,13 @@
 	import type { GroupSort, SortDir } from '#lib/enums/index.js';
 	import { formatCount } from '../format';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
-	import EmptyState from './EmptyState.svelte';
-	import ErrorAlert from './ErrorAlert.svelte';
-	import Loading from './Loading.svelte';
-	import Pagination from './Pagination.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import GroupLogo from './GroupLogo.svelte';
-	import LogoModal from './LogoModal.svelte';
+	import LogoModal from '#lib/components/modals/LogoModal.svelte';
 
 	/**
 	 * Discovery B2: one page of a kind's live groups (publishers, developers or genres across systems), each a link selecting it.

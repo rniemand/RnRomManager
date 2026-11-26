@@ -10,13 +10,13 @@
 		SystemInfo,
 		ImageResolutionFilter
 	} from '#lib/types/index.js';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
-	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
+	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatCount } from '#lib/format.js';
 	import {
 		imageResolutionApiUrl,

@@ -16,13 +16,13 @@
 	} from '../saves';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
-	import ConfirmModal from './ConfirmModal.svelte';
-	import EmulatorModal from './EmulatorModal.svelte';
-	import EmptyState from './EmptyState.svelte';
-	import ErrorAlert from './ErrorAlert.svelte';
-	import FileSize from './FileSize.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import EmulatorModal from '#lib/components/modals/EmulatorModal.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from './Loading.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 
 	/** B14–B15: the game's saves (S2: a Site user's own, every user's for an Admin): list, add, edit, replace, delete and download. */
 	interface Props {

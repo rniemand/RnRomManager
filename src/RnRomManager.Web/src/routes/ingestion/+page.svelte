@@ -1,5 +1,5 @@
 <script lang="ts">
-	import PageTitle from '#lib/components/PageTitle.svelte';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
@@ -15,17 +15,17 @@
 		Page,
 		PendingSystem
 	} from '#lib/types/index.js';
-	import AccordionItem from '#lib/components/AccordionItem.svelte';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
+	import AccordionItem from '#lib/components/layout/AccordionItem.svelte';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
-	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
+	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
+	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
 	import IngestFileTable from '#lib/components/IngestFileTable.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import {
 		deleteIngestFiles,

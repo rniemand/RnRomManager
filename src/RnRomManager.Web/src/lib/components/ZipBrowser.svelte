@@ -5,11 +5,11 @@
 	import type { GameDetail, ZipEntries, ZipFolder } from '#lib/types/index.js';
 	import { formatDateTime, formatSize } from '../format';
 	import { ancestors, buildTree } from '../zipTree';
-	import EmptyState from './EmptyState.svelte';
-	import ErrorAlert from './ErrorAlert.svelte';
-	import FileSize from './FileSize.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from './Loading.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 
 	/**
 	 * Z1/Z4: browses the game's ZIP. Loads lazily the first time it's `active`; a replaced `game` object marks the

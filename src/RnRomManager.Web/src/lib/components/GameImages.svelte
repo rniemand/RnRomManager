@@ -11,11 +11,11 @@
 	} from '#lib/types/index.js';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
-	import ConfirmModal from './ConfirmModal.svelte';
-	import ErrorAlert from './ErrorAlert.svelte';
-	import FileSize from './FileSize.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from './Loading.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 
 	interface Props {
 		game: GameDetail;

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import Icon from '#lib/icons/Icon.svelte';
-	import NotAllowed from '#lib/components/NotAllowed.svelte';
-	import PageTitle from '#lib/components/PageTitle.svelte';
+	import NotAllowed from '#lib/components/common/NotAllowed.svelte';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { reportTabs } from '#lib/reports.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import type { Snippet } from 'svelte';

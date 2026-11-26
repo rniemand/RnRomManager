@@ -10,12 +10,12 @@
 		Page,
 		SystemInfo
 	} from '#lib/types/index.js';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatDateTime, formatDuration } from '#lib/format.js';
 	import { jobLabel, statusClass } from '#lib/jobs.js';
 	import { scrollActiveTab } from '#lib/scrollActiveTab.js';

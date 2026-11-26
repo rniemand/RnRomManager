@@ -13,18 +13,18 @@
 		ManualErrors,
 		ManualForm
 	} from '#lib/types/index.js';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import CopyButton from '#lib/components/CopyButton.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
-	import GameTypeahead from '#lib/components/GameTypeahead.svelte';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import CopyButton from '#lib/components/forms/CopyButton.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
+	import GameTypeahead from '#lib/components/forms/GameTypeahead.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import ReviewDeleteModal from '#lib/components/ReviewDeleteModal.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import ReviewDeleteModal from '#lib/components/modals/ReviewDeleteModal.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatCount, formatDateTime, formatKey, formatValue } from '#lib/format.js';
 	import { navCounts } from '#lib/stores/navCounts.svelte.js';
 	import {

@@ -4,7 +4,7 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
-import GameAdminModal from '#lib/components/GameAdminModal.svelte';
+import GameAdminModal from '#lib/components/modals/GameAdminModal.svelte';
 import type { GameDetail } from '#lib/types/index.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));

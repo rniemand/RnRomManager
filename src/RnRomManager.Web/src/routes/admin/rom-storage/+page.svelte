@@ -3,11 +3,11 @@
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import type { RomStorageRow } from '#lib/types/index.js';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatCount } from '#lib/format.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';

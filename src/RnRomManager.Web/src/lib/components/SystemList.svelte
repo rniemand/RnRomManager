@@ -6,7 +6,7 @@
 	import type { GroupSort, SortDir } from '#lib/enums/index.js';
 	import { formatCount } from '../format';
 	import { auth } from '../stores/auth.svelte';
-	import EmptyState from './EmptyState.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import GroupLogo from './GroupLogo.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 

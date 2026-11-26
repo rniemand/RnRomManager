@@ -14,13 +14,13 @@
 	import { opensInNewTab, playLinkEvents, playUrl, usesPlayDisc } from '../emulator';
 	import { playableRom, savesApi } from '../saves';
 	import { toasts } from '../stores/toasts.svelte';
-	import ConfirmModal from './ConfirmModal.svelte';
-	import EmulatorModal from './EmulatorModal.svelte';
-	import FileSize from './FileSize.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import EmulatorModal from '#lib/components/modals/EmulatorModal.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import { auth } from '../stores/auth.svelte';
-	import RatingControl from './RatingControl.svelte';
-	import SystemBadge from './SystemBadge.svelte';
+	import RatingControl from '#lib/components/forms/RatingControl.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { systemColour } from '../systemColours';
 
 	/** The Library's game grid / list (spec §11), shared by the Library and a collection's page (B24). */

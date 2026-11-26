@@ -9,14 +9,14 @@
 		TimelineYears,
 		YearRange
 	} from '#lib/types/index.js';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import GameResults from '#lib/components/GameResults.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import PageTitle from '#lib/components/PageTitle.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
 	import { formatCount } from '#lib/format.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';

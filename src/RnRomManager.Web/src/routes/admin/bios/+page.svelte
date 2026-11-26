@@ -2,9 +2,9 @@
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import type { BiosFileStatus, BiosGroup, BiosInfo } from '#lib/types/index.js';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatSize } from '#lib/format.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 

@@ -4,11 +4,11 @@
 	import type { GameListItem, Page, DiscoveryState } from '#lib/types/index.js';
 	import { discoveryApi, discoverySearch, discoveryText } from '../discovery';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
-	import EmptyState from './EmptyState.svelte';
-	import ErrorAlert from './ErrorAlert.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import GameResults from './GameResults.svelte';
-	import Loading from './Loading.svelte';
-	import Pagination from './Pagination.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
 
 	/**
 	 * Discovery B2: the selected group's games across systems, as the Library's grid (system badges, game links), paged

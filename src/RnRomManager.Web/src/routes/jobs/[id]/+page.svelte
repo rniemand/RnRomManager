@@ -4,11 +4,11 @@
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { Job, JobItem, Page } from '#lib/types/index.js';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
+	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import {
 		formatSummaryValue,

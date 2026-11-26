@@ -5,8 +5,8 @@
 	import { formatCount } from '../format';
 	import { bundle } from '../stores/bundle.svelte';
 	import { toasts } from '../stores/toasts.svelte';
-	import ConfirmModal from './ConfirmModal.svelte';
-	import EmptyState from './EmptyState.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 
 	/**

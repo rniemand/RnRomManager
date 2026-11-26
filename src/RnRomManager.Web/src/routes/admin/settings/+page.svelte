@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { flattenSettings, formatValue } from '#lib/format.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 

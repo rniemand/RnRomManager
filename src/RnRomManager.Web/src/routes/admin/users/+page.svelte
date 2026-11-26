@@ -4,11 +4,11 @@
 	import { isApiError } from '#lib/api/errors.js';
 	import type { UserInfo } from '#lib/types/index.js';
 	import type { Role } from '#lib/enums/index.js';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import { passwordError, policyHint, usernameError } from '#lib/passwordPolicy.js';
 	import { auth } from '#lib/stores/auth.svelte.js';

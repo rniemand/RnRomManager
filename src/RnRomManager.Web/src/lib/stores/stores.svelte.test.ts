@@ -8,7 +8,7 @@ import { idlePollIntervalMs, jobs, pollIntervalMs } from './jobs.svelte';
 import { toasts, toastDurationMs } from './toasts.svelte';
 import { reviewJobs, summaryError } from './reviewJobs.svelte';
 import { render, screen } from '@testing-library/svelte';
-import ToastHost from '../components/ToastHost.svelte';
+import ToastHost from '#lib/components/layout/ToastHost.svelte';
 
 const app = vi.hoisted(() => ({ goto: vi.fn(), url: new URL('http://localhost/review/7') }));
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => app.goto(...args) }));

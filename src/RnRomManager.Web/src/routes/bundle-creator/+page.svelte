@@ -2,8 +2,8 @@
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import BundleDownload from '#lib/components/BundleDownload.svelte';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import SavedBundleQueues from '#lib/components/SavedBundleQueues.svelte';
 	import { formatCount } from '#lib/format.js';

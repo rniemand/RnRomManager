@@ -2,15 +2,15 @@
 	import { api } from '../api/client';
 	import type { GameListItem, Page, SystemInfo } from '#lib/types/index.js';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
-	import EmptyState from './EmptyState.svelte';
-	import ErrorAlert from './ErrorAlert.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import GameResults from './GameResults.svelte';
 	import { auth } from '../stores/auth.svelte';
 	import GroupLogo from './GroupLogo.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from './Loading.svelte';
-	import Pagination from './Pagination.svelte';
-	import SystemEmulatorsModal from './SystemEmulatorsModal.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
+	import SystemEmulatorsModal from '#lib/components/modals/SystemEmulatorsModal.svelte';
 
 	/**
 	 * Systems tab B5: the selected system's games, paged by the URL's `gamePage`, its logo (B18) and Emulators button,

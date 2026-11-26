@@ -1,0 +1,276 @@
+<script lang="ts">
+	import { tick, untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { isApiError } from '#lib/api/errors.js';
+	import type { Me, Bindings, EditableHotkeyId, HotkeyAction } from '#lib/types/index.js';
+	import {
+		actions,
+		allowedFor,
+		defaultBindings,
+		errors as hotkeyErrors,
+		fromEvent,
+		ruleError,
+		toSave,
+		validate
+	} from '#lib/hotkeys.js';
+	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
+	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import ConfirmModal from './ConfirmModal.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Icon from '#lib/icons/Icon.svelte';
+
+	/** B25: the user's global hotkeys; edits are pending until Save. */
+	interface Props {
+		open: boolean;
+		me: Me;
+		/** U7: opens global search, for the non-editable `search` row's Run button. */
+		onsearch?: () => void;
+	}
+
+	let { open = $bindable(), me, onsearch }: Props = $props();
+
+	let pending = $state<Bindings | null>(null);
+	let capturing = $state<EditableHotkeyId | null>(null);
+	let captureError = $state<{ id: EditableHotkeyId; message: string } | null>(null);
+	let serverErrors = $state<Partial<Record<string, string>>>({});
+	let saveError = $state<unknown>(null);
+	let busy = $state(false);
+	/** Actions the user captured, cleared or reset in this session: sent even when implicitly unassigned (B2). */
+	const edited = new SvelteSet<string>();
+
+	const rows = $derived(actions.filter((a) => allowedFor(a, me.roles)));
+	const ruleErrors = $derived(pending ? validate(pending, me.roles) : {});
+	// Disabling an implicitly unassigned action leaves it null but makes it explicit, so it counts as a change.
+	const changed = $derived(
+		!!pending &&
+			!!hotkeys.bindings &&
+			(JSON.stringify(pending) !== JSON.stringify(hotkeys.bindings) ||
+				hotkeys.implicitUnassigned.some((id) => edited.has(id)))
+	);
+	const blocked = $derived(
+		!pending || !changed || Object.keys(ruleErrors).length > 0 || capturing !== null
+	);
+
+	$effect(() => {
+		if (!open) return;
+		const current = untrack(() => hotkeys.bindings);
+		pending = current ? { ...current } : null;
+		capturing = null;
+		captureError = null;
+		serverErrors = {};
+		saveError = null;
+		busy = false;
+		untrack(() => edited.clear());
+	});
+
+	// Opened before the bindings arrived: pick them up when they do.
+	$effect(() => {
+		if (open && !pending && hotkeys.bindings) pending = { ...hotkeys.bindings };
+	});
+
+	const modifierCodes = /^(Shift|Control|Alt|Meta|OS)(Left|Right)?$/;
+
+	function edit(id: EditableHotkeyId): void {
+		captureError = null;
+		capturing = capturing === id ? null : id;
+		// Safari doesn't focus a clicked button: capture listens on it, so focus it.
+		if (capturing) void tick().then(() => document.getElementById(`hotkey-edit-${id}`)?.focus());
+	}
+
+	/** Capture mode: the next non-modifier keydown becomes the binding (B25). */
+	function capture(e: KeyboardEvent, id: EditableHotkeyId): void {
+		if (capturing !== id || !pending) return;
+		// Keep it from Bootstrap (Escape closes the modal), global search and the global hotkeys.
+		e.preventDefault();
+		e.stopPropagation();
+		const plain = !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
+		if (plain && e.key === 'Escape') {
+			capturing = null;
+			captureError = null;
+			return;
+		}
+		if (plain && (e.key === 'Backspace' || e.key === 'Delete')) {
+			pending[id] = null;
+			edited.add(id);
+			delete serverErrors[`bindings.${id}`];
+			capturing = null;
+			captureError = null;
+			return;
+		}
+		if (modifierCodes.test(e.code)) return;
+		const combination = fromEvent(e);
+		const other = rows.find(
+			(a): a is HotkeyAction & { id: EditableHotkeyId } =>
+				a.editable && a.id !== id && pending![a.id as EditableHotkeyId] === combination
+		);
+		const message =
+			combination === null
+				? hotkeyErrors.format
+				: (ruleError(combination) ?? (other ? hotkeyErrors.duplicate(other.name) : null));
+		if (message) {
+			captureError = { id, message };
+			return;
+		}
+		pending[id] = combination;
+		edited.add(id);
+		delete serverErrors[`bindings.${id}`];
+		capturing = null;
+		captureError = null;
+	}
+
+	/**
+	 * A listener on the button itself, not Svelte's delegated `onkeydown` (which runs at the root, after Bootstrap's
+	 * Escape handler on `.modal` has already closed the modal).
+	 */
+	function captureKeys(id: EditableHotkeyId) {
+		return (node: HTMLElement) => {
+			const listener = (e: KeyboardEvent) => capture(e, id);
+			node.addEventListener('keydown', listener);
+			return () => node.removeEventListener('keydown', listener);
+		};
+	}
+
+	function reset(): void {
+		if (!pending) return;
+		const defaults = defaultBindings();
+		for (const row of rows)
+			if (row.editable) {
+				pending[row.id as EditableHotkeyId] = defaults[row.id as EditableHotkeyId];
+				edited.add(row.id);
+			}
+		capturing = null;
+		captureError = null;
+		serverErrors = {};
+	}
+
+	async function save(): Promise<void> {
+		if (!pending || blocked || busy) return;
+		busy = true;
+		saveError = null;
+		try {
+			await hotkeys.save(toSave(pending, hotkeys.implicitUnassigned, edited));
+			toasts.show('Keyboard shortcuts saved.', 'success');
+			open = false;
+		} catch (e) {
+			if (isApiError(e, 'ValidationFailed')) {
+				serverErrors = Object.fromEntries(Object.entries(e.errors).map(([k, v]) => [k, v[0]]));
+			}
+			saveError = e;
+		} finally {
+			busy = false;
+		}
+	}
+
+	/** U7: no edit is silently lost, so Run waits while a key is captured or bindings are unsaved. */
+	const runBlocked = $derived(capturing !== null || changed);
+
+	/** U7: closes the modal, then runs the action through the same path as its key. */
+	async function run(action: HotkeyAction): Promise<void> {
+		open = false;
+		await tick();
+		if (action.editable) void hotkeys.run(action.id as EditableHotkeyId);
+		else onsearch?.();
+	}
+
+	const keys = (binding: string) => binding.split('+');
+	const errorFor = (id: string) =>
+		(captureError?.id === id ? captureError.message : null) ??
+		ruleErrors[id as EditableHotkeyId] ??
+		serverErrors[`bindings.${id}`] ??
+		null;
+</script>
+
+<ConfirmModal
+	bind:open
+	title="Keyboard Shortcuts"
+	size="lg"
+	confirmLabel="Save"
+	{busy}
+	confirmDisabled={blocked}
+	onconfirm={save}
+>
+	{#if saveError}<ErrorAlert error={saveError} ondismiss={() => (saveError = null)} />{/if}
+	{#if !pending}
+		<p class="text-body-secondary">Your shortcuts couldn't be loaded.</p>
+		<button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => hotkeys.load()}
+			>Retry</button
+		>
+	{:else}
+		{#if runBlocked}
+			<p class="small text-body-secondary">Save or cancel your changes to run a shortcut</p>
+		{/if}
+		<table class="table table-sm table-striped table-hover align-middle mb-3">
+			<caption class="visually-hidden">Keyboard Shortcuts</caption>
+			<thead class="table-dark">
+				<tr class="small text-uppercase text-body-secondary">
+					<th scope="col">Action</th>
+					<th scope="col">Shortcut</th>
+					<th scope="col"><span class="visually-hidden">Actions</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each rows as action (action.id)}
+					{@const id = action.id as EditableHotkeyId}
+					{@const error = action.editable ? errorFor(id) : null}
+					<tr data-action={action.id}>
+						<th scope="row" class="fw-normal">{action.name}</th>
+						<td>
+							{#if !action.editable}
+								{#each action.defaults as binding, i (binding)}
+									{#if i > 0}<span class="text-body-secondary small"> or </span>{/if}
+									{#each keys(binding) as key, k (k)}{#if k > 0}+{/if}<kbd>{key}</kbd>{/each}
+								{/each}
+							{:else if capturing === id}
+								<span class="text-primary" aria-live="polite">Press keys…</span>
+							{:else if pending[id]}
+								{#each keys(pending[id]!) as key, k (k)}{#if k > 0}+{/if}<kbd>{key}</kbd>{/each}
+							{:else}
+								<span class="text-body-secondary">Not assigned</span>
+								{#if hotkeys.implicitUnassigned.includes(id) && !edited.has(id)}
+									<div class="small text-body-secondary">
+										Its default, {action.defaults[0]}, is used by another shortcut.
+									</div>
+								{/if}
+							{/if}
+							{#if error}<div class="small text-danger" role="alert">{error}</div>{/if}
+						</td>
+						<!-- At 320px Run and Edit stack instead of overflowing; each stays on one line. -->
+						<td class="text-end">
+							<button
+								type="button"
+								class="btn btn-sm btn-outline-primary text-nowrap"
+								class:me-1={action.editable}
+								aria-label="Run {action.name}"
+								disabled={runBlocked}
+								onclick={() => run(action)}><Icon name="play" /> Run</button
+							>
+							{#if action.editable}
+								<button
+									type="button"
+									id="hotkey-edit-{id}"
+									class="btn btn-sm"
+									class:btn-outline-secondary={capturing !== id}
+									class:btn-primary={capturing === id}
+									aria-label={capturing === id
+										? `Cancel editing ${action.name}`
+										: `Edit ${action.name}`}
+									aria-pressed={capturing === id}
+									onclick={() => edit(id)}
+									{@attach captureKeys(id)}
+								>
+									{capturing === id ? 'Cancel' : 'Edit'}
+								</button>
+							{/if}
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+		<p class="small text-body-secondary">
+			Edit, then press the new keys. Backspace or Delete clears a shortcut; Escape stops editing.
+		</p>
+		<button type="button" class="btn btn-sm btn-outline-secondary" onclick={reset}
+			>Reset to defaults</button
+		>
+	{/if}
+</ConfirmModal>

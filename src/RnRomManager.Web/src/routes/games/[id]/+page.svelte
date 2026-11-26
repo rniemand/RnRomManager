@@ -17,26 +17,26 @@
 		AdminOutcome
 	} from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import CopyButton from '#lib/components/CopyButton.svelte';
-	import GameAdminModal from '#lib/components/GameAdminModal.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import CopyButton from '#lib/components/forms/CopyButton.svelte';
+	import GameAdminModal from '#lib/components/modals/GameAdminModal.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import GameImages from '#lib/components/GameImages.svelte';
 	import GameSaves from '#lib/components/GameSaves.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
-	import GameCollectionsModal from '#lib/components/GameCollectionsModal.svelte';
-	import SystemEmulatorsModal from '#lib/components/SystemEmulatorsModal.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
+	import GameCollectionsModal from '#lib/components/modals/GameCollectionsModal.svelte';
+	import SystemEmulatorsModal from '#lib/components/modals/SystemEmulatorsModal.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
-	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import RatingControl from '#lib/components/RatingControl.svelte';
+	import InfoJsonModal from '#lib/components/modals/InfoJsonModal.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import RatingControl from '#lib/components/forms/RatingControl.svelte';
 	import GameTitle from '#lib/components/GameTitle.svelte';
-	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
-	import EditReleaseModal from '#lib/components/EditReleaseModal.svelte';
+	import ReleaseNoteModal from '#lib/components/modals/ReleaseNoteModal.svelte';
+	import EditReleaseModal from '#lib/components/modals/EditReleaseModal.svelte';
 	import type { ReleaseKind, AddResult } from '#lib/enums/index.js';
-	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
+	import EmulatorModal from '#lib/components/modals/EmulatorModal.svelte';
 	import {
 		canPlay,
 		opensInNewTab,
@@ -45,7 +45,7 @@
 		setMedia,
 		usesPlayDisc
 	} from '#lib/emulator.js';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatCount, formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';

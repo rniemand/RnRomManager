@@ -1,5 +1,5 @@
 <script lang="ts">
-	import PageTitle from '#lib/components/PageTitle.svelte';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
@@ -15,14 +15,14 @@
 		FacetCounts,
 		LibraryFilters
 	} from '#lib/types/index.js';
-	import CollectionPickerModal from '#lib/components/CollectionPickerModal.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
+	import CollectionPickerModal from '#lib/components/modals/CollectionPickerModal.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import GameResults from '#lib/components/GameResults.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import {
 		defaultDir,
 		facetsApiUrl,

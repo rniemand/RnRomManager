@@ -3,11 +3,11 @@
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { DatRefreshSettings, DatVersion } from '#lib/types/index.js';
-	import AccordionItem from '#lib/components/AccordionItem.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import AccordionItem from '#lib/components/layout/AccordionItem.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import { jobLabel, percent } from '#lib/jobs.js';
 	import { auth } from '#lib/stores/auth.svelte.js';

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import { navigate } from '#lib/navigation.js';
 	import { maxLength, policyHint, validateChangePassword } from '#lib/passwordPolicy.js';
 	import type { ChangePasswordForm, FieldErrors } from '#lib/types/index.js';

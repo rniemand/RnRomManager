@@ -27,7 +27,7 @@ vi.mock('#lib/bootstrap.js', () => ({
 }));
 
 const { default: CollectionsPage } = await import('./+page.svelte');
-const { default: CollectionModal } = await import('#lib/components/CollectionModal.svelte');
+const { default: CollectionModal } = await import('#lib/components/modals/CollectionModal.svelte');
 
 type Answer = { status: number; body?: unknown };
 

@@ -13,15 +13,15 @@
 		LibraryFilters
 	} from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
-	import CollectionModal from '#lib/components/CollectionModal.svelte';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import CollectionModal from '#lib/components/modals/CollectionModal.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import GameResults from '#lib/components/GameResults.svelte';
-	import GameTypeahead from '#lib/components/GameTypeahead.svelte';
+	import GameTypeahead from '#lib/components/forms/GameTypeahead.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
 	import {
 		defaultDir,
 		gamesApiUrl,

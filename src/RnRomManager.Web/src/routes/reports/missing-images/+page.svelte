@@ -2,12 +2,12 @@
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import type { Page, SystemInfo } from '#lib/types/index.js';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Loading from '#lib/components/Loading.svelte';
-	import Pagination from '#lib/components/Pagination.svelte';
-	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
+	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import { formatCount } from '#lib/format.js';

@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
-	import PageTitle from '#lib/components/PageTitle.svelte';
+	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import AdminOnly from '#lib/components/AdminOnly.svelte';
+	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 
 	let { children }: { children: Snippet } = $props();

@@ -2,7 +2,7 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import type { LogEntry } from '#lib/types/index.js';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import { auth } from '#lib/stores/auth.svelte.js';
 

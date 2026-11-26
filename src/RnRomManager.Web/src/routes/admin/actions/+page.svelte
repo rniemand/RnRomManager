@@ -4,9 +4,9 @@
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { AdminActions } from '#lib/types/index.js';
-	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatCount, formatDateTime } from '#lib/format.js';
 	import { jobLabel } from '#lib/jobs.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';

@@ -2,11 +2,11 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import Loading from '#lib/components/Loading.svelte';
+	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatCount, formatSize } from '#lib/format.js';
 	import { systemColour } from '#lib/systemColours.js';
 	import { squarify } from '#lib/treemap.js';
