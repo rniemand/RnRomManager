@@ -463,6 +463,67 @@ public class ImageEndpointsTests
             Is.EqualTo(("BoxArt", true, true)));
     }
 
+    private static byte[] RealPng(int width, int height)
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(width, height);
+        bitmap.Erase(SkiaSharp.SKColors.CornflowerBlue);
+        using var data = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    private async Task<string> CoverSha1Async() =>
+        (await Service<IImageRepository>().ListByGameAsync(_game, default)).Single(i => i.IsCover).Sha1;
+
+    [Test]
+    public async Task Cover_Miss_GeneratesAResizedWebp_ThenServesTheCachedFile_And304()
+    {
+        (await Upload(_manager, RealPng(600, 800), "BoxArt")).Dispose();
+        var sha1 = await CoverSha1Async();
+        var url = $"/api/games/{_game}/cover/{sha1}";
+
+        using var miss = await _manager.GetAsync(url);
+        Assert.That(miss.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(miss.Content.Headers.ContentType!.MediaType, Is.EqualTo("image/webp"));
+        Assert.That(miss.Headers.CacheControl, Has.Property("Private").True.And.Property("MaxAge").EqualTo(TimeSpan.FromDays(365)));
+        Assert.That(miss.Headers.CacheControl!.Extensions.Select(e => e.Name), Is.EqualTo(new[] { "immutable" }));
+        Assert.That(miss.Headers.ETag!.Tag, Is.EqualTo($"\"{sha1}\""));
+        using (var bitmap = SkiaSharp.SKBitmap.Decode(await miss.Content.ReadAsByteArrayAsync()))
+            Assert.That((bitmap.Width, bitmap.Height), Is.EqualTo((384, 512)));
+        Assert.That(File.Exists(Path.Combine(_factory.Root, "imagecache", _game.ToString("D"), sha1 + ".webp")), Is.True);
+
+        using var hit = await _manager.GetAsync(url);
+        Assert.That((hit.StatusCode, hit.Content.Headers.ContentType!.MediaType), Is.EqualTo((HttpStatusCode.OK, "image/webp")));
+
+        using var notModified = await _manager.SendAsync(HttpMethod.Get, url, null, false,
+            h => h.IfNoneMatch.Add(new EntityTagHeaderValue($"\"{sha1}\"")));
+        Assert.That(notModified.StatusCode, Is.EqualTo(HttpStatusCode.NotModified));
+    }
+
+    [Test]
+    public async Task Cover_StaleSha1_Is404()
+    {
+        (await Upload(_manager, RealPng(10, 10), "BoxArt")).Dispose();
+
+        using var response = await _manager.GetAsync($"/api/games/{_game}/cover/{new string('0', 40)}");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task Cover_Undecodable_ServesTheOriginal_CachesNothing()
+    {
+        (await Upload(_manager, Png(300, 400), "BoxArt")).Dispose(); // a valid header without pixel data
+        var sha1 = await CoverSha1Async();
+
+        using var response = await _manager.GetAsync($"/api/games/{_game}/cover/{sha1}");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType!.MediaType, Is.EqualTo("image/png"));
+        Assert.That(response.Headers.CacheControl, Has.Property("Private").True.And.Property("MaxAge").EqualTo(TimeSpan.FromDays(1)));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(Png(300, 400)));
+        Assert.That(Directory.Exists(Path.Combine(_factory.Root, "imagecache", _game.ToString("D"))), Is.False);
+    }
+
     [Test]
     public async Task Delete_ThePlaceholder_Is409DefaultImage_UnknownIs404()
     {

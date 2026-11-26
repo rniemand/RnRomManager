@@ -1293,7 +1293,7 @@ public partial class LibraryEndpointsTests
             Is.EqualTo(("snap-01.jpg", "upload", "Snap")));
         Assert.That(detail.GetProperty("hasDefaultBoxArt").GetBoolean(), Is.False, "the cover isn't the placeholder");
         var item = (await GetJson("/api/games")).GetProperty("items").EnumerateArray().Single();
-        Assert.That(item.GetProperty("boxArtUrl").GetString(), Is.EqualTo(cover.GetProperty("url").GetString()));
+        Assert.That(item.GetProperty("boxArtUrl").GetString(), Is.EqualTo($"/api/games/{id}/cover/{snap.Sha1}"));
 
         using var image = await _user.GetAsync(cover.GetProperty("url").GetString()!);
         Assert.That(image.StatusCode, Is.EqualTo(HttpStatusCode.OK));

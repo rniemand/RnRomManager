@@ -345,8 +345,9 @@ public class GameQueryTests
         var tetris = items.Single(i => i.Id == id);
         var image = (await _images.ListByGameAsync(id, default)).Single();
         Assert.That(tetris.Regions, Is.EqualTo(new[] { "Europe", "USA", "World" }));
-        Assert.That((tetris.SystemId, tetris.ReleaseYear, tetris.RomCount, tetris.BoxArtImageId), Is.EqualTo(("gb", (int?)1989, 3, (long?)image.Id)));
-        Assert.That(noArt.BoxArtImageId, Is.Null);
+        Assert.That((tetris.SystemId, tetris.ReleaseYear, tetris.RomCount, tetris.BoxArtImageId, tetris.BoxArtSha1),
+            Is.EqualTo(("gb", (int?)1989, 3, (long?)image.Id, new string('a', 40))));
+        Assert.That((noArt.BoxArtImageId, noArt.BoxArtSha1), Is.EqualTo(((long?)null, (string?)null)));
     }
 
     [Test]

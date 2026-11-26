@@ -396,10 +396,11 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             SELECT g.id AS Id, g.display_title AS DisplayTitle,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    g.zip_size_bytes AS ZipSizeBytes, g.created_at AS CreatedAt,
-                   (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.is_cover = 1) AS BoxArtImageId
+                   (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.is_cover = 1) AS BoxArtImageId,
+                   (SELECT i.sha1 FROM images i WHERE i.game_id = g.id AND i.is_cover = 1 ORDER BY i.id LIMIT 1) AS BoxArtSha1
             FROM games g WHERE g.id IN @ids
             """, new { ids }, cancellationToken: cancellationToken)))
-            .Select(r => new DuplicateGame(r.Id, r.DisplayTitle, (int)r.RomCount, r.ZipSizeBytes, r.CreatedAt, r.BoxArtImageId))
+            .Select(r => new DuplicateGame(r.Id, r.DisplayTitle, (int)r.RomCount, r.ZipSizeBytes, r.CreatedAt, r.BoxArtImageId, r.BoxArtSha1))
             .ToDictionary(g => g.Id);
 
         var items = groups.Select(g => new DuplicateGroup(g.SystemId, g.BaseTitle, g.GamesKey,
@@ -438,6 +439,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         public long ZipSizeBytes { get; init; }
         public DateTime CreatedAt { get; init; }
         public long? BoxArtImageId { get; init; }
+        public string? BoxArtSha1 { get; init; }
     }
 
     private sealed class GroupRow

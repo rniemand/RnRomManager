@@ -234,6 +234,7 @@ public sealed class GameRepository : IGameRepository
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
                    (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.is_cover = 1) AS BoxArtImageId,
+                   (SELECT i.sha1 FROM images i WHERE i.game_id = g.id AND i.is_cover = 1 ORDER BY i.id LIMIT 1) AS BoxArtSha1,
                    (SELECT CAST(r.size_bytes + COALESCE((SELECT SUM(f.size_bytes) FROM rom_files f WHERE f.rom_id = r.id), 0) AS SIGNED)
                     FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY 1 DESC LIMIT 1) AS PrimarySizeBytes,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id AND JSON_CONTAINS(r.flags, '"Update"')) AS UpdateCount,
@@ -252,7 +253,7 @@ public sealed class GameRepository : IGameRepository
             """, args, cancellationToken: cancellationToken));
 
         var items = rows.Select(r => new GameListItem(
-            r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
+            r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId, r.BoxArtSha1,
             r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns)),
             (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true, r.IgdbId)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
@@ -461,6 +462,7 @@ public sealed class GameRepository : IGameRepository
         public long RomCount { get; init; }
         public string? RegionKeys { get; init; }
         public long? BoxArtImageId { get; init; }
+        public string? BoxArtSha1 { get; init; }
         public long? PrimarySizeBytes { get; init; }
         public long UpdateCount { get; init; }
         public long DlcCount { get; init; }

@@ -215,7 +215,7 @@ public static partial class ReportEndpoints
                 games = group.Games.Select(g => new
                 {
                     id = g.Id, displayTitle = g.DisplayTitle, romCount = g.RomCount, zipSizeBytes = g.ZipSizeBytes, createdAt = g.CreatedAt,
-                    boxArtUrl = g.BoxArtImageId is { } imageId ? LibraryEndpoints.ImageUrl(g.Id, imageId) : null,
+                    boxArtUrl = g.BoxArtSha1 is { } sha1 ? LibraryEndpoints.CoverUrl(g.Id, sha1) : null,
                 }),
             }));
         });

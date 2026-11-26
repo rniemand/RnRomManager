@@ -117,6 +117,42 @@ public static class LibraryEndpoints
                     entityTag: new EntityTagHeaderValue($"\"{image.Sha1}\""));
         });
 
+        // C3: the cached WebP of the current cover; a stale sha1 is a 404, so only the database's value builds a path.
+        games.MapGet("/{id:guid}/cover/{sha1}", async (Guid id, string sha1, HttpContext ctx, IGameRepository repository,
+            IImageRepository images, LibraryFiles files, CoverCache cache, ILogger<CoverCache> logger) =>
+        {
+            var cover = (await images.ListByGameAsync(id, ctx.RequestAborted)).Where(i => i.IsCover).OrderBy(i => i.Id).FirstOrDefault();
+            if (cover is null || !string.Equals(cover.Sha1, sha1, StringComparison.Ordinal)
+                || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+
+            var etag = new EntityTagHeaderValue($"\"{cover.Sha1}\"");
+            if (cache.CachedPath(id, cover.Sha1) is { } path)
+            {
+                ctx.Response.Headers.CacheControl = CoverCacheControl;
+                return Results.File(path, "image/webp", entityTag: etag);
+            }
+
+            var entry = LibraryZip.ImageEntry(cover.FileName);
+            if (files.OpenEntry(ctx, game, entry, ImageFormats.MaxBytes, out var stream) is { } problem)
+                return problem;
+            CoverCacheResult result;
+            await using (stream)
+                result = await cache.GenerateAsync(id, cover.Sha1, stream!, ctx.RequestAborted);
+
+            if (result.Webp is { } webp)
+            {
+                ctx.Response.Headers.CacheControl = CoverCacheControl;
+                return Results.Bytes(webp, "image/webp", entityTag: etag);
+            }
+
+            logger.LogWarning("The cover of game {GameId} couldn't be converted to WebP; serving the original.", id);
+            if (files.OpenEntry(ctx, game, entry, ImageFormats.MaxBytes, out var original) is { } reopenProblem)
+                return reopenProblem;
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.Stream(original!, ImageFormats.ContentType(cover.FileName), entityTag: etag);
+        });
+
         games.MapGet("/{id:guid}/download", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
         {
             if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
@@ -925,7 +961,12 @@ public static class LibraryEndpoints
         return null;
     }
 
+    private const string CoverCacheControl = "private, max-age=31536000, immutable";
+
     internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
+
+    /// <summary>C4: the cached WebP of the game's cover.</summary>
+    internal static string CoverUrl(Guid gameId, string coverSha1) => $"/api/games/{gameId}/cover/{coverSha1}";
 
     /// <summary>One <c>/api/games</c> row (spec §23), also used by discovery group pages.</summary>
     /// <summary>S7: a Site user's name (their saves are counted apart); null for an Admin, who sees every save.</summary>
@@ -987,7 +1028,7 @@ public static class LibraryEndpoints
             regions = game.Regions,
             romCount = game.RomCount,
             primarySizeBytes = game.PrimarySizeBytes,
-            boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
+            boxArtUrl = game.BoxArtSha1 is { } sha1 ? CoverUrl(game.Id, sha1) : null,
             rating = game.Rating,
             favourite = game.Favourite,
             matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,

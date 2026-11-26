@@ -465,7 +465,7 @@ public class ReportEndpointsTests
         var first = group.GetProperty("games")[0];
         Assert.That((first.GetProperty("displayTitle").GetString(), first.GetProperty("romCount").GetInt32()), Is.EqualTo(("Bravo", 1)));
         Assert.That(first.GetProperty("zipSizeBytes").GetInt64(), Is.GreaterThan(0));
-        Assert.That(first.GetProperty("boxArtUrl").GetString(), Does.StartWith($"/api/games/{bravo}/images/"));
+        Assert.That(first.GetProperty("boxArtUrl").GetString(), Does.StartWith($"/api/games/{bravo}/cover/"));
         Assert.That(first.TryGetProperty("createdAt", out _), Is.True);
     }
 
