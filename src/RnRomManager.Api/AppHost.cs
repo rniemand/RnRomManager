@@ -193,6 +193,7 @@ public static class AppHost
         builder.Services.AddTransient<GameMediaRetry>();
         builder.Services.AddTransient<MediaRetryJob>();
         builder.Services.AddTransient<PullCoversJob>();
+        builder.Services.AddTransient<RnRomManager.Core.Media.IgdbSyncJob>();
         builder.Services.AddTransient<RnRomManager.Core.Storage.StorageMigrationJob>();
         builder.Services.AddSingleton<StorageMigrationJobFactory>(sp => change =>
         {

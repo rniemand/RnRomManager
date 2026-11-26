@@ -410,6 +410,16 @@ public static class LibraryEndpoints
             return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
+        // Admin actions R1.
+        api.MapPost("/jobs/igdb-sync", async (HttpContext ctx, JobRunner runner, IgdbSyncJob job, IIgdbGames igdb) =>
+        {
+            if (!igdb.Configured)
+                return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
+                    "Refreshing ratings needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
+            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
+            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
         // Admin actions P1.
         api.MapPost("/jobs/pull-covers", async (HttpContext ctx, JobRunner runner, PullCoversJob job, IIgdbGames igdb) =>
         {
@@ -551,8 +561,9 @@ public static class LibraryEndpoints
         // Multi-disc M3 (Saturn/Sega CD S2, Amiga F3, Plus/4 B11): PlayStation, Saturn, Sega CD, Amiga and Plus/4; other systems have none. Keyed by each set's Disc 1.
         var discSets = DiscSets.Find(game.SystemId, romRows, fileRows).ToDictionary(s => s.Discs[0].Id);
         var igdbConfigured = SourcesOptions.IgdbConfigured(ctx.RequestServices.GetRequiredService<IOptions<SourcesOptions>>().Value);
+        var actions = await repository.GetActionsAsync(id, ctx.RequestAborted);
         return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes, discSets,
-            igdbConfigured));
+            igdbConfigured, actions));
     }
 
     private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
@@ -993,7 +1004,7 @@ public static class LibraryEndpoints
     }
 
     private static object ToDetail(GameRow game, string systemName, string? browserCore, bool fileSets, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
-        IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes, IReadOnlyDictionary<long, DiscSet> discSets, bool igdbConfigured) => new
+        IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes, IReadOnlyDictionary<long, DiscSet> discSets, bool igdbConfigured, GameActionsRow? actions) => new
     {
         id = game.Id,
         system = game.SystemId,
@@ -1013,6 +1024,15 @@ public static class LibraryEndpoints
         saveCount = game.SaveCount,
         igdbId = game.IgdbId,
         igdbConfigured,
+        // R4: null unless a ratings refresh stored a score.
+        igdbRating = actions?.IgdbRating is { } score
+            ? new
+            {
+                score,
+                votes = actions.IgdbRatingCount ?? 0,
+                syncedAt = actions.LastIgdbSyncAt is { } synced ? DateTime.SpecifyKind(synced, DateTimeKind.Utc) : (DateTime?)null,
+            }
+            : null,
         metadata = new { createdAt = game.CreatedAt, updatedAt = game.UpdatedAt },
         roms = roms.OrderByDescending(r => r.IsPrimary).ThenBy(r => r.FileName, StringComparer.Ordinal).Select(r => new
         {

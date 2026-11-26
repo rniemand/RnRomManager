@@ -80,6 +80,33 @@ public sealed class GameRepository : IGameRepository
             new { gameId }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<GameRow>> ListIgdbLinkedAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<GameRow>(new CommandDefinition(
+            $"{Select} g WHERE g.igdb_id > 0 ORDER BY g.title, g.id", cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task SaveIgdbSyncAsync(Guid gameId, double? rating, int? count, DateTime syncedAt, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO game_actions (game_id, igdb_rating, igdb_rating_count, last_igdb_sync_at) VALUES (@gameId, @rating, @count, @syncedAt)
+            ON DUPLICATE KEY UPDATE igdb_rating = VALUES(igdb_rating), igdb_rating_count = VALUES(igdb_rating_count),
+                                    last_igdb_sync_at = VALUES(last_igdb_sync_at)
+            """, new { gameId, rating, count, syncedAt }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<GameActionsRow?> GetActionsAsync(Guid gameId, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return await connection.QuerySingleOrDefaultAsync<GameActionsRow>(new CommandDefinition("""
+            SELECT cover_image_pulled_at AS CoverImagePulledAt, last_igdb_sync_at AS LastIgdbSyncAt, igdb_rating AS IgdbRating,
+                   igdb_rating_count AS IgdbRatingCount
+            FROM game_actions WHERE game_id = @gameId
+            """, new { gameId }, cancellationToken: cancellationToken));
+    }
+
     public async Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();

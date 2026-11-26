@@ -27,6 +27,15 @@ public interface IGameRepository
     /// <summary>A6: the game's IGDB link changed: its <c>game_actions</c> rating, vote count and sync time become null.</summary>
     Task ClearIgdbSyncAsync(Guid gameId, CancellationToken cancellationToken);
 
+    /// <summary>R2: every IGDB-linked game (<c>igdb_id &gt; 0</c>), by title then id.</summary>
+    Task<IReadOnlyList<GameRow>> ListIgdbLinkedAsync(CancellationToken cancellationToken);
+
+    /// <summary>R2: upserts the game's IGDB rating, vote count and sync time; never touches <c>cover_image_pulled_at</c>.</summary>
+    Task SaveIgdbSyncAsync(Guid gameId, double? rating, int? count, DateTime syncedAt, CancellationToken cancellationToken);
+
+    /// <summary>R4: the game's <c>game_actions</c> row, or null when it has none.</summary>
+    Task<GameActionsRow?> GetActionsAsync(Guid gameId, CancellationToken cancellationToken);
+
     /// <summary>The library list: filters, sort (year nulls last), tie-break <c>id</c>, one page (spec §23, §14.2).</summary>
     Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken);
 

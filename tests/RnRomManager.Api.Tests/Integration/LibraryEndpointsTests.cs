@@ -200,6 +200,21 @@ public partial class LibraryEndpointsTests
         return await AuthClient.JsonAsync(response);
     }
 
+    [Test]
+    public async Task Detail_IgdbRating_NullUntilARefreshStoresAScore()
+    {
+        var id = await Tetris();
+        Assert.That((await GetJson($"/api/games/{id}")).GetProperty("igdbRating").ValueKind, Is.EqualTo(JsonValueKind.Null));
+
+        await Service<IGameRepository>().SaveIgdbSyncAsync(id, null, null, new DateTime(2026, 11, 26, 9, 0, 0), default);
+        Assert.That((await GetJson($"/api/games/{id}")).GetProperty("igdbRating").ValueKind, Is.EqualTo(JsonValueKind.Null), "no rating");
+
+        await Service<IGameRepository>().SaveIgdbSyncAsync(id, 81.6, null, new DateTime(2026, 11, 26, 9, 0, 0), default);
+        var rating = (await GetJson($"/api/games/{id}")).GetProperty("igdbRating");
+        Assert.That((rating.GetProperty("score").GetDouble(), rating.GetProperty("votes").GetInt32(), rating.GetProperty("syncedAt").GetString()),
+            Is.EqualTo((81.6, 0, "2026-11-26T09:00:00Z")));
+    }
+
     private async Task<string> ZipPath(Guid id) =>
         Path.Combine(_factory.Root, "roms", (await Service<IGameRepository>().GetAsync(id, default))!.ZipPath);
 

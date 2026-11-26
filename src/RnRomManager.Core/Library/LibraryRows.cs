@@ -37,6 +37,15 @@ public sealed record GameRow
     public required DateTime UpdatedAt { get; init; }
 }
 
+/// <summary>A row of <c>game_actions</c> (Admin actions A3). Times are UTC.</summary>
+public sealed record GameActionsRow
+{
+    public DateTime? CoverImagePulledAt { get; init; }
+    public DateTime? LastIgdbSyncAt { get; init; }
+    public double? IgdbRating { get; init; }
+    public int? IgdbRatingCount { get; init; }
+}
+
 /// <summary>A row of <c>roms</c> (spec §14.1).</summary>
 public sealed record RomRow
 {
