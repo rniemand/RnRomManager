@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { api } from '../api/client';
 	import { jobLabel, percent } from '../jobs';
+	import { activity } from '../stores/activity.svelte';
 	import { hotkeys } from '../stores/hotkeys.svelte';
 	import { jobs } from '../stores/jobs.svelte';
 	import type { About, Me } from '../api/types';
@@ -13,7 +14,7 @@
 	 * B10–B12: the signed-in footer, fixed to the bottom: About (U2: the app logo), the version (a link to the releases) and the keyboard
 	 * shortcuts button (U1: a keyboard icon; hidden while the password must be changed, like the rest of the app). ROM Zip Config B17: for
 	 * Admins, the running job's progress, linking to the Jobs page (not while the password must be changed: the API
-	 * answers 403 then).
+	 * answers 403 then). L4: otherwise what holds the job lock (a job or e.g. "Saving changes…"), for every user.
 	 */
 	interface Props {
 		me: Me;
@@ -45,6 +46,13 @@
 		if (showJobs) return jobs.watch();
 	});
 	const job = $derived(showJobs ? jobs.current : null);
+	$effect(() => {
+		if (!me.mustChangePassword) return activity.watch();
+	});
+	const held = $derived(job || me.mustChangePassword ? null : activity.current);
+	const heldLabel = $derived(
+		held ? (held.jobType ? `${jobLabel(held.jobType)} running` : `${held.activity}…`) : ''
+	);
 	/** Release editing B29: the Admin quick actions, run as their hotkeys. */
 	const showAdmin = $derived(showJobs);
 </script>
@@ -97,11 +105,31 @@
 					{/if}
 				</span>
 			</a>
+		{:else if held}
+			<span class="footer-activity ms-auto" role="status">
+				{#if showJobs && held.jobType}
+					<a
+						class="d-flex align-items-center gap-2 link-body-emphasis text-decoration-none"
+						href={resolve('/jobs')}
+						title="Jobs"
+					>
+						<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+						<span class="footer-label">{heldLabel}</span>
+					</a>
+				{:else}
+					<span class="d-flex align-items-center gap-2">
+						<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+						<span class="footer-label">{heldLabel}</span>
+					</span>
+				{/if}
+			</span>
 		{/if}
 		{#if showAdmin}
 			<button
 				type="button"
-				class="btn btn-link btn-sm p-0 footer-action {job ? '' : 'ms-auto'} link-body-emphasis"
+				class="btn btn-link btn-sm p-0 footer-action {job || held
+					? ''
+					: 'ms-auto'} link-body-emphasis"
 				aria-label="Next missing image"
 				title="Next missing image"
 				onclick={() => void hotkeys.run('reports.missingImage.next')}
@@ -126,7 +154,7 @@
 		{#if !me.mustChangePassword}
 			<button
 				type="button"
-				class="btn btn-link btn-sm p-0 footer-action {job || showAdmin
+				class="btn btn-link btn-sm p-0 footer-action {job || held || showAdmin
 					? ''
 					: 'ms-auto'} link-body-emphasis"
 				aria-label="Shortcuts"

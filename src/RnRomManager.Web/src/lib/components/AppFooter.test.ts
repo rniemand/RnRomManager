@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
 import type { Me } from '../api/types';
+import { activity } from '../stores/activity.svelte';
 import { hotkeys } from '../stores/hotkeys.svelte';
 import { jobs } from '../stores/jobs.svelte';
 
@@ -29,6 +30,7 @@ const about = {
 };
 let answer: { status: number; body?: unknown };
 let current: unknown;
+let held: unknown;
 let calls: string[];
 
 beforeEach(() => {
@@ -36,9 +38,15 @@ beforeEach(() => {
 	calls = [];
 	answer = { status: 200, body: about };
 	current = undefined;
-	jobs.current = null; // the store outlives each test
+	held = undefined;
+	jobs.current = null; // the stores outlive each test
+	activity.current = null;
 	vi.stubGlobal('fetch', (url: string) => {
 		calls.push(url);
+		if (url === '/api/activity')
+			return Promise.resolve(
+				held ? new Response(JSON.stringify(held)) : new Response(null, { status: 204 })
+			);
 		if (url === '/api/jobs/current')
 			return Promise.resolve(
 				current ? new Response(JSON.stringify(current)) : new Response(null, { status: 204 })
@@ -61,7 +69,7 @@ describe('AppFooter (B10–B12)', () => {
 		expect(version.getAttribute('target')).toBe('_blank');
 		expect(version.getAttribute('rel')).toBe('noopener noreferrer');
 		expect(document.querySelector('footer')!.classList.contains('fixed-bottom')).toBe(true);
-		expect(calls).toEqual(['/api/about']);
+		expect(calls.filter((c) => c !== '/api/activity')).toEqual(['/api/about']);
 	});
 
 	it('below sm only the version shows: the name sits in a d-none d-sm-inline span inside the link (U9)', async () => {
@@ -78,7 +86,7 @@ describe('AppFooter (B10–B12)', () => {
 		answer = { status: 500, body: { status: 500, title: 'Boom' } };
 		render(AppFooter, { me: me(), onhotkeys: vi.fn() });
 
-		await vi.waitFor(() => expect(calls).toEqual(['/api/about']));
+		await vi.waitFor(() => expect(calls).toContain('/api/about'));
 		expect(screen.getByRole('link', { name: 'RnRomManager' }).textContent?.trim()).toBe(
 			'RnRomManager'
 		);
@@ -177,6 +185,67 @@ describe('AppFooter (B10–B12)', () => {
 			await vi.waitFor(() => expect(calls.filter((c) => c === '/api/about')).toHaveLength(2));
 			expect(calls).not.toContain('/api/jobs/current');
 			expect(screen.queryByRole('progressbar')).toBeNull();
+		});
+	});
+
+	describe('lock activity (L4)', () => {
+		const admin = (): Me => ({ ...me(), roles: ['admin'] });
+
+		it('a Site user sees what holds the lock, not as a link; the label is a footer-label', async () => {
+			held = { activity: 'Saving changes', jobType: null };
+			render(AppFooter, { me: me(), onhotkeys: vi.fn() });
+
+			const status = await screen.findByRole('status');
+			expect(status.textContent!.trim()).toBe('Saving changes…');
+			expect(status.classList).toContain('ms-auto');
+			expect(
+				status.querySelector('.spinner-border.spinner-border-sm[aria-hidden="true"]')
+			).not.toBeNull();
+			expect(status.querySelector('.footer-label')!.textContent).toBe('Saving changes…');
+			expect(status.querySelector('a')).toBeNull();
+			expect(screen.getByRole('button', { name: 'Shortcuts' }).classList).not.toContain('ms-auto');
+		});
+
+		it('a job reads as its label + running', async () => {
+			held = { activity: 'StorageMigration', jobType: 'StorageMigration' };
+			render(AppFooter, { me: me(), onhotkeys: vi.fn() });
+			expect((await screen.findByRole('status')).textContent!.trim()).toBe('Moving ROMs running');
+		});
+
+		it('an Admin with job progress sees the progress, not the activity', async () => {
+			held = { activity: 'StorageMigration', jobType: 'StorageMigration' };
+			current = {
+				id: 'j1',
+				type: 'StorageMigration',
+				mode: null,
+				status: 'Running',
+				current: 1,
+				total: 2,
+				currentItem: null,
+				startedAt: '2026-11-18T10:00:00Z'
+			};
+			render(AppFooter, { me: admin(), onhotkeys: vi.fn() });
+
+			await screen.findByRole('link', { name: /Moving ROMs 1\/2/ });
+			expect(screen.queryByRole('status')).toBeNull();
+		});
+
+		it('an Admin sees a job activity as a link to Jobs until the job progress loads', async () => {
+			held = { activity: 'Integrity', jobType: 'Integrity' };
+			activity.current = { activity: 'Integrity', jobType: 'Integrity' };
+			render(AppFooter, { me: admin(), onhotkeys: vi.fn() });
+
+			const status = screen.getByRole('status');
+			expect(status.querySelector('a')!.getAttribute('href')).toBe('/jobs');
+		});
+
+		it('is not polled while the password must be changed', async () => {
+			held = { activity: 'Saving changes', jobType: null };
+			render(AppFooter, { me: me(true), onhotkeys: vi.fn() });
+
+			await vi.waitFor(() => expect(calls).toContain('/api/about'));
+			expect(calls).not.toContain('/api/activity');
+			expect(screen.queryByRole('status')).toBeNull();
 		});
 	});
 

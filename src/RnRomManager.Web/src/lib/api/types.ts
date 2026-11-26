@@ -39,6 +39,14 @@ export interface CurrentJob {
 	step?: JobStep | null;
 }
 
+/** L2: `GET /api/activity`, what holds the job lock; 204 when free. */
+export interface Activity {
+	/** e.g. "Saving changes", or the job type's name for a job. */
+	activity: string;
+	/** The `JobType` name when a job holds the lock. */
+	jobType: string | null;
+}
+
 /** Large ROM import progress B1: one streamed phase of the current file. */
 export interface JobStep {
 	/** `Hashing`, `CopyingToLibrary` or `Copying`; another value shows as is. */
