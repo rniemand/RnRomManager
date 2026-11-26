@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import SaveFileModal from '#lib/components/modals/SaveFileModal.svelte';
 	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import { untrack } from 'svelte';
@@ -11,7 +12,6 @@
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 
 	/** B14–B15: the game's saves (S2: a Site user's own, every user's for an Admin): list, add, edit, replace, delete and download. */
@@ -89,14 +89,13 @@
 <section class="card" aria-labelledby="saves-heading">
 	<div class="card-header d-flex align-items-center gap-2">
 		<h2 class="h5 mb-0 me-auto" id="saves-heading">Saves</h2>
-		<button
-			type="button"
-			class="btn btn-sm btn-primary"
+		<Button
+			variant="primary"
+			size="sm"
+			icon="add"
 			disabled={game.roms.length === 0}
-			onclick={() => start('add')}
+			onclick={() => start('add')}>Add save</Button
 		>
-			<Icon name="add" /> Add save
-		</button>
 	</div>
 
 	{#if loadError}
@@ -160,39 +159,50 @@
 							</td>
 							<td class="text-end text-nowrap">
 								{#if playable}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-success"
+									<Button
+										variant="success"
+										outline
+										size="sm"
+										icon="play"
 										aria-label="Play {save.name}"
-										onclick={() => play(save, playable)}><Icon name="play" /></button
-									>
+										onclick={() => play(save, playable)}
+									/>
 								{/if}
 								<!-- eslint-disable svelte/no-navigation-without-resolve -- an API download, not a page -->
-								<a
-									class="btn btn-sm btn-outline-secondary"
+								<Button
+									variant="secondary"
+									outline
+									size="sm"
+									icon="download"
 									href={savesApi.downloadUrl(game.id, save.id)}
 									download
-									aria-label="Download {save.name}"><Icon name="download" /></a
-								>
+									aria-label="Download {save.name}"
+								/>
 								<!-- eslint-enable svelte/no-navigation-without-resolve -->
-								<button
-									type="button"
-									class="btn btn-sm btn-outline-secondary"
+								<Button
+									variant="secondary"
+									outline
+									size="sm"
+									icon="edit"
 									aria-label="Edit {save.name}"
-									onclick={() => start('edit', save)}><Icon name="edit" /></button
-								>
-								<button
-									type="button"
-									class="btn btn-sm btn-outline-secondary"
+									onclick={() => start('edit', save)}
+								/>
+								<Button
+									variant="secondary"
+									outline
+									size="sm"
+									icon="upload"
 									aria-label="Replace {save.name}"
-									onclick={() => start('replace', save)}><Icon name="upload" /></button
-								>
-								<button
-									type="button"
-									class="btn btn-sm btn-outline-danger"
+									onclick={() => start('replace', save)}
+								/>
+								<Button
+									variant="danger"
+									outline
+									size="sm"
+									icon="delete"
 									aria-label="Delete {save.name}"
-									onclick={() => start('delete', save)}><Icon name="delete" /></button
-								>
+									onclick={() => start('delete', save)}
+								/>
 							</td>
 						</tr>
 					{/each}

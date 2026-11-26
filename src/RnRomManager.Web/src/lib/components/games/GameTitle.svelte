@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { fromAction } from 'svelte/attachments';
+	import Button from '#lib/components/forms/Button.svelte';
+	import TextInput from '#lib/components/forms/TextInput.svelte';
 	import { tick } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
@@ -93,12 +96,12 @@
 			void save();
 		}}
 	>
-		<input
-			bind:this={input}
-			class="form-control form-control-lg"
-			class:is-invalid={error}
+		<TextInput
+			size="lg"
+			class={error ? 'is-invalid' : undefined}
+			bind:ref={input}
 			aria-label="Title"
-			maxlength="255"
+			maxlength={255}
 			disabled={busy}
 			bind:value
 			onkeydown={(e) => {
@@ -114,30 +117,29 @@
 	</form>
 {:else}
 	<h1 class="h3 mb-0">
-		<button
-			type="button"
-			class="btn btn-link p-0 text-reset text-decoration-none title-edit"
-			use:tooltip={'Click to edit the title'}
+		<Button
+			variant="link"
+			class="p-0 text-reset text-decoration-none title-edit"
+			{@attach fromAction(tooltip, () => 'Click to edit the title')}
 			onclick={start}
+			>{game.displayTitle}<Icon name="edit" class="ms-2 text-body-secondary small" /></Button
 		>
-			{game.displayTitle}<Icon name="edit" class="ms-2 text-body-secondary small" />
-		</button>
 	</h1>
 {/if}
 
 <style>
-	.title-edit {
+	:global(.title-edit) {
 		font: inherit;
 	}
-	.title-edit :global(i) {
+	:global(.title-edit i) {
 		opacity: 0;
 	}
-	.title-edit:hover :global(i),
-	.title-edit:focus-visible :global(i) {
+	:global(.title-edit:hover i),
+	:global(.title-edit:focus-visible i) {
 		opacity: 1;
 	}
 	@media (hover: none) {
-		.title-edit :global(i) {
+		:global(.title-edit i) {
 			opacity: 1;
 		}
 	}

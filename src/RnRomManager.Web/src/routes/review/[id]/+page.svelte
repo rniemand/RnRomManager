@@ -1,4 +1,11 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
+	import { fromAction } from 'svelte/attachments';
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import NumberInput from '#lib/components/forms/NumberInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import DismissReviewModal from '#lib/components/modals/DismissReviewModal.svelte';
 	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 	import { onMount, untrack } from 'svelte';
@@ -20,7 +27,6 @@
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
 	import GameTypeahead from '#lib/components/forms/GameTypeahead.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import ReviewDeleteModal from '#lib/components/modals/ReviewDeleteModal.svelte';
@@ -355,8 +361,8 @@
 
 <AdminOnly>
 	<p>
-		<a class="btn btn-sm btn-outline-primary" href={resolve('/review')}
-			><Icon name="back" /> Review queue</a
+		<Button variant="primary" outline size="sm" icon="back" href={resolve('/review')}
+			>Review queue</Button
 		>
 	</p>
 
@@ -365,7 +371,7 @@
 	{:else if notFound}
 		<EmptyState icon="not-found" message="This review item doesn't exist any more.">
 			{#snippet action()}
-				<a class="btn btn-primary" href={resolve('/review')}>Back to the queue</a>
+				<Button variant="primary" href={resolve('/review')}>Back to the queue</Button>
 			{/snippet}
 		</EmptyState>
 	{:else if !item}
@@ -382,27 +388,27 @@
 			<div class="ms-auto d-flex gap-2">
 				<!-- External link: resolve() is for app routes. -->
 				<!-- eslint-disable svelte/no-navigation-without-resolve -->
-				<a
-					class="btn btn-outline-secondary"
+				<Button
+					variant="secondary"
+					outline
+					icon="google"
 					href={googleSearchUrl(reviewSearchQuery(item, item.systemName))}
 					target="_blank"
-					rel="noopener noreferrer"><Icon name="google" /> Google it</a
+					rel="noopener noreferrer">Google it</Button
 				>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				{#if item.dismissible}
-					<button
-						type="button"
-						class="btn btn-outline-secondary"
-						{disabled}
-						onclick={() => (confirmDismiss = true)}>Dismiss</button
+					<Button variant="secondary" outline {disabled} onclick={() => (confirmDismiss = true)}
+						>Dismiss</Button
 					>
 				{/if}
-				<button
-					type="button"
-					class="btn btn-outline-danger"
+				<Button
+					variant="danger"
+					outline
+					icon="delete"
 					{disabled}
-					use:tooltip={'Delete (Shift+click to skip confirmation)'}
-					onclick={askDelete}><Icon name="delete" /> Delete</button
+					{@attach fromAction(tooltip, () => 'Delete (Shift+click to skip confirmation)')}
+					onclick={askDelete}>Delete</Button
 				>
 			</div>
 		</div>
@@ -428,12 +434,7 @@
 		{#if actionError}
 			<div class="alert alert-danger alert-dismissible" role="alert">
 				{actionError}
-				<button
-					type="button"
-					class="btn-close"
-					aria-label="Dismiss"
-					onclick={() => (actionError = null)}
-				></button>
+				<Button class="btn-close" aria-label="Dismiss" onclick={() => (actionError = null)} />
 			</div>
 		{/if}
 
@@ -556,15 +557,15 @@
 										<a class="me-auto" href={resolve('/games/[id]', { id: game.id })}
 											>{game.displayTitle}</a
 										>
-										<button
-											type="button"
-											class="btn btn-sm btn-primary"
+										<Button
+											variant="primary"
+											size="sm"
 											{disabled}
 											onclick={() =>
 												resolveWith(
 													{ action: 'Attach', targetGameId: game.id, flag: 'None' },
 													`Attached to ${game.displayTitle}.`
-												)}>Attach</button
+												)}>Attach</Button
 										>
 									</li>
 								{:else}
@@ -584,10 +585,8 @@
 							</p>
 							{#if titleDb}
 								<div class="form-check mb-3">
-									<input
+									<Checkbox
 										id="as-update"
-										class="form-check-input"
-										type="checkbox"
 										checked={asUpdate}
 										onchange={(e) => (updateChoice = e.currentTarget.checked)}
 									/>
@@ -595,47 +594,44 @@
 								</div>
 							{/if}
 							{#if item.suggestions?.length}
-								<div class="card mb-3">
-									<div class="table-responsive">
-										<table class="table table-sm table-striped table-hover align-middle mb-0">
-											<thead class="table-dark">
-												<tr class="small text-uppercase text-body-secondary">
-													<th scope="col">DAT entry</th>
-													<th scope="col" class="text-end">Score</th>
-													<th scope="col" class="text-end"
-														><span class="visually-hidden">Actions</span></th
-													>
-												</tr>
-											</thead>
-											<tbody>
-												{#each item.suggestions as suggestion (suggestion.romName)}
-													<tr>
-														<td class="text-break">{suggestion.romName}</td>
-														<td class="text-end text-nowrap">{percent(suggestion.score)}</td>
-														<td class="text-end text-nowrap">
-															<button
-																type="button"
-																class="btn btn-sm btn-primary"
-																{disabled}
-																onclick={() => useDat(suggestion.datGameName)}>Use</button
-															>
-															<button
-																type="button"
-																class="btn btn-sm btn-outline-primary ms-1"
-																disabled={disabled || typeof next !== 'number'}
-																title={next === 'none'
-																	? 'No more items in the review queue.'
-																	: undefined}
-																onclick={() => useDat(suggestion.datGameName, true)}
-																>Use and Next</button
-															>
-														</td>
-													</tr>
-												{/each}
-											</tbody>
-										</table>
-									</div>
-								</div>
+								<DataTable
+									items={item.suggestions}
+									key={(suggestion) => suggestion.romName}
+									class="mb-3"
+								>
+									{#snippet head()}
+										<tr class="small text-uppercase text-body-secondary">
+											<th scope="col">DAT entry</th>
+											<th scope="col" class="text-end">Score</th>
+											<th scope="col" class="text-end"
+												><span class="visually-hidden">Actions</span></th
+											>
+										</tr>
+									{/snippet}
+									{#snippet row(suggestion)}
+										<tr>
+											<td class="text-break">{suggestion.romName}</td>
+											<td class="text-end text-nowrap">{percent(suggestion.score)}</td>
+											<td class="text-end text-nowrap">
+												<Button
+													variant="primary"
+													size="sm"
+													{disabled}
+													onclick={() => useDat(suggestion.datGameName)}>Use</Button
+												>
+												<Button
+													variant="primary"
+													outline
+													size="sm"
+													class="ms-1"
+													disabled={disabled || typeof next !== 'number'}
+													title={next === 'none' ? 'No more items in the review queue.' : undefined}
+													onclick={() => useDat(suggestion.datGameName, true)}>Use and Next</Button
+												>
+											</td>
+										</tr>
+									{/snippet}
+								</DataTable>
 							{:else}
 								<p class="text-body-secondary">No close DAT matches.</p>
 							{/if}
@@ -643,17 +639,12 @@
 							<form class="row g-2 align-items-end" role="search" onsubmit={search}>
 								<div class="col">
 									<label class="form-label" for="dat-search">Search the {item.system} DAT</label>
-									<input
-										id="dat-search"
-										type="search"
-										class="form-control"
-										bind:value={searchText}
-									/>
+									<SearchInput id="dat-search" bind:value={searchText} />
 								</div>
 								<div class="col-auto">
-									<button type="submit" class="btn btn-outline-secondary" disabled={searching}>
-										Search
-									</button>
+									<Button variant="secondary" outline type="submit" disabled={searching}
+										>Search</Button
+									>
 								</div>
 							</form>
 							{#if searchResults}
@@ -668,11 +659,11 @@
 														><FileSize bytes={result.sizeBytes} /></span
 													>
 												{/if}
-												<button
-													type="button"
-													class="btn btn-sm btn-primary"
+												<Button
+													variant="primary"
+													size="sm"
 													{disabled}
-													onclick={() => useDat(result.gameName)}>Use</button
+													onclick={() => useDat(result.gameName)}>Use</Button
 												>
 											</li>
 										{/each}
@@ -705,45 +696,40 @@
 								<fieldset class="mb-2">
 									<legend class="form-label fs-6">Attach as</legend>
 									{#each attachFlags as flag (flag)}
-										<div class="form-check form-check-inline">
-											<input
-												id="flag-{flag}"
-												class="form-check-input"
-												type="radio"
-												value={flag}
-												bind:group={attachFlag}
-											/>
-											<label class="form-check-label" for="flag-{flag}">{flag}</label>
-										</div>
+										<Checkbox
+											type="radio"
+											id="flag-{flag}"
+											label={flag}
+											inline
+											value={flag}
+											bind:group={attachFlag}
+										/>
 									{/each}
 								</fieldset>
 								{#if attachFlag === 'Disc'}
 									<div class="mb-2" style="max-width: 10rem">
 										<label class="form-label" for="attach-disc">Disc</label>
-										<input
+										<NumberInput
+											class={attachDiscError ? 'is-invalid' : undefined}
 											id="attach-disc"
-											type="number"
 											min="1"
 											max="99"
 											required
-											class="form-control"
-											class:is-invalid={attachDiscError}
 											bind:value={attachDisc}
 										/>
 										{#if attachDiscError}<div class="invalid-feedback">{attachDiscError}</div>{/if}
 									</div>
 								{/if}
-								<button type="submit" class="btn btn-primary" {disabled}>Attach</button>
+								<Button variant="primary" type="submit" {disabled}>Attach</Button>
 							</form>
 						{:else}
 							<form onsubmit={submitManual} novalidate>
 								<div class="mb-2">
 									<label class="form-label" for="manual-title">Title</label>
-									<input
+									<TextInput
+										class={manualErrors.title ? 'is-invalid' : undefined}
 										id="manual-title"
-										class="form-control"
-										class:is-invalid={manualErrors.title}
-										maxlength="255"
+										maxlength={255}
 										bind:value={manual.title}
 									/>
 									{#if manualErrors.title}<div class="invalid-feedback">
@@ -754,10 +740,9 @@
 									{#each [['regions', 'Regions', 'e.g. USA, Europe'], ['languages', 'Languages', 'e.g. En, Fr'], ['flags', 'Flags', 'e.g. Proto, Unl']] as const as [field, label, hint] (field)}
 										<div class="col-12 col-md-4">
 											<label class="form-label" for="manual-{field}">{label}</label>
-											<input
+											<TextInput
+												class={manualErrors[field] ? 'is-invalid' : undefined}
 												id="manual-{field}"
-												class="form-control"
-												class:is-invalid={manualErrors[field]}
 												aria-describedby="manual-{field}-help"
 												bind:value={manual[field]}
 											/>
@@ -770,12 +755,11 @@
 								</div>
 								<div class="mb-2">
 									<label class="form-label" for="manual-revision">Revision</label>
-									<input
+									<TextInput
+										class={manualErrors.revision ? 'is-invalid' : undefined}
 										id="manual-revision"
-										class="form-control"
-										class:is-invalid={manualErrors.revision}
 										placeholder="e.g. Rev 1"
-										maxlength="32"
+										maxlength={32}
 										bind:value={manual.revision}
 									/>
 									{#if manualErrors.revision}<div class="invalid-feedback">
@@ -785,13 +769,11 @@
 								{#if item.fileSets}
 									<div class="mb-2" style="max-width: 10rem">
 										<label class="form-label" for="manual-disc">Disc</label>
-										<input
+										<NumberInput
+											class={manualErrors.disc ? 'is-invalid' : undefined}
 											id="manual-disc"
-											type="number"
 											min="1"
 											max="99"
-											class="form-control"
-											class:is-invalid={manualErrors.disc}
 											aria-describedby="manual-disc-help"
 											bind:value={manual.disc}
 										/>
@@ -804,14 +786,15 @@
 								{#if manual.title.trim()}
 									<p class="form-text">File name: {manualFileStem(manual)}</p>
 								{/if}
-								<button type="submit" class="btn btn-primary" {disabled}>Add manually</button>
+								<Button variant="primary" type="submit" {disabled}>Add manually</Button>
 								{#if item.hasDat === false}
-									<button
-										type="button"
-										class="btn btn-outline-primary ms-1"
+									<Button
+										variant="primary"
+										outline
+										class="ms-1"
 										disabled={disabled || typeof next !== 'number'}
 										title={next === 'none' ? 'No more items in the review queue.' : undefined}
-										onclick={() => submitManual(null, true)}>Add and Next</button
+										onclick={() => submitManual(null, true)}>Add and Next</Button
 									>
 								{/if}
 							</form>

@@ -1,4 +1,10 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
+	import { fromAction } from 'svelte/attachments';
+	import Select from '#lib/components/forms/Select.svelte';
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import DeleteReviewItemsModal from '#lib/components/modals/DeleteReviewItemsModal.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { replaceUrl } from '#lib/urlState.js';
@@ -16,10 +22,8 @@
 		ReviewFilter
 	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
-	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
@@ -221,50 +225,41 @@
 	<form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
 		<div class="col-12 col-md-5">
 			<label class="form-label" for="review-q">Search</label>
-			<input
+			<SearchInput
 				id="review-q"
-				type="search"
-				class="form-control"
 				placeholder="Search file name or title"
-				maxlength="100"
+				maxlength={100}
 				bind:value={search}
 				oninput={onSearchInput}
 			/>
 		</div>
 		<div class="col-6 col-md-3">
 			<label class="form-label" for="review-system">System</label>
-			<select
+			<Select
 				id="review-system"
-				class="form-select"
 				value={filter.system}
 				onchange={(e) => update({ system: e.currentTarget.value })}
-			>
-				<option value="">All systems</option>
+				><option value="">All systems</option>
 				{#each systems as s (s.id)}
 					<option value={s.id}>{s.displayName}</option>
-				{/each}
-			</select>
+				{/each}</Select
+			>
 		</div>
 		<div class="col-6 col-md-2">
 			<label class="form-label" for="review-reason">Reason</label>
-			<select
+			<Select
 				id="review-reason"
-				class="form-select"
 				value={filter.reason}
 				onchange={(e) => update({ reason: e.currentTarget.value })}
-			>
-				<option value="">All reasons</option>
+				><option value="">All reasons</option>
 				<option value="NoDatMatch">No DAT match</option>
 				<option value="AmbiguousGroup">Ambiguous group</option>
-				<option value="AmbiguousSet">Ambiguous set</option>
-			</select>
+				<option value="AmbiguousSet">Ambiguous set</option></Select
+			>
 		</div>
 		<div class="col-12 col-md-2">
-			<button
-				type="button"
-				class="btn btn-outline-secondary w-100"
-				disabled={!filtered}
-				onclick={clear}>Clear</button
+			<Button variant="secondary" outline class="w-100" disabled={!filtered} onclick={clear}
+				>Clear</Button
 			>
 		</div>
 	</form>
@@ -277,87 +272,78 @@
 		<!-- Q2: the bulk toolbar. -->
 		<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 			<span class="small text-body-secondary" aria-live="polite">{selection.size} selected</span>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-secondary"
+			<Button
+				variant="secondary"
+				outline
+				size="sm"
 				disabled={selection.size === 0}
-				onclick={() => selection.clear()}>Clear selection</button
+				onclick={() => selection.clear()}>Clear selection</Button
 			>
-			<button
-				type="button"
-				class="btn btn-sm btn-danger"
+			<Button
+				variant="danger"
+				size="sm"
+				icon="delete"
 				disabled={selection.size === 0 || bulkBusy}
-				use:tooltip={'Delete (Shift+click to skip confirmation)'}
-				onclick={askBulkDelete}><Icon name="delete" /> Delete selected ({selection.size})</button
+				{@attach fromAction(tooltip, () => 'Delete (Shift+click to skip confirmation)')}
+				onclick={askBulkDelete}>Delete selected ({selection.size})</Button
 			>
 		</div>
-		<div class="card">
-			<div class="table-responsive">
-				{#if result.items.length === 0}
-					<EmptyState
-						message={filtered ? 'No review items match this filter.' : 'Nothing to review.'}
-					/>
-				{:else}
-					<table class="table table-sm table-striped table-hover align-middle mb-0">
-						<thead class="table-dark">
-							<tr class="small text-uppercase text-body-secondary">
-								<th scope="col">
-									<input
-										class="form-check-input"
-										type="checkbox"
-										aria-label="Select all on this page"
-										checked={checkState === 'all'}
-										indeterminate={checkState === 'some'}
-										onchange={toggleAll}
-									/>
-								</th>
-								<th scope="col">File</th>
-								<th scope="col">System</th>
-								<th scope="col" class="text-end">Size</th>
-								<th scope="col">Header title</th>
-								<th scope="col">Reason</th>
-								<th scope="col">Added</th>
-								<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each result.items as item (item.id)}
-								<tr>
-									<td>
-										<input
-											class="form-check-input"
-											type="checkbox"
-											aria-label="Select {item.fileName}"
-											checked={selection.has(item.id)}
-											onchange={(e) => toggle(item, e.currentTarget.checked)}
-										/>
-									</td>
-									<td class="text-truncate" style="max-width: 32rem" title={item.fileName}>
-										<a href={resolve('/review/[id]', { id: String(item.id) })}>{item.fileName}</a>
-									</td>
-									<td><SystemBadge system={item.system} /></td>
-									<td class="text-end"><FileSize bytes={item.sizeBytes} /></td>
-									<td>{item.headerTitle ?? '—'}</td>
-									<td>{item.reason}</td>
-									<td class="text-nowrap">{formatDateTime(item.createdAt)}</td>
-									<td class="text-end">
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-danger"
-											aria-label="Delete {item.fileName}"
-											use:tooltip={'Delete (Shift+click to skip confirmation)'}
-											onclick={(e) => askDelete(e, item)}
-										>
-											<Icon name="delete" />
-										</button>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				{/if}
-			</div>
-		</div>
+		<DataTable
+			items={result.items}
+			key={(item) => item.id}
+			empty={filtered ? 'No review items match this filter.' : 'Nothing to review.'}
+			emptyInCard
+		>
+			{#snippet head()}
+				<tr class="small text-uppercase text-body-secondary">
+					<th scope="col">
+						<Checkbox
+							aria-label="Select all on this page"
+							checked={checkState === 'all'}
+							indeterminate={checkState === 'some'}
+							onchange={toggleAll}
+						/>
+					</th>
+					<th scope="col">File</th>
+					<th scope="col">System</th>
+					<th scope="col" class="text-end">Size</th>
+					<th scope="col">Header title</th>
+					<th scope="col">Reason</th>
+					<th scope="col">Added</th>
+					<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
+				</tr>
+			{/snippet}
+			{#snippet row(item)}
+				<tr>
+					<td>
+						<Checkbox
+							aria-label="Select {item.fileName}"
+							checked={selection.has(item.id)}
+							onchange={(e) => toggle(item, e.currentTarget.checked)}
+						/>
+					</td>
+					<td class="text-truncate" style="max-width: 32rem" title={item.fileName}>
+						<a href={resolve('/review/[id]', { id: String(item.id) })}>{item.fileName}</a>
+					</td>
+					<td><SystemBadge system={item.system} /></td>
+					<td class="text-end"><FileSize bytes={item.sizeBytes} /></td>
+					<td>{item.headerTitle ?? '—'}</td>
+					<td>{item.reason}</td>
+					<td class="text-nowrap">{formatDateTime(item.createdAt)}</td>
+					<td class="text-end">
+						<Button
+							variant="danger"
+							outline
+							size="sm"
+							icon="delete"
+							aria-label="Delete {item.fileName}"
+							{@attach fromAction(tooltip, () => 'Delete (Shift+click to skip confirmation)')}
+							onclick={(e) => askDelete(e, item)}
+						/>
+					</td>
+				</tr>
+			{/snippet}
+		</DataTable>
 		<Pagination
 			page={filter.page}
 			{pages}

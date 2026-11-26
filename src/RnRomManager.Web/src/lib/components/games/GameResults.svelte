@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
+	import { fromAction } from 'svelte/attachments';
+	import Button from '#lib/components/forms/Button.svelte';
 	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -155,27 +158,26 @@
 			><!-- eslint-enable svelte/no-navigation-without-resolve --><Icon name="play" /></a
 		>
 	{:else}
-		<button
-			type="button"
+		<Button
+			icon="play"
 			class={classes}
 			{style}
 			aria-label="Play {game.displayTitle}"
-			onclick={() => play(game)}><Icon name="play" /></button
-		>
+			onclick={() => play(game)}
+		/>
 	{/if}
 {/snippet}
 
 <!-- S3: pick up where you left off: the viewer's latest playable save. -->
 {#snippet resumeAction(game: GameListItem, classes: string)}
-	<button
-		type="button"
+	<Button
 		class={classes}
 		aria-label="Pick up where you left off in {game.displayTitle}"
 		disabled={resuming === game.id}
-		use:tooltip={'Pick up where you left off'}
+		{@attach fromAction(tooltip, () => 'Pick up where you left off')}
 		onclick={() => void resume(game)}
 		>{#if resuming === game.id}<span class="spinner-border spinner-border-sm" aria-hidden="true"
-			></span>{:else}<Icon name="play" />{/if}</button
+			></span>{:else}<Icon name="play" />{/if}</Button
 	>
 {/snippet}
 
@@ -282,9 +284,7 @@
 					<div class="card-body p-2">
 						{#if selected}
 							<div class="form-check position-relative z-2 mb-1">
-								<input
-									class="form-check-input"
-									type="checkbox"
+								<Checkbox
 									aria-label="Select {game.displayTitle}"
 									checked={selected.has(game.id)}
 									onchange={(e) => toggle(game.id, e.currentTarget.checked)}
@@ -346,9 +346,7 @@
 					<tr>
 						{#if selected}
 							<td>
-								<input
-									class="form-check-input"
-									type="checkbox"
+								<Checkbox
 									aria-label="Select {game.displayTitle}"
 									checked={selected.has(game.id)}
 									onchange={(e) => toggle(game.id, e.currentTarget.checked)}

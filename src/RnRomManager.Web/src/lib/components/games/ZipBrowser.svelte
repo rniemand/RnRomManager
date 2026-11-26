@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { untrack } from 'svelte';
 	import type { SvelteSet } from 'svelte/reactivity';
 	import { api } from '#lib/api/client.js';
@@ -8,7 +9,6 @@
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 
 	/**
@@ -89,20 +89,27 @@
 			class:bg-primary-subtle={selected === f.path}
 			class:rounded={selected === f.path}
 		>
-			<button
-				type="button"
-				class="btn btn-sm btn-link text-body chevron-toggle"
+			<Button
+				variant="link"
+				size="sm"
+				class="text-body chevron-toggle"
+				icon="chevron"
 				aria-expanded={open}
 				aria-label="{open ? 'Collapse' : 'Expand'} {label(f)}"
-				onclick={() => toggle(f.path)}><Icon name="chevron" /></button
-			>
-			<button
-				type="button"
-				class="btn btn-sm btn-link text-start text-break text-decoration-none"
-				class:fw-semibold={selected === f.path}
-				class:text-primary-emphasis={selected === f.path}
+				onclick={() => toggle(f.path)}
+			/>
+			<Button
+				variant="link"
+				size="sm"
+				class={[
+					'text-start text-break text-decoration-none',
+					selected === f.path && 'fw-semibold text-primary-emphasis'
+				]
+					.filter(Boolean)
+					.join(' ')}
+				icon="folder"
 				aria-current={selected === f.path ? 'true' : undefined}
-				onclick={() => select(f.path)}><Icon name="folder" /> {label(f)}</button
+				onclick={() => select(f.path)}>{label(f)}</Button
 			>
 		</div>
 		{#if open && f.folders.length}
@@ -127,12 +134,11 @@
 				<ol class="breadcrumb mb-2">
 					{#each ancestors(folder.path) as path (path)}
 						<li class="breadcrumb-item">
-							<button
-								type="button"
+							<Button
 								class="btn btn-link btn-sm p-0 text-break"
 								aria-current={path === folder.path ? 'location' : undefined}
 								onclick={() => select(path)}
-								>{path ? path.slice(path.lastIndexOf('/') + 1) : data.zipName}</button
+								>{path ? path.slice(path.lastIndexOf('/') + 1) : data.zipName}</Button
 							>
 						</li>
 					{/each}
@@ -161,10 +167,10 @@
 							{#each folder.folders as child (child.path)}
 								<tr>
 									<td class="text-truncate name-cell" title={child.name}>
-										<button
-											type="button"
+										<Button
+											icon="folder"
 											class="btn btn-link btn-sm p-0 text-start text-decoration-none text-truncate mw-100"
-											onclick={() => select(child.path)}><Icon name="folder" /> {child.name}</button
+											onclick={() => select(child.path)}>{child.name}</Button
 										>
 									</td>
 									<!-- B12: a folder has no size, compressed size or date: empty cells, no dash. Compressed and Modified hide below md so a phone needs no sideways scroll. -->
@@ -194,12 +200,15 @@
 									<td class="text-end">
 										<!-- An API download, not an app route. -->
 										<!-- eslint-disable svelte/no-navigation-without-resolve -->
-										<a
-											class="btn btn-sm btn-outline-primary"
+										<Button
+											variant="primary"
+											outline
+											size="sm"
+											icon="download"
 											href={downloadUrl(file.entry.path)}
 											download
-											aria-label="Download {file.name}"><Icon name="download" /></a
-										>
+											aria-label="Download {file.name}"
+										/>
 										<!-- eslint-enable svelte/no-navigation-without-resolve -->
 									</td>
 								</tr>

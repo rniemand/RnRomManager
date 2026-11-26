@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { fromAction } from 'svelte/attachments';
+	import Button from '#lib/components/forms/Button.svelte';
 	import RomHeaderModal from '#lib/components/modals/RomHeaderModal.svelte';
 	import { replaceUrl } from '#lib/urlState.js';
 	import NavTabs from '#lib/components/layout/NavTabs.svelte';
@@ -486,30 +488,38 @@
 
 <!-- P1: the top row; the game's own links follow Back to Library once it has loaded. -->
 <div class="d-flex flex-wrap gap-2 mb-3">
-	<a class="btn btn-sm btn-outline-primary" href={resolve('/')}
-		><Icon name="back" /> Back to Library</a
+	<Button variant="primary" outline size="sm" icon="back" href={resolve('/')}
+		>Back to Library</Button
 	>
 	{#if game}
 		<!-- External links: resolve() is for app routes. -->
 		<!-- eslint-disable svelte/no-navigation-without-resolve -->
-		<a
-			class="btn btn-sm btn-outline-secondary"
+		<Button
+			variant="secondary"
+			outline
+			size="sm"
+			icon="google"
 			href={googleSearchUrl(gameSearchQuery(game))}
 			target="_blank"
-			rel="noopener noreferrer"><Icon name="google" /> Google</a
+			rel="noopener noreferrer">Google</Button
 		>
-		<button
-			type="button"
-			class="btn btn-sm btn-outline-secondary"
-			bind:this={emulatorsButton}
-			onclick={() => (emulatorsOpen = true)}><Icon name="emulators" /> Emulators</button
+		<Button
+			variant="secondary"
+			outline
+			size="sm"
+			icon="emulators"
+			bind:ref={emulatorsButton}
+			onclick={() => (emulatorsOpen = true)}>Emulators</Button
 		>
 		{#if game.igdbConfigured && game.igdbId !== null && game.igdbId > 0}
-			<a
-				class="btn btn-sm btn-outline-secondary"
+			<Button
+				variant="secondary"
+				outline
+				size="sm"
+				icon="external"
 				href="/api/igdb/games/{game.igdbId}/page"
 				target="_blank"
-				rel="noopener noreferrer"><Icon name="external" /> View on IGDB</a
+				rel="noopener noreferrer">View on IGDB</Button
 			>
 		{/if}
 		<!-- eslint-enable svelte/no-navigation-without-resolve -->
@@ -521,7 +531,7 @@
 {:else if notFound}
 	<EmptyState icon="not-found" message="This game doesn't exist any more.">
 		{#snippet action()}
-			<a class="btn btn-primary" href={resolve('/')}>Go to the Library</a>
+			<Button variant="primary" href={resolve('/')}>Go to the Library</Button>
 		{/snippet}
 	</EmptyState>
 {:else if !game}
@@ -530,8 +540,7 @@
 	{#if notice}
 		<div class="alert alert-warning alert-dismissible" role="alert">
 			{notice}
-			<button type="button" class="btn-close" aria-label="Dismiss" onclick={() => (notice = null)}
-			></button>
+			<Button class="btn-close" aria-label="Dismiss" onclick={() => (notice = null)} />
 		</div>
 	{/if}
 
@@ -605,13 +614,15 @@
 									<SystemBadge system={game.system} name={game.systemName} class="text-wrap" />
 									{#if auth.isAdmin}
 										<!-- Quick edit: opens the same Edit Metadata modal as the Manage menu. -->
-										<button
-											type="button"
-											class="btn btn-sm btn-link text-body-secondary p-0 ms-auto quick-edit"
+										<Button
+											variant="link"
+											size="sm"
+											class="text-body-secondary p-0 ms-auto quick-edit"
+											icon="edit"
 											aria-label="Quick edit"
-											use:tooltip={'Edit Metadata'}
-											onclick={() => (action = { kind: 'edit' })}><Icon name="edit" /></button
-										>
+											{@attach fromAction(tooltip, () => 'Edit Metadata')}
+											onclick={() => (action = { kind: 'edit' })}
+										/>
 									{/if}
 								</div>
 							</td>
@@ -651,11 +662,13 @@
 				<!-- IGDB lookup N1: unlinked games only; gone once a save returns the linked detail. -->
 				<div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3" role="status">
 					This game isn't linked to IGDB.
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-primary ms-auto"
-						onclick={() => (action = { kind: 'edit', lookup: true })}
-						><Icon name="search" /> Find on IGDB</button
+					<Button
+						variant="primary"
+						outline
+						size="sm"
+						class="ms-auto"
+						icon="search"
+						onclick={() => (action = { kind: 'edit', lookup: true })}>Find on IGDB</Button
 					>
 				</div>
 			{/if}
@@ -670,149 +683,141 @@
 					{game.description}
 				</p>
 				{#if descriptionOverflows}
-					<button
-						type="button"
+					<Button
 						class="btn btn-link btn-sm p-0 mb-3"
 						aria-expanded={descriptionExpanded}
 						aria-controls="game-description"
 						onclick={() => (descriptionExpanded = !descriptionExpanded)}
-						>{descriptionExpanded ? 'Show less' : 'Show more'}</button
+						>{descriptionExpanded ? 'Show less' : 'Show more'}</Button
 					>
 				{/if}
 			{/if}
 			<div class="d-flex flex-wrap gap-2">
 				{#if external}
 					<!-- G5: an external system's ZIP holds no ROMs; they download per release. -->
-					<button
-						type="button"
-						class="btn btn-sm btn-primary"
-						use:tooltip={'ROM files are downloaded per release'}
+					<Button
+						variant="primary"
+						size="sm"
+						icon="download"
+						{@attach fromAction(tooltip, () => 'ROM files are downloaded per release')}
 						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
+						>Download ZIP</Button
 					>
-						<Icon name="download" /> Download ZIP
-					</button>
 				{:else}
-					<button
-						type="button"
-						class="btn btn-sm btn-primary"
+					<Button
+						variant="primary"
+						size="sm"
+						icon="download"
 						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
+						>Download ZIP</Button
 					>
-						<Icon name="download" /> Download ZIP
-					</button>
 				{/if}
 				{#if downloadRoms.length === 1}
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-primary"
+					<Button
+						variant="primary"
+						outline
+						size="sm"
+						icon="download"
 						onclick={() => download(downloadRoms[0].downloadUrl, downloadRoms[0])}
+						>Download ROM</Button
 					>
-						<Icon name="download" /> Download ROM
-					</button>
 				{:else if downloadRoms.length > 1}
 					<div class="dropdown">
-						<button
-							type="button"
-							class="btn btn-sm btn-outline-primary dropdown-toggle"
+						<Button
+							variant="primary"
+							outline
+							size="sm"
+							class="dropdown-toggle"
+							icon="download"
 							data-bs-toggle="dropdown"
-							aria-expanded="false"
+							aria-expanded="false">Download ROM</Button
 						>
-							<Icon name="download" /> Download ROM
-						</button>
 						<ul class="dropdown-menu">
 							{#each downloadRoms as rom (rom.id)}
 								<li>
-									<button
-										type="button"
-										class="dropdown-item"
-										onclick={() => download(rom.downloadUrl, rom)}
+									<Button class="dropdown-item" onclick={() => download(rom.downloadUrl, rom)}
+										>{rom.fileName} — {formatSize(rom.sizeBytes)}</Button
 									>
-										{rom.fileName} — {formatSize(rom.sizeBytes)}
-									</button>
 								</li>
 							{/each}
 						</ul>
 					</div>
 				{/if}
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-secondary"
-					onclick={() => (collectionsOpen = true)}
+				<Button
+					variant="secondary"
+					outline
+					size="sm"
+					icon="collections"
+					onclick={() => (collectionsOpen = true)}>Collections</Button
 				>
-					<Icon name="collections" /> Collections
-				</button>
 				{#if fromMissingMetadata && auth.isAdmin}
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-primary"
+					<Button
+						variant="primary"
+						outline
+						size="sm"
+						icon="report-missing-metadata"
 						onclick={() => void hotkeys.run('reports.missingMetadata.next')}
+						>Next missing metadata</Button
 					>
-						<Icon name="report-missing-metadata" /> Next missing metadata
-					</button>
 				{/if}
 				{#if fromMissingIgdb && auth.isAdmin}
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-primary"
+					<Button
+						variant="primary"
+						outline
+						size="sm"
+						icon="search"
 						onclick={() => void hotkeys.run('reports.missingIgdbId.next')}
+						>Next missing IGDB ID</Button
 					>
-						<Icon name="search" /> Next missing IGDB ID
-					</button>
 				{/if}
 				<!-- B3: Manage, last in the row: View info.json for everyone, then the Admin actions. -->
 				<div class="dropdown">
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary dropdown-toggle"
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						class="dropdown-toggle"
+						icon="admin"
 						data-bs-toggle="dropdown"
-						aria-expanded="false"
+						aria-expanded="false">Manage</Button
 					>
-						<Icon name="admin" /> Manage
-					</button>
 					<ul class="dropdown-menu dropdown-menu-end">
 						<li>
-							<button type="button" class="dropdown-item" onclick={() => (infoJsonOpen = true)}>
-								<Icon name="code" /> View info.json
-							</button>
+							<Button icon="code" class="dropdown-item" onclick={() => (infoJsonOpen = true)}
+								>View info.json</Button
+							>
 						</li>
 						{#if auth.isAdmin}
 							<li><hr class="dropdown-divider" /></li>
 							<li>
-								<button
-									type="button"
+								<Button
+									icon="edit"
 									class="dropdown-item"
-									onclick={() => (action = { kind: 'edit' })}
+									onclick={() => (action = { kind: 'edit' })}>Edit Metadata</Button
 								>
-									<Icon name="edit" /> Edit Metadata
-								</button>
 							</li>
 							<li>
-								<button
-									type="button"
+								<Button
+									icon="retry"
 									class="dropdown-item"
-									onclick={() => (action = { kind: 'retry' })}
+									onclick={() => (action = { kind: 'retry' })}>Retry media</Button
 								>
-									<Icon name="retry" /> Retry media
-								</button>
 							</li>
 							<li>
-								<button
-									type="button"
+								<Button
+									icon="merge"
 									class="dropdown-item"
-									onclick={() => (action = { kind: 'merge' })}
+									onclick={() => (action = { kind: 'merge' })}>Merge into…</Button
 								>
-									<Icon name="merge" /> Merge into…
-								</button>
 							</li>
 							<li><hr class="dropdown-divider" /></li>
 							<li>
 								<!-- text-danger-emphasis: plain text-danger fails AA on the dark dropdown. -->
-								<button
-									type="button"
+								<Button
+									icon="delete"
 									class="dropdown-item text-danger-emphasis"
-									onclick={() => (action = { kind: 'deleteGame' })}
+									onclick={() => (action = { kind: 'deleteGame' })}>Delete game</Button
 								>
-									<Icon name="delete" /> Delete game
-								</button>
 							</li>
 						{/if}
 					</ul>
@@ -843,10 +848,8 @@
 			<p class="text-body-secondary">No releases other than updates and DLC.</p>
 		{/if}
 		{#if shownRoms.length >= 2}
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-secondary mb-2"
-				onclick={toggleAllReleases}>{allReleasesOpen ? 'Collapse all' : 'Expand all'}</button
+			<Button variant="secondary" outline size="sm" class="mb-2" onclick={toggleAllReleases}
+				>{allReleasesOpen ? 'Collapse all' : 'Expand all'}</Button
 			>
 		{/if}
 		<!-- G2: one card per release, so nothing scrolls sideways on a phone. -->
@@ -868,14 +871,16 @@
 						<div class="d-flex flex-wrap align-items-center gap-2">
 							<!-- B6: chevron and name on the left; min-width 0 lets a long name wrap. -->
 							<div class="d-flex align-items-center gap-2" style="min-width: 0">
-								<button
-									type="button"
-									class="btn btn-sm btn-link p-0 text-body chevron-toggle"
+								<Button
+									variant="link"
+									size="sm"
+									class="p-0 text-body chevron-toggle"
+									icon="chevron"
 									aria-expanded={open}
 									aria-controls="release-{rom.id}-details"
 									aria-label="{open ? 'Hide' : 'Show'} details for {rom.fileName}"
-									onclick={() => toggleRelease(rom.fileName)}><Icon name="chevron" /></button
-								>
+									onclick={() => toggleRelease(rom.fileName)}
+								/>
 								<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
 							</div>
 							<!-- B6: badges, then buttons, on the right. -->
@@ -896,20 +901,20 @@
 									<span class="badge text-bg-secondary">{region}</span>
 								{/each}
 								<!-- R4: a filled button when the release has a note; Site users only view notes (U3). -->
-								{#if auth.isAdmin || rom.hasNote}<button
-										type="button"
+								{#if auth.isAdmin || rom.hasNote}<Button
+										icon={rom.hasNote ? 'note-filled' : 'note'}
 										class="btn btn-sm {rom.hasNote ? 'btn-warning' : 'btn-outline-secondary'}"
 										aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
-										use:tooltip={rom.hasNote ? 'View note' : 'Add note'}
+										{@attach fromAction(tooltip, () => (rom.hasNote ? 'View note' : 'Add note'))}
 										onclick={() => showNote(rom)}
-									>
-										<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
-									</button>{/if}
+									/>{/if}
 								{#if canPlay(game, rom) && game.browserCore && opensInNewTab(game.browserCore)}
 									<!-- PSP B3: the isolated player runs in its own tab; a static page outside the SPA router. -->
 									<!-- eslint-disable svelte/no-navigation-without-resolve -->
-									<a
-										class="btn btn-sm btn-outline-success"
+									<Button
+										variant="success"
+										outline
+										size="sm"
 										href={playUrl(
 											game.id,
 											rom,
@@ -921,48 +926,48 @@
 										aria-label="Play {rom.fileName} (opens in a new tab)"
 										{...playLinkEvents(game.id, rom.id)}
 										><!-- eslint-enable svelte/no-navigation-without-resolve -->
-										<Icon name="play" />
-									</a>
+										<Icon name="play" /></Button
+									>
 								{:else if canPlay(game, rom)}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-success"
+									<Button
+										variant="success"
+										outline
+										size="sm"
+										icon="play"
 										aria-label="Play {rom.fileName}"
 										onclick={() => {
 											playRom = rom;
 											playSet = null;
 											playOpen = true;
 										}}
-									>
-										<Icon name="play" />
-									</button>
+									/>
 									{#if rom.discSet}
 										{@const discSet = rom.discSet}
 										{@const media = setMedia(game.browserCore)}
 										<!-- Multi-disc M7 (Amiga F8: disks): every disc of the set in one session, from Disc 1's card. -->
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-success"
+										<Button
+											variant="success"
+											outline
+											size="sm"
+											icon="play"
 											aria-label="Play all {media} of {discSet.name}"
-											use:tooltip={`Play all ${media} in one session`}
+											{@attach fromAction(tooltip, () => `Play all ${media} in one session`)}
 											onclick={() => {
 												playRom = rom;
 												playSet = discSet.name;
 												playOpen = true;
-											}}
+											}}>All {media}</Button
 										>
-											<Icon name="play" /> All {media}
-										</button>
 									{/if}
 								{/if}
-								<button
-									type="button"
-									class="btn btn-sm btn-outline-primary"
+								<Button
+									variant="primary"
+									outline
+									size="sm"
+									icon="download"
 									aria-label="Download {rom.fileName}"
 									onclick={() => download(rom.downloadUrl, rom)}
-								>
-									<Icon name="download" />
-								</button>
+								/>
 								{@render bundleButton(bundleEntry(game, rom))}
 							</div>
 						</div>
@@ -974,15 +979,16 @@
 							<div class="border rounded p-2 mb-3" data-testid="release-note">
 								<div class="d-flex align-items-center gap-2 mb-2">
 									<h4 class="h6 mb-0">Release note</h4>
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary ms-auto"
+									<Button
+										variant="secondary"
+										outline
+										size="sm"
+										class="ms-auto"
+										icon={auth.isAdmin ? 'edit' : 'note-filled'}
 										aria-label="{auth.isAdmin ? 'Edit' : 'View'} note for {rom.fileName}"
 										onclick={() => showNote(rom, auth.isAdmin ? 'edit' : undefined)}
+										>{auth.isAdmin ? 'Edit note' : 'View note'}</Button
 									>
-										<Icon name={auth.isAdmin ? 'edit' : 'note-filled'} />
-										{auth.isAdmin ? 'Edit note' : 'View note'}
-									</button>
 								</div>
 								{#if note && 'error' in note}
 									<ErrorAlert error={note.error} onretry={() => loadNote(rom)} />
@@ -1072,54 +1078,54 @@
 						{#if rom.header || auth.isAdmin}
 							<div class="d-flex flex-wrap gap-2 mt-2">
 								{#if rom.header}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary"
-										onclick={() => showHeader(rom)}
+									<Button
+										variant="secondary"
+										outline
+										size="sm"
+										icon="info"
+										onclick={() => showHeader(rom)}>Header details</Button
 									>
-										<Icon name="info" /> Header details
-									</button>
 								{/if}
 								{#if auth.isAdmin}
 									<!-- B9: Header details stays left; Move and Delete release sit right. -->
 									<div class="ms-auto d-flex flex-wrap gap-2">
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-secondary"
+										<Button
+											variant="secondary"
+											outline
+											size="sm"
+											icon="edit"
 											aria-label="Edit release {rom.fileName}"
 											onclick={() => {
 												editRom = rom;
 												editOpen = true;
-											}}
+											}}>Edit release</Button
 										>
-											<Icon name="edit" /> Edit release
-										</button>
 										{#if !rom.isPrimary}
-											<button
-												type="button"
-												class="btn btn-sm btn-outline-secondary"
+											<Button
+												variant="secondary"
+												outline
+												size="sm"
+												icon="star"
 												aria-label="Make primary {rom.fileName}"
-												onclick={() => (action = { kind: 'primary', rom })}
+												onclick={() => (action = { kind: 'primary', rom })}>Make primary</Button
 											>
-												<Icon name="star" /> Make primary
-											</button>
 										{/if}
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-secondary"
+										<Button
+											variant="secondary"
+											outline
+											size="sm"
+											icon="move"
 											aria-label="Move release {rom.fileName}"
-											onclick={() => (action = { kind: 'move', rom })}
+											onclick={() => (action = { kind: 'move', rom })}>Move release</Button
 										>
-											<Icon name="move" /> Move release
-										</button>
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-danger"
+										<Button
+											variant="danger"
+											outline
+											size="sm"
+											icon="delete"
 											aria-label="Delete release {rom.fileName}"
-											onclick={() => (action = { kind: 'deleteRom', rom })}
+											onclick={() => (action = { kind: 'deleteRom', rom })}>Delete release</Button
 										>
-											<Icon name="delete" /> Delete release
-										</button>
 									</div>
 								{/if}
 							</div>
@@ -1127,14 +1133,17 @@
 						{#if rom.files?.length}
 							{@const filesOpen = openFiles.has(rom.fileName)}
 							<!-- B20: the main file and the set's other files (cue, tracks); N counts all of them. -->
-							<button
-								type="button"
-								class="btn btn-sm btn-outline-secondary mt-2"
+							<Button
+								variant="secondary"
+								outline
+								size="sm"
+								class="mt-2"
+								icon="chevron"
 								aria-expanded={filesOpen}
 								aria-controls="release-{rom.id}-files"
 								onclick={() =>
 									filesOpen ? openFiles.delete(rom.fileName) : openFiles.add(rom.fileName)}
-								><Icon name="chevron" /> {rom.files.length + 1} files</button
+								>{rom.files.length + 1} files</Button
 							>
 							<div class="card mt-2" id="release-{rom.id}-files" hidden={!filesOpen}>
 								<div class="table-responsive">
@@ -1160,14 +1169,14 @@
 														<CopyButton value={file.sha1} label="SHA1 of {file.fileName}" />
 													</td>
 													<td class="text-end">
-														<button
-															type="button"
-															class="btn btn-sm btn-outline-primary"
+														<Button
+															variant="primary"
+															outline
+															size="sm"
+															icon="download"
 															aria-label="Download {file.fileName}"
 															onclick={() => download(file.downloadUrl, rom)}
-														>
-															<Icon name="download" />
-														</button>
+														/>
 														<!-- Row 0 is the main file; the rest are separately downloadable set files (B1). -->
 														{@render bundleButton(
 															bundleEntry(game, rom, index === 0 ? undefined : rom.files[index - 1])
@@ -1251,17 +1260,15 @@
 <!-- Bundle Creator B1: adds one file to the working cart; shows a check once it's there. -->
 {#snippet bundleButton(entry: BundleEntry)}
 	{@const inCart = bundle.has(entry)}
-	<button
-		type="button"
+	<Button
+		icon={inCart ? 'cart-check' : 'cart-add'}
 		class="btn btn-sm {inCart ? 'btn-primary' : 'btn-outline-primary'}"
 		aria-label={inCart
 			? `${entry.fileName} is in the bundle`
 			: `Add ${entry.fileName} to the bundle`}
 		title={inCart ? 'In the bundle' : 'Add to bundle'}
 		onclick={() => addToBundle(entry)}
-	>
-		<Icon name={inCart ? 'cart-check' : 'cart-add'} />
-	</button>
+	/>
 {/snippet}
 
 <style>

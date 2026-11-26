@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
+	import TextInput from '#lib/components/forms/TextInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { api } from '#lib/api/client.js';
@@ -12,7 +15,6 @@
 	} from '#lib/types/index.js';
 	import { applyMatch, copyFields, defaultCopyFields, toList } from '#lib/gameEdit.js';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {
 		game: GameDetail;
@@ -179,16 +181,19 @@
 	>
 		<label class="form-label" for="igdb-q">Search IGDB for</label>
 		<div class="d-flex gap-2">
-			<input
+			<TextInput
 				id="igdb-q"
-				class="form-control"
 				maxlength={maxQuery}
 				aria-describedby="igdb-q-help"
 				bind:value={q}
 				oninput={typed}
 			/>
-			<button type="submit" class="btn btn-primary text-nowrap" disabled={searching || !q.trim()}
-				><Icon name="search" /> Lookup Info</button
+			<Button
+				variant="primary"
+				class="text-nowrap"
+				icon="search"
+				type="submit"
+				disabled={searching || !q.trim()}>Lookup Info</Button
 			>
 		</div>
 		<div id="igdb-q-help" class="form-text">
@@ -206,10 +211,13 @@
 		{:else if matches}
 			<div class="list-group mb-3" role="group" aria-label="IGDB matches">
 				{#each matches as match (match.igdbId)}
-					<button
-						type="button"
-						class="list-group-item list-group-item-action d-flex align-items-center gap-2"
-						class:active={selected === match.igdbId}
+					<Button
+						class={[
+							'list-group-item list-group-item-action d-flex align-items-center gap-2',
+							selected === match.igdbId && 'active'
+						]
+							.filter(Boolean)
+							.join(' ')}
 						aria-pressed={selected === match.igdbId}
 						onclick={() => select(match)}
 					>
@@ -234,7 +242,7 @@
 						{#if match.igdbId === form.igdbId}
 							<span class="badge text-bg-success">Linked</span>
 						{/if}
-					</button>
+					</Button>
 				{/each}
 			</div>
 		{/if}
@@ -248,9 +256,8 @@
 					<tr>
 						<th scope="col">
 							<span class="visually-hidden">Copy</span>
-							<input
-								type="checkbox"
-								class="form-check-input copy-check"
+							<Checkbox
+								class="copy-check"
 								aria-label="Toggle all fields"
 								title="Toggle all fields"
 								disabled={enabledFields.length === 0}
@@ -268,9 +275,8 @@
 					{#each copyFields as field (field)}
 						<tr class:copy-disabled={copy[field].disabled}>
 							<td>
-								<input
-									type="checkbox"
-									class="form-check-input copy-check"
+								<Checkbox
+									class="copy-check"
 									aria-label="Copy {fieldLabels[field]}"
 									disabled={copy[field].disabled}
 									bind:checked={copy[field].checked}
@@ -296,18 +302,18 @@
 <style>
 	/* Lookup Info: checkboxes that read clearly on the striped table in both themes. Enabled boxes get a solid, stronger
 	   border; disabled ones are a flat, dashed, faded box with a not-allowed cursor, and their row is muted. */
-	.copy-check {
+	:global(.copy-check) {
 		width: 1.25em;
 		height: 1.25em;
 		margin-top: 0;
 		border: 2px solid var(--bs-secondary-color);
 		cursor: pointer;
 	}
-	.copy-check:checked,
-	.copy-check:indeterminate {
+	:global(.copy-check:checked),
+	:global(.copy-check:indeterminate) {
 		border-color: var(--bs-primary);
 	}
-	.copy-check:disabled {
+	:global(.copy-check:disabled) {
 		opacity: 0.4;
 		border-style: dashed;
 		background-color: var(--bs-secondary-bg);

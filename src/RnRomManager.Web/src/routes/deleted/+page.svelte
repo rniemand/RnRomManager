@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { fromAction } from 'svelte/attachments';
+	import Button from '#lib/components/forms/Button.svelte';
 	import PermanentDeleteModal from '#lib/components/modals/PermanentDeleteModal.svelte';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onMount } from 'svelte';
@@ -15,7 +17,6 @@
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
 	import IngestFileTable from '#lib/components/ingest/IngestFileTable.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
@@ -157,31 +158,35 @@
 	{:else}
 		<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 			<span class="small text-body-secondary" aria-live="polite">{selectedCount} selected</span>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-secondary"
-				onclick={() => allKeys.forEach((k) => selected.add(k))}>Select all</button
+			<Button
+				variant="secondary"
+				outline
+				size="sm"
+				onclick={() => allKeys.forEach((k) => selected.add(k))}>Select all</Button
 			>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-secondary"
+			<Button
+				variant="secondary"
+				outline
+				size="sm"
 				disabled={selectedCount === 0}
-				onclick={() => selected.clear()}>Clear selection</button
+				onclick={() => selected.clear()}>Clear selection</Button
 			>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-primary"
+			<Button
+				variant="primary"
+				outline
+				size="sm"
+				icon="restore"
 				disabled={disabled || selectedCount === 0}
-				onclick={() => restore(selectedEntries())}
-				><Icon name="restore" /> Restore selected ({selectedCount})</button
+				onclick={() => restore(selectedEntries())}>Restore selected ({selectedCount})</Button
 			>
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-danger"
+			<Button
+				variant="danger"
+				outline
+				size="sm"
+				icon="delete"
 				disabled={disabled || selectedCount === 0}
-				use:tooltip={'Delete (Shift+click to skip confirmation)'}
-				onclick={(e) => askDelete(e, selectedEntries())}
-				><Icon name="delete" /> Delete selected ({selectedCount})</button
+				{@attach fromAction(tooltip, () => 'Delete (Shift+click to skip confirmation)')}
+				onclick={(e) => askDelete(e, selectedEntries())}>Delete selected ({selectedCount})</Button
 			>
 		</div>
 		{#each removed as system (system.system)}

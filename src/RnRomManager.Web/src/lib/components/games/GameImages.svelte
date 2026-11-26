@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import DeleteImageModal from '#lib/components/modals/DeleteImageModal.svelte';
 	import SuggestImagesModal from '#lib/components/modals/SuggestImagesModal.svelte';
 	import UploadImageModal from '#lib/components/modals/UploadImageModal.svelte';
@@ -11,7 +12,6 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import FileSize from '#lib/components/common/FileSize.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 
 	interface Props {
 		game: GameDetail;
@@ -88,29 +88,26 @@
 	<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 		{#if auth.isAdmin}
 			<!-- IGDB suggestions S11: before Google Images, and the start of the right-aligned group. -->
-			<button
-				type="button"
+			<Button
+				icon="suggest-images"
 				class="btn btn-outline-secondary btn-sm ms-auto"
-				onclick={() => (suggestOpen = true)}
+				onclick={() => (suggestOpen = true)}>Suggest Images</Button
 			>
-				<Icon name="suggest-images" /> Suggest Images
-			</button>
 			<!-- B8: an external search, not an app page. -->
 			<!-- eslint-disable svelte/no-navigation-without-resolve -->
-			<a
+			<Button
+				icon="google"
 				class="btn btn-outline-secondary btn-sm"
 				href={googleImagesUrl(gameSearchQuery(game))}
 				target="_blank"
-				rel="noopener noreferrer"><Icon name="google" /> Google Images</a
+				rel="noopener noreferrer">Google Images</Button
 			>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
-			<button
-				type="button"
+			<Button
+				icon="upload"
 				class="btn btn-outline-primary btn-sm"
-				onclick={() => (uploadOpen = true)}
+				onclick={() => (uploadOpen = true)}>Upload Image</Button
 			>
-				<Icon name="upload" /> Upload Image
-			</button>
 		{/if}
 	</div>
 	<div class="row row-cols-2 row-cols-sm-3 row-cols-lg-5 g-3 mb-3">
@@ -125,20 +122,18 @@
 				>
 					<!-- B10: the size badge sits over the thumbnail, outside its button. -->
 					<div class="position-relative">
-						<button
-							type="button"
+						<Button
 							class="btn p-0 border-0 w-100"
 							aria-label="View {image.fileName} full size"
 							onclick={() => view(image)}
-						>
-							<img
+							><img
 								class="card-img-top object-fit-contain bg-body-tertiary"
 								style="height: 8rem"
 								src={image.url}
 								alt="{game.displayTitle} {imageTypeLabels[image.type].toLowerCase()}"
 								loading="lazy"
-							/>
-						</button>
+							/></Button
+						>
 						<span class="badge text-bg-light border position-absolute top-0 end-0 m-1"
 							><FileSize bytes={image.sizeBytes} /></span
 						>
@@ -153,38 +148,40 @@
 						<!-- B10: Download for every user, then the Admin's Use as cover and Delete. -->
 						<div class="d-flex flex-wrap gap-1 mt-2">
 							<!-- eslint-disable svelte/no-navigation-without-resolve -- an API download, not a page -->
-							<a
-								class="btn btn-sm btn-outline-secondary"
+							<Button
+								variant="secondary"
+								outline
+								size="sm"
+								icon="download"
 								href="/api/games/{encodeURIComponent(game.id)}/images/{image.id}?download=true"
 								download
-								aria-label="Download {image.fileName}"><Icon name="download" /></a
-							>
+								aria-label="Download {image.fileName}"
+							/>
 							<!-- eslint-enable svelte/no-navigation-without-resolve -->
 							{#if auth.isAdmin}
 								{#if !image.isCover}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-primary"
+									<Button
+										variant="primary"
+										outline
+										size="sm"
 										aria-label="Use as cover: {image.fileName}"
 										disabled={busy}
-										onclick={() => setCover(image)}
+										onclick={() => setCover(image)}>Use as cover</Button
 									>
-										Use as cover
-									</button>
 								{/if}
 								{#if !image.isDefault}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-danger"
+									<Button
+										variant="danger"
+										outline
+										size="sm"
+										icon="delete"
 										aria-label="Delete {image.fileName}"
 										disabled={busy}
 										onclick={() => {
 											deleting = image;
 											deleteOpen = true;
 										}}
-									>
-										<Icon name="delete" />
-									</button>
+									/>
 								{/if}
 							{/if}
 						</div>

@@ -3,13 +3,6 @@
 SV4 src/RnRomManager.Web/src/lib/components/common/ErrorAlert.svelte
 SV4 src/RnRomManager.Web/src/lib/components/common/JsonTree.svelte
 SV4 src/RnRomManager.Web/src/lib/components/common/Pagination.svelte
-SV4 src/RnRomManager.Web/src/lib/components/games/GameImages.svelte
-SV4 src/RnRomManager.Web/src/lib/components/games/GameResults.svelte
-SV4 src/RnRomManager.Web/src/lib/components/games/GameSaves.svelte
-SV4 src/RnRomManager.Web/src/lib/components/games/GameTitle.svelte
-SV4 src/RnRomManager.Web/src/lib/components/games/IgdbLookup.svelte
-SV4 src/RnRomManager.Web/src/lib/components/games/ZipBrowser.svelte
-SV4 src/RnRomManager.Web/src/lib/components/ingest/IngestFileTable.svelte
 SV4 src/RnRomManager.Web/src/lib/components/layout/AccordionItem.svelte
 SV4 src/RnRomManager.Web/src/lib/components/layout/AppFooter.svelte
 SV4 src/RnRomManager.Web/src/lib/components/layout/Navbar.svelte
@@ -26,11 +19,6 @@ SV4 src/RnRomManager.Web/src/lib/components/modals/GlobalSearch.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/HotkeysModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/LogoModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/ReleaseNoteModal.svelte
-SV4 src/RnRomManager.Web/src/routes/deleted/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/games/[id]/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/ingestion/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/review/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/review/[id]/+page.svelte
 SV6 src/RnRomManager.Web/src/lib/components/bundles/BundleDownload.svelte
 SV6 src/RnRomManager.Web/src/lib/components/bundles/SavedBundleQueues.svelte
 SV6 src/RnRomManager.Web/src/lib/components/common/JobStepProgress.svelte

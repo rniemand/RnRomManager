@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import IngestDeleteModal from '#lib/components/modals/IngestDeleteModal.svelte';
 	import { replaceUrl } from '#lib/urlState.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
@@ -223,10 +225,12 @@
 								<strong>{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''} running</strong>
 								<span class="text-body-secondary small">since {formatDateTime(job.startedAt)}</span>
 								{#if isCancellable(job.type)}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-danger ms-auto"
-										onclick={() => cancel(job.id)}>Cancel</button
+									<Button
+										variant="danger"
+										outline
+										size="sm"
+										class="ms-auto"
+										onclick={() => cancel(job.id)}>Cancel</Button
 									>
 								{/if}
 							</div>
@@ -252,7 +256,7 @@
 						>
 							{#snippet action()}
 								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- route arrives in S47 -->
-								<a class="btn btn-primary" href="/admin/dats">Go to Admin → DATs</a>
+								<Button variant="primary" href="/admin/dats">Go to Admin → DATs</Button>
 							{/snippet}
 						</EmptyState>
 					{/if}
@@ -269,41 +273,43 @@
 			{#snippet header()}Pending files ({pendingFileCount}){/snippet}
 			{#if !job && !datsMissing}
 				<div class="d-flex flex-wrap gap-2 mb-3">
-					<button type="button" class="btn btn-primary" disabled={busy} onclick={() => start()}>
-						{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-						<Icon name="ingest" /> Import all
-					</button>
-					<!-- Disabled at none (nothing to do) and at all (Import all does the same). -->
-					<button
-						type="button"
-						class="btn btn-outline-primary"
-						disabled={busy || selectedCount === 0 || selectedCount === allKeys.length}
-						onclick={importSelected}
+					<Button variant="primary" disabled={busy} onclick={() => start()}
+						>{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"
+							></span>{/if}
+						<Icon name="ingest" /> Import all</Button
 					>
-						Import selected ({selectedCount})
-					</button>
+					<!-- Disabled at none (nothing to do) and at all (Import all does the same). -->
+					<Button
+						variant="primary"
+						outline
+						disabled={busy || selectedCount === 0 || selectedCount === allKeys.length}
+						onclick={importSelected}>Import selected ({selectedCount})</Button
+					>
 				</div>
 			{/if}
 			{#if withFiles.length === 0}
 				<div class="card"><EmptyState message="No files waiting in the ingest folders." /></div>
 			{:else}
 				<div class="d-flex flex-wrap gap-2 mb-2">
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(selected, allKeys, true)}>Select all</button
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						onclick={() => selectAll(selected, allKeys, true)}>Select all</Button
 					>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(selected, allKeys, false)}>Clear selection</button
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						onclick={() => selectAll(selected, allKeys, false)}>Clear selection</Button
 					>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-danger"
+					<Button
+						variant="danger"
+						outline
+						size="sm"
 						disabled={deleteDisabled || selectedCount === 0}
 						onclick={() => askDelete(selectedEntries(withFiles, selected, 'pending'))}
-						>Delete selected ({selectedCount})</button
+						>Delete selected ({selectedCount})</Button
 					>
 				</div>
 				{#each withFiles as system (system.system)}
@@ -329,22 +335,25 @@
 				<div class="card"><EmptyState message="No failed imports." /></div>
 			{:else}
 				<div class="d-flex flex-wrap gap-2 mb-2">
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(failedSelected, failedKeys, true)}>Select all</button
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						onclick={() => selectAll(failedSelected, failedKeys, true)}>Select all</Button
 					>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(failedSelected, failedKeys, false)}>Clear selection</button
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						onclick={() => selectAll(failedSelected, failedKeys, false)}>Clear selection</Button
 					>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-danger"
+					<Button
+						variant="danger"
+						outline
+						size="sm"
 						disabled={deleteDisabled || failedCount === 0}
 						onclick={() => askDelete(selectedEntries(failedWithFiles, failedSelected, 'failed'))}
-						>Delete selected ({failedCount})</button
+						>Delete selected ({failedCount})</Button
 					>
 				</div>
 				{#each failedWithFiles as system (system.system)}
@@ -371,34 +380,26 @@
 			{#if !runs || runs.items.length === 0}
 				<div class="card"><EmptyState message="No ingestion has run yet." /></div>
 			{:else}
-				<div class="card">
-					<div class="table-responsive">
-						<table class="table table-sm table-striped table-hover align-middle mb-0">
-							<thead class="table-dark">
-								<tr class="small text-uppercase text-body-secondary">
-									<th scope="col">Started</th>
-									<th scope="col">Status</th>
-									<th scope="col">Trigger</th>
-									<th scope="col">Summary</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each runs.items as run (run.id)}
-									<tr>
-										<td class="text-nowrap">
-											<a href={resolve('/jobs/[id]', { id: run.id })}
-												>{formatDateTime(run.startedAt)}</a
-											>
-										</td>
-										<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
-										<td>{run.triggerSource}</td>
-										<td class="small">{formatSummary(run.summary)}</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				</div>
+				<DataTable items={runs.items} key={(run) => run.id}>
+					{#snippet head()}
+						<tr class="small text-uppercase text-body-secondary">
+							<th scope="col">Started</th>
+							<th scope="col">Status</th>
+							<th scope="col">Trigger</th>
+							<th scope="col">Summary</th>
+						</tr>
+					{/snippet}
+					{#snippet row(run)}
+						<tr>
+							<td class="text-nowrap">
+								<a href={resolve('/jobs/[id]', { id: run.id })}>{formatDateTime(run.startedAt)}</a>
+							</td>
+							<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
+							<td>{run.triggerSource}</td>
+							<td class="small">{formatSummary(run.summary)}</td>
+						</tr>
+					{/snippet}
+				</DataTable>
 				<Pagination
 					page={runsPage}
 					pages={pageCount(runs.total, pageSize)}
