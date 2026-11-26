@@ -12,7 +12,7 @@ namespace RnRomManager.Systems.Commodore;
 /// </summary>
 public sealed class PetHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.pet.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(PetHandler), "boxart.pet.png");
 
     public string Id => "pet";
     public string DisplayName => "Commodore PET";

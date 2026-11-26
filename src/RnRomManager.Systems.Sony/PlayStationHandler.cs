@@ -11,7 +11,7 @@ namespace RnRomManager.Systems.Sony;
 /// </summary>
 public sealed class PlayStationHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.psx.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(PlayStationHandler), "boxart.psx.png");
 
     public string Id => "psx";
     public string DisplayName => "PlayStation";

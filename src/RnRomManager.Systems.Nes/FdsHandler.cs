@@ -14,7 +14,7 @@ public sealed class FdsHandler : ISystemHandler
     public const int SideBytes = 65_500;
     private const int FwNesHeaderSize = 16;
 
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => NesHandler.LoadResource("boxart.fds.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(FdsHandler), "boxart.fds.png");
 
     public string Id => "fds";
     public string DisplayName => "Famicom Disk System";

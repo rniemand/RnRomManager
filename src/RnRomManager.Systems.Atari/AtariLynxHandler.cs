@@ -4,7 +4,7 @@ namespace RnRomManager.Systems.Atari;
 
 public sealed class AtariLynxHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.lynx.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(AtariLynxHandler), "boxart.lynx.png");
 
     public string Id => "lynx";
     public string DisplayName => "Atari Lynx";

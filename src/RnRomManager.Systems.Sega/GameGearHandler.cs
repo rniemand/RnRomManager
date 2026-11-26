@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.Sega;
 /// </summary>
 public sealed class GameGearHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.gamegear.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(GameGearHandler), "boxart.gamegear.png");
 
     public string Id => "gg";
     public string DisplayName => "Game Gear";

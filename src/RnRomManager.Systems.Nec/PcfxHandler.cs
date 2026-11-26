@@ -10,7 +10,7 @@ namespace RnRomManager.Systems.Nec;
 /// </summary>
 public sealed class PcfxHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => TurboGrafx16Handler.LoadResource("boxart.pcfx.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(PcfxHandler), "boxart.pcfx.png");
 
     public string Id => "pcfx";
     public string DisplayName => "PC-FX";

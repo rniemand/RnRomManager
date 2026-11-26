@@ -13,7 +13,7 @@ namespace RnRomManager.Systems.Nec;
 /// </summary>
 public sealed class TurboGrafxCdHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => TurboGrafx16Handler.LoadResource("boxart.tgcd.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(TurboGrafxCdHandler), "boxart.tgcd.png");
 
     public string Id => "tgcd";
     public string DisplayName => "TurboGrafx-CD / PC Engine CD";

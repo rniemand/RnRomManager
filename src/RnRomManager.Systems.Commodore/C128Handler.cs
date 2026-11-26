@@ -11,7 +11,7 @@ namespace RnRomManager.Systems.Commodore;
 /// </summary>
 public sealed class C128Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.c128.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(C128Handler), "boxart.c128.png");
 
     public string Id => "c128";
     public string DisplayName => "Commodore 128";

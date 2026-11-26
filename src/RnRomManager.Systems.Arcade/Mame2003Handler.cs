@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.Arcade;
 /// </summary>
 public sealed class Mame2003Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.mame2003.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(Mame2003Handler), "boxart.mame2003.png");
 
     public string Id => "mame2003";
     public string DisplayName => "Arcade (MAME 2003-Plus)";

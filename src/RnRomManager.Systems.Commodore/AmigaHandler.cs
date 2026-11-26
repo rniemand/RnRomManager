@@ -13,7 +13,7 @@ namespace RnRomManager.Systems.Commodore;
 /// </summary>
 public sealed class AmigaHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.amiga.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(AmigaHandler), "boxart.amiga.png");
 
     public string Id => "amiga";
     public string DisplayName => "Commodore Amiga";

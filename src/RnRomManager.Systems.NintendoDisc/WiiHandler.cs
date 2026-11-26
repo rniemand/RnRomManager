@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.NintendoDisc;
 /// </summary>
 public sealed class WiiHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.wii.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(WiiHandler), "boxart.wii.png");
 
     public string Id => "wii";
     public string DisplayName => "Wii";

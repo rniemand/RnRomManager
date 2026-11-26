@@ -13,7 +13,7 @@ namespace RnRomManager.Systems.Commodore;
 /// </summary>
 public sealed class Vic20Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.vic20.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(Vic20Handler), "boxart.vic20.png");
 
     public string Id => "vic20";
     public string DisplayName => "Commodore VIC-20";

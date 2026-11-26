@@ -11,7 +11,7 @@ namespace RnRomManager.Systems.Sega;
 /// </summary>
 public sealed class SaturnHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.saturn.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(SaturnHandler), "boxart.saturn.png");
 
     public string Id => "saturn";
     public string DisplayName => "Saturn";

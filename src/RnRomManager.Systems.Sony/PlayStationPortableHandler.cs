@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.Sony;
 /// </summary>
 public sealed class PlayStationPortableHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.psp.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(PlayStationPortableHandler), "boxart.psp.png");
 
     public string Id => "psp";
     public string DisplayName => "PlayStation Portable";

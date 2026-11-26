@@ -11,7 +11,7 @@ namespace RnRomManager.Systems.Commodore;
 /// </summary>
 public sealed class Plus4Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.plus4.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(Plus4Handler), "boxart.plus4.png");
 
     public string Id => "plus4";
     public string DisplayName => "Commodore Plus/4";

@@ -13,7 +13,7 @@ namespace RnRomManager.Systems.NintendoDs;
 /// </summary>
 public sealed class Nintendo3DsHandler(IRomStorageSettings? settings = null) : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.3ds.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(Nintendo3DsHandler), "boxart.3ds.png");
 
     public string Id => Nintendo3DsHeaderReader.Nintendo3DsId;
     public string DisplayName => "Nintendo 3DS";

@@ -5,7 +5,7 @@ namespace RnRomManager.Systems.GameBoy;
 /// <summary>Game Boy Advance (GBA spec B2). Its own family: no GB/GBC header can classify a GBA file, or the reverse.</summary>
 public sealed class GameBoyAdvanceHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.gba.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(GameBoyAdvanceHandler), "boxart.gba.png");
 
     public string Id => GameBoyAdvanceHeaderReader.GameBoyAdvanceId;
     public string DisplayName => "Game Boy Advance";

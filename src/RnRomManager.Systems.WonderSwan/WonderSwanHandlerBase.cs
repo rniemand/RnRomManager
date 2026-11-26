@@ -9,7 +9,7 @@ public abstract class WonderSwanHandlerBase : ISystemHandler
 
     private readonly Lazy<ReadOnlyMemory<byte>> _boxArt;
 
-    protected WonderSwanHandlerBase() => _boxArt = new(() => EmbeddedResources.Load($"boxart.{Id}.png"));
+    protected WonderSwanHandlerBase() => _boxArt = BoxArt.Lazy(typeof(WonderSwanHandlerBase), $"boxart.{Id}.png");
 
     public abstract string Id { get; }
     public abstract string DisplayName { get; }

@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.Snes;
 /// </summary>
 public sealed class SatellaviewHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => SnesHandler.LoadResource("boxart.satellaview.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(SatellaviewHandler), "boxart.satellaview.png");
 
     public string Id => "satellaview";
     public string DisplayName => "Satellaview";

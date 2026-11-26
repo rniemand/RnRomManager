@@ -8,7 +8,7 @@ namespace RnRomManager.Systems.Sega;
 /// </summary>
 public sealed class Sega32xHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.sega32x.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(Sega32xHandler), "boxart.sega32x.png");
 
     public string Id => "s32x";
     public string DisplayName => "32X";

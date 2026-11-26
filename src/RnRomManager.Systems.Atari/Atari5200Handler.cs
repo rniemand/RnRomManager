@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.Atari;
 /// </summary>
 public sealed class Atari5200Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.a5200.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(Atari5200Handler), "boxart.a5200.png");
 
     public string Id => "a5200";
     public string DisplayName => "Atari 5200";

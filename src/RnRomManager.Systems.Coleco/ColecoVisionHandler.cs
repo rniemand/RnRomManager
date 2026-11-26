@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.Coleco;
 /// </summary>
 public sealed class ColecoVisionHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => LoadResource("boxart.coleco.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(ColecoVisionHandler), "boxart.coleco.png");
 
     public string Id => "coleco";
     public string DisplayName => "ColecoVision";
@@ -36,14 +36,5 @@ public sealed class ColecoVisionHandler : ISystemHandler
     {
         var magic = Convert.ToHexString(rom[..Math.Min(2, rom.Length)]);
         return new RomHeader(Id, null, magic is "AA55" or "55AA", new Dictionary<string, object?> { ["magic"] = magic });
-    }
-
-    private static byte[] LoadResource(string name)
-    {
-        using var stream = typeof(ColecoVisionHandler).Assembly.GetManifestResourceStream($"RnRomManager.Systems.Coleco.Resources.{name}")
-            ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");
-        using var copy = new MemoryStream();
-        stream.CopyTo(copy);
-        return copy.ToArray();
     }
 }

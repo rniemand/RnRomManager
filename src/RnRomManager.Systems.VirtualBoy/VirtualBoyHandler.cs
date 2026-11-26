@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.VirtualBoy;
 /// </summary>
 public sealed class VirtualBoyHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.vb.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(VirtualBoyHandler), "boxart.vb.png");
 
     public string Id => "vb";
     public string DisplayName => "Virtual Boy";

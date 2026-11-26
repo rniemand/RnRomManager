@@ -9,7 +9,7 @@ namespace RnRomManager.Systems.NintendoDisc;
 /// </summary>
 public sealed class GameCubeHandler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.gc.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = BoxArt.Lazy(typeof(GameCubeHandler), "boxart.gc.png");
 
     public string Id => "gc";
     public string DisplayName => "GameCube";

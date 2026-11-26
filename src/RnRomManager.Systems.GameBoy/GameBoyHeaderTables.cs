@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Systems.GameBoy;
 
@@ -17,7 +18,7 @@ public static class GameBoyHeaderTables
 
     private static Tables Load()
     {
-        var doc = JsonSerializer.Deserialize<Document>(EmbeddedResources.Load("header-tables.json"), new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        var doc = JsonSerializer.Deserialize<Document>(EmbeddedResource.Load(typeof(GameBoyHeaderTables).Assembly, "header-tables.json"), new JsonSerializerOptions(JsonSerializerDefaults.Web))
             ?? throw new InvalidOperationException("Embedded header-tables.json is empty.");
         return new Tables(ByByte(doc.CartridgeTypes), ByByte(doc.OldLicensees), doc.NewLicensees);
     }
