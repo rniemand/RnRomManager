@@ -72,6 +72,14 @@ public sealed class GameRepository : IGameRepository
             .ToDictionary(r => r.GameId, r => r.SaveCount);
     }
 
+    public async Task ClearIgdbSyncAsync(Guid gameId, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE game_actions SET igdb_rating = NULL, igdb_rating_count = NULL, last_igdb_sync_at = NULL WHERE game_id = @gameId",
+            new { gameId }, cancellationToken: cancellationToken));
+    }
+
     public async Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();

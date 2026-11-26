@@ -24,6 +24,9 @@ public interface IGameRepository
     /// <summary>S7: <paramref name="username"/>'s own save count per game (from <c>game_user_save_counts</c>); games without a row are absent.</summary>
     Task<IReadOnlyDictionary<Guid, int>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds, CancellationToken cancellationToken);
 
+    /// <summary>A6: the game's IGDB link changed: its <c>game_actions</c> rating, vote count and sync time become null.</summary>
+    Task ClearIgdbSyncAsync(Guid gameId, CancellationToken cancellationToken);
+
     /// <summary>The library list: filters, sort (year nulls last), tie-break <c>id</c>, one page (spec §23, §14.2).</summary>
     Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken);
 

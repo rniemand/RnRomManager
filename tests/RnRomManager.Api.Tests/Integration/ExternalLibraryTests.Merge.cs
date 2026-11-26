@@ -50,6 +50,22 @@ public partial class ExternalLibraryTests
         Assert.That(Listed(MysteryZip), Has.None.StartsWith(LibraryZip.RomsFolder), "no ROM entry was passed to the writer");
     }
 
+    [TestCase(null, true)]
+    [TestCase(77, false)]
+    public async Task Merge_TargetTakingTheSourcesIgdbId_ClearsActions(int? target, bool cleared)
+    {
+        var (space, mystery) = await TwoGamesAsync();
+        Assert.That((await EditorWith().PatchAsync(space, new GamePatch { SetIgdbId = true, IgdbId = 12 }, null, default)).Code, Is.Null);
+        Assert.That((await EditorWith().PatchAsync(mystery, new GamePatch { SetIgdbId = true, IgdbId = target }, null, default)).Code, Is.Null);
+        await GameActionsSeed.SeedAsync(_factory, mystery);
+
+        var result = await MergeAsync(space, mystery);
+
+        Assert.That(result.Code, Is.Null);
+        Assert.That(Read(MysteryZip).Actions?.CoverImagePulled, Is.EqualTo(cleared ? null : GameActionsSeed.Pulled));
+        Assert.That((await GameActionsSeed.ReadAsync(_factory, mystery))!.Value.Rating, Is.EqualTo(cleared ? null : 81.5));
+    }
+
     [Test]
     public async Task ClashingName_TheRenamedReleaseNamesItsFileToo()
     {

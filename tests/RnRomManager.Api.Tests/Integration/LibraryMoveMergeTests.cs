@@ -379,6 +379,25 @@ public class LibraryMoveMergeTests
         Assert.That(((await ReadGame(zelda)).IgdbId, (await Row(zelda))!.IgdbId), Is.EqualTo((expected, expected)));
     }
 
+    [TestCase(null, true, TestName = "Merge actions: target taking the source's igdbId is cleared")]
+    [TestCase(77, false, TestName = "Merge actions: target keeping its own igdbId keeps them")]
+    public async Task Merge_IgdbRelink_ClearsActions(int? target, bool cleared)
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld));
+        var zelda = await Game(("z.gb", Zelda));
+        await LinkIgdb(zelda, target);
+        await LinkIgdb(tetris, 12);
+        await GameActionsSeed.SeedAsync(_factory, zelda);
+        await GameActionsSeed.SeedAsync(_factory, tetris);
+
+        using var response = await Merge(tetris, zelda);
+
+        Assert.That(await TargetId(response), Is.EqualTo(zelda));
+        Assert.That((await ReadGame(zelda)).Actions?.CoverImagePulled, Is.EqualTo(cleared ? null : GameActionsSeed.Pulled));
+        Assert.That((await GameActionsSeed.ReadAsync(_factory, zelda))!.Value.Rating, Is.EqualTo(cleared ? null : 81.5));
+        Assert.That(await GameActionsSeed.ReadAsync(_factory, tetris), Is.Null, "the merged-away source's row is deleted");
+    }
+
     [Test]
     public async Task MoveToNewGame_StartsUnlinked_SourceKeepsItsIgdbId()
     {
