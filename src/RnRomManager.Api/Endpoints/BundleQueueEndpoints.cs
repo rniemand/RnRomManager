@@ -68,7 +68,7 @@ public static class BundleQueueEndpoints
         {
             if (!int.TryParse(revision, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var expected)
                 || expected <= 0)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["revision"] = ["The queue's current revision is required."] });
+                return Problems.Validation(ctx, "revision", "The queue's current revision is required.");
             var status = await repository.DeleteAsync(id, EndpointUser.RequiredId(ctx), expected, ctx.RequestAborted);
             return WriteResult(ctx, new BundleQueueWrite(status), _ => Results.NoContent());
         });
@@ -157,6 +157,6 @@ public static class BundleQueueEndpoints
         catch (JsonException)
         {
         }
-        return (null, Problems.Validation(ctx, new Dictionary<string, string[]> { [""] = ["A valid JSON object is required."] }));
+        return (null, Problems.Validation(ctx, "", "A valid JSON object is required."));
     }
 }

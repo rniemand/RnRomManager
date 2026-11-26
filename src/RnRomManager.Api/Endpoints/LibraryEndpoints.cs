@@ -186,7 +186,7 @@ public static class LibraryEndpoints
             LibraryFiles files) =>
         {
             if (string.IsNullOrEmpty(path))
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["path"] = ["Required."] });
+                return Problems.Validation(ctx, "path", "Required.");
             if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
                 return Problems.NotFound(ctx);
             return files.OpenRawEntry(ctx, game, path, out var stream) is { } problem
@@ -380,7 +380,7 @@ public static class LibraryEndpoints
             if (download.Bytes is not { } bytes)
                 return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
             if (DownloadedImageError(bytes) is { } bytesError)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [bytesError] });
+                return Problems.Validation(ctx, "url", bytesError);
             var result = await editor.AddImageAsync(id, type, bytes, AuditActor.From(ctx.User), ctx.RequestAborted, request.Url);
             await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers, systems, jobLock, issues, time);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
@@ -392,7 +392,7 @@ public static class LibraryEndpoints
         {
             ImageType? parsed = type switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => null };
             if (parsed is null)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["type"] = ["Choose BoxArt or Snap."] });
+                return Problems.Validation(ctx, "type", "Choose BoxArt or Snap.");
             if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
                 return Problems.NotFound(ctx);
             if (!suggestions.Configured)
@@ -412,7 +412,7 @@ public static class LibraryEndpoints
             {
                 q = values.ToString().Trim();
                 if (q.Length is 0 or > MaxLookupQuery || IgdbClient.SearchTitle(q).Length == 0)
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["q"] = ["Must be 1–100 characters."] });
+                    return Problems.Validation(ctx, "q", "Must be 1–100 characters.");
             }
             if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
                 return Problems.NotFound(ctx);
@@ -466,7 +466,7 @@ public static class LibraryEndpoints
         games.MapPost("/{id:guid}/merge", async (Guid id, MergeRequest request, HttpContext ctx, LibraryEditor editor) =>
         {
             if (request.TargetGameId is not { } target || target == Guid.Empty)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["targetGameId"] = ["A target game is required."] });
+                return Problems.Validation(ctx, "targetGameId", "A target game is required.");
             var result = await editor.MergeAsync(id, target, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.AdminOnly);
@@ -545,7 +545,7 @@ public static class LibraryEndpoints
         if (ctx.Request.ContentLength > UploadRequestLimit)
             return (null, TooLarge(ctx));
         if (!ctx.Request.HasFormContentType)
-            return (null, Problems.Validation(ctx, new Dictionary<string, string[]> { ["file"] = ["Send the image as multipart/form-data."] }));
+            return (null, Problems.Validation(ctx, "file", "Send the image as multipart/form-data."));
         try
         {
             return (await ctx.Request.ReadFormAsync(ctx.RequestAborted), null);

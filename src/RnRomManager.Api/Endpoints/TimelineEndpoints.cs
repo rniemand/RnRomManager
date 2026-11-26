@@ -21,7 +21,7 @@ public static class TimelineEndpoints
         timeline.MapGet("", async (string? system, HttpContext ctx, ISystemRegistry systems, IGameRepository games, IGameInfoLookup lookup) =>
         {
             if (system is not null && systems.ById(system) is null)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["system"] = ["Choose a registered system."] });
+                return Problems.Validation(ctx, "system", "Choose a registered system.");
             var years = await games.ListReleaseYearCountsAsync(system, ctx.RequestAborted);
             return Results.Ok(new
             {

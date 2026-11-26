@@ -19,6 +19,10 @@ public static class Problems
         IReadOnlyDictionary<string, object?>? extensions = null) =>
         Results.ValidationProblem(errors, extensions: Extensions(ctx, "ValidationFailed", extensions));
 
+    /// <summary>A validation problem with one error message for one field.</summary>
+    public static IResult Validation(HttpContext ctx, string field, string message) =>
+        Validation(ctx, new Dictionary<string, string[]> { [field] = [message] });
+
     private static Dictionary<string, object?> Extensions(HttpContext ctx, string code, IReadOnlyDictionary<string, object?>? extra)
     {
         var all = new Dictionary<string, object?>

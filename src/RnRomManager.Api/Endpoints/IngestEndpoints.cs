@@ -27,16 +27,13 @@ public static class IngestEndpoints
                 }
                 catch (JsonException)
                 {
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["files"] = ["The body isn't valid JSON."] });
+                    return Problems.Validation(ctx, "files", "The body isn't valid JSON.");
                 }
             }
             if (request?.Files is { } files)
             {
                 if (files.Count == 0 || files.Any(f => string.IsNullOrEmpty(f?.System) || string.IsNullOrEmpty(f.Name)))
-                    return Problems.Validation(ctx, new Dictionary<string, string[]>
-                    {
-                        ["files"] = ["Give at least one file, each with a system and a name."],
-                    });
+                    return Problems.Validation(ctx, "files", "Give at least one file, each with a system and a name.");
                 job.Selection = files.Select(f => (f!.System!, f.Name!)).ToHashSet();
             }
             try
@@ -80,7 +77,7 @@ public static class IngestEndpoints
                 }
                 catch (JsonException)
                 {
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["files"] = ["The body isn't valid JSON."] });
+                    return Problems.Validation(ctx, "files", "The body isn't valid JSON.");
                 }
             }
             var errors = IngestFileDeleter.Validate(request?.Files, systems, paths.Value.Ingest);
@@ -105,7 +102,7 @@ public static class IngestEndpoints
                 }
                 catch (JsonException)
                 {
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["files"] = ["The body isn't valid JSON."] });
+                    return Problems.Validation(ctx, "files", "The body isn't valid JSON.");
                 }
             }
             var files = request?.Files?.Select(f => f is null ? null : new IngestDeleteRef(f.System, IngestFileDeleter.Removed, f.Name)).ToList();

@@ -101,7 +101,7 @@ public static class ReviewEndpoints
         {
             // Q4: 1–500 distinct positive ids, all deleted under one lock acquisition.
             if (request.Ids is not { Length: >= 1 and <= 500 } ids || ids.Any(id => id <= 0) || ids.Distinct().Count() != ids.Length)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["ids"] = ["Must be 1–500 distinct positive ids."] });
+                return Problems.Validation(ctx, "ids", "Must be 1–500 distinct positive ids.");
             var result = await resolver.DeleteSourcesAsync(ids, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result is null
                 ? JobStart.Running(ctx)

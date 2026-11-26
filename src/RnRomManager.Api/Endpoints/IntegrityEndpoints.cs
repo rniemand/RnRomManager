@@ -21,7 +21,7 @@ public static class IntegrityEndpoints
         api.MapPost("/jobs/integrity", async (IntegrityStartRequest request, HttpContext ctx, JobRunner runner, IntegrityJobFactory integrity) =>
         {
             if (request.Mode is not (nameof(JobMode.Quick) or nameof(JobMode.Deep)))
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["mode"] = ["Must be Quick or Deep."] });
+                return Problems.Validation(ctx, "mode", "Must be Quick or Deep.");
             var job = integrity(Enum.Parse<JobMode>(request.Mode));
             return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);

@@ -80,7 +80,7 @@ public static class AdminEndpoints
             }
             if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("embedRoms", out var value)
                 || value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["embedRoms"] = ["Must be true or false."] });
+                return Problems.Validation(ctx, "embedRoms", "Must be true or false.");
             if (!handler.RomStorageConfigurable)
                 return Problems.Create(ctx, StatusCodes.Status400BadRequest, "NotConfigurable", "This system's ROM storage can't be changed.");
             var embed = value.GetBoolean();
@@ -106,7 +106,7 @@ public static class AdminEndpoints
             }
             if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("level", out var value) || value.ValueKind != JsonValueKind.String
                 || RomStorageSettings.ParseCompression(value.GetString()) is not { } level)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["level"] = ["Must be Store, Med or High."] });
+                return Problems.Validation(ctx, "level", "Must be Store, Med or High.");
             if (!handler.EmbedRomsInZip)
                 return ZipCompressionNotConfigurable(ctx);
             if (level == romStorage.Compression(handler.Id))
@@ -168,7 +168,7 @@ public static class AdminEndpoints
                     Session.IssueAntiforgery(ctx);
                     return Results.Ok(new { restored = result.Restored, safetyBackup = result.SafetyBackup });
                 case BackupRestoreStatus.InvalidName:
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["fileName"] = ["Choose a backup from the list."] });
+                    return Problems.Validation(ctx, "fileName", "Choose a backup from the list.");
                 case BackupRestoreStatus.NotFound:
                     return Problems.NotFound(ctx);
                 case BackupRestoreStatus.JobRunning:

@@ -37,7 +37,7 @@ public static partial class ReportEndpoints
             if (afterGameId is not null)
             {
                 if (!Guid.TryParse(afterGameId, out var parsed))
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["afterGameId"] = ["Must be a game ID."] });
+                    return Problems.Validation(ctx, "afterGameId", "Must be a game ID.");
                 after = parsed;
             }
             var next = await repository.NextMissingImageAsync(after, ctx.RequestAborted);
@@ -71,9 +71,7 @@ public static partial class ReportEndpoints
             };
             if (sortKey is null)
                 errors["sort"] = ["Must be name, system or year."];
-            bool? descending = dir?.ToLowerInvariant() switch { null or "asc" => false, "desc" => true, _ => null };
-            if (descending is null)
-                errors["dir"] = ["Must be asc or desc."];
+            var descending = SortQuery.ParseDir(dir, errors, whenMissing: false);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
@@ -111,9 +109,7 @@ public static partial class ReportEndpoints
             };
             if (sortKey is null)
                 errors["sort"] = ["Must be name, system or year."];
-            bool? descending = dir?.ToLowerInvariant() switch { null or "asc" => false, "desc" => true, _ => null };
-            if (descending is null)
-                errors["dir"] = ["Must be asc or desc."];
+            var descending = SortQuery.ParseDir(dir, errors, whenMissing: false);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
@@ -237,9 +233,7 @@ public static partial class ReportEndpoints
             };
             if (sortKey is null)
                 errors["sort"] = ["Must be name, system, releases, updates or size."];
-            bool? descending = dir?.ToLowerInvariant() switch { null => null, "asc" => false, "desc" => true, _ => null };
-            if (dir is not null && descending is null)
-                errors["dir"] = ["Must be asc or desc."];
+            var descending = SortQuery.ParseDir(dir, errors, whenMissing: null);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
@@ -298,9 +292,7 @@ public static partial class ReportEndpoints
             };
             if (sortKey is null)
                 errors["sort"] = ["Must be name, system, hacks, releases or size."];
-            bool? descending = dir?.ToLowerInvariant() switch { null => null, "asc" => false, "desc" => true, _ => null };
-            if (dir is not null && descending is null)
-                errors["dir"] = ["Must be asc or desc."];
+            var descending = SortQuery.ParseDir(dir, errors, whenMissing: null);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
@@ -442,7 +434,7 @@ public static partial class ReportEndpoints
         if (afterGameId is not null)
         {
             if (!Guid.TryParse(afterGameId, out var parsed))
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["afterGameId"] = ["Must be a game ID."] });
+                return Problems.Validation(ctx, "afterGameId", "Must be a game ID.");
             after = parsed;
         }
         var found = await next(after, ctx.RequestAborted);

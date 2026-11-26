@@ -31,7 +31,7 @@ public sealed class SaveUploadReader : IDisposable
         Problems.Create(ctx, StatusCodes.Status413PayloadTooLarge, "PayloadTooLarge", "The save is larger than 256 MiB.");
 
     private static IResult Invalid(HttpContext ctx, string field, string error) =>
-        Problems.Validation(ctx, new Dictionary<string, string[]> { [field] = [error] });
+        Problems.Validation(ctx, field, error);
 
     /// <summary>
     /// Checks <c>Content-Length</c> first (TestServer doesn't enforce the endpoint's size metadata), then reads the text

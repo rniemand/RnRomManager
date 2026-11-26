@@ -26,7 +26,7 @@ public static class BundleDownloadEndpoints
         if (problem is not null)
             return problem;
         if (BundleQueueValidation.ParseIdentity(request!.GameId, request.ReleaseSha1, request.Member, out var identity) is { } error)
-            return Problems.Validation(ctx, new Dictionary<string, string[]> { [error.Field] = [error.Message] });
+            return Problems.Validation(ctx, error.Field, error.Message);
 
         if ((await roms.ResolveBundleFilesAsync([identity!], ctx.RequestAborted))[0] is null)
             return Problems.NotFound(ctx);

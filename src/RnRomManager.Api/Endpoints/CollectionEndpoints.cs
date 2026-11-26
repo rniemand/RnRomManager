@@ -80,14 +80,14 @@ public static class CollectionEndpoints
             ImageUrlDownloader downloader, CollectionService service) =>
         {
             if (LibraryEndpoints.ParseImageUrl(request?.Url) is not { } url)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = ["Enter an http or https image URL."] });
+                return Problems.Validation(ctx, "url", "Enter an http or https image URL.");
             if (await service.GetAsync(id, EndpointUser.RequiredId(ctx), ctx.RequestAborted) is null)
                 return Problems.NotFound(ctx);
             var download = await downloader.DownloadAsync(url, ctx.RequestAborted);
             if (download.Bytes is not { } bytes)
                 return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
             if (LibraryEndpoints.DownloadedImageError(bytes) is { } bytesError)
-                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [bytesError] });
+                return Problems.Validation(ctx, "url", bytesError);
             return await DetailResultAsync(ctx, await service.SetCoverAsync(id, EndpointUser.RequiredId(ctx), bytes, ctx.RequestAborted), service, id);
         });
 
