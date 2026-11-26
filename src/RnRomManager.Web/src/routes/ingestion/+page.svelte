@@ -1,4 +1,5 @@
 <script lang="ts">
+	import IngestDeleteModal from '#lib/components/modals/IngestDeleteModal.svelte';
 	import { replaceUrl } from '#lib/urlState.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onMount } from 'svelte';
@@ -19,7 +20,6 @@
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
 	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
@@ -27,13 +27,7 @@
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
 	import { formatDateTime } from '#lib/format.js';
-	import {
-		deleteIngestFiles,
-		deleteTitle,
-		fileKey as key,
-		isArchive,
-		modalListSize
-	} from '#lib/ingestDelete.js';
+	import { deleteIngestFiles, fileKey as key, isArchive } from '#lib/ingestDelete.js';
 	import { formatSummary, isCancellable, jobLabel, percent, statusClass } from '#lib/jobs.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -415,28 +409,10 @@
 		</AccordionItem>
 	{/if}
 
-	<BaseModal
+	<IngestDeleteModal
 		bind:open={deleteOpen}
-		title={deleteTitle(deleteEntries)}
-		confirmLabel="Delete"
-		confirmClass="btn-danger"
+		entries={deleteEntries}
 		busy={deleting}
 		onconfirm={() => runDelete(deleteEntries)}
-	>
-		<p>
-			{deleteEntries.length === 1 ? 'This file is' : 'These files are'} permanently deleted from the ingest
-			folder. This can't be undone.
-			{#if deleteEntries.some((e) => e.folder === 'pending')}
-				Their pending Review items are deleted too.
-			{/if}
-		</p>
-		<ul class="mb-0 text-break">
-			{#each deleteEntries.slice(0, modalListSize) as entry (`${entry.folder}/${entry.system}/${entry.name}`)}
-				<li><code>{entry.system}/{entry.name}</code></li>
-			{/each}
-			{#if deleteEntries.length > modalListSize}
-				<li>and {deleteEntries.length - modalListSize} more</li>
-			{/if}
-		</ul>
-	</BaseModal>
+	/>
 </AdminOnly>

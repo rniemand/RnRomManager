@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DismissReviewModal from '#lib/components/modals/DismissReviewModal.svelte';
 	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -14,7 +15,6 @@
 		ManualForm
 	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import CopyButton from '#lib/components/forms/CopyButton.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
@@ -825,20 +825,12 @@
 			</div>
 		</div>
 
-		<BaseModal
+		<DismissReviewModal
 			bind:open={confirmDismiss}
-			title="Dismiss"
-			confirmLabel="Dismiss"
-			confirmClass="btn-danger"
+			archiveEntry={!!item.archiveEntry}
 			{busy}
 			onconfirm={dismiss}
-		>
-			{#if item.archiveEntry}
-				The archive itself is left untouched.
-			{:else}
-				The file moves to the system's <code>_failed</code> folder.
-			{/if}
-		</BaseModal>
+		/>
 
 		<ReviewDeleteModal bind:open={confirmDelete} id={item.id} ondeleted={deleted} />
 	{/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DeleteReviewItemsModal from '#lib/components/modals/DeleteReviewItemsModal.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { replaceUrl } from '#lib/urlState.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
@@ -15,7 +16,6 @@
 		ReviewFilter
 	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
@@ -29,7 +29,6 @@
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { deleteReviewItem, deleteReviewItems, toastDeleteFailed } from '#lib/review.js';
-	import { modalListSize } from '#lib/ingestDelete.js';
 	import { refreshCounts } from '#lib/stores/navCounts.svelte.js';
 	import {
 		parseReviewFilter,
@@ -211,8 +210,6 @@
 		if (emptied && filter.page > 1) go(reviewFilterSearch({ ...filter, page: filter.page - 1 }));
 		else reload++;
 	}
-
-	const plural = (n: number) => (n === 1 ? 'file' : 'files');
 </script>
 
 <svelte:head><title>Review Queue · RnRomManager</title></svelte:head>
@@ -372,26 +369,10 @@
 
 	<ReviewDeleteModal bind:open={deleteOpen} id={deleteId} ondeleted={deleted} />
 
-	<BaseModal
+	<DeleteReviewItemsModal
 		bind:open={bulkOpen}
-		title="Delete {selectedItems.length} review {plural(selectedItems.length)}?"
-		confirmLabel="Delete"
-		confirmClass="btn-danger"
+		items={selectedItems}
 		busy={bulkBusy}
 		onconfirm={bulkDelete}
-	>
-		<ul class="mb-2">
-			{#each selectedItems.slice(0, modalListSize) as item (item.id)}
-				<li class="text-break">{item.fileName}</li>
-			{/each}
-		</ul>
-		{#if selectedItems.length > modalListSize}
-			<p class="mb-2">… and {selectedItems.length - modalListSize} more</p>
-		{/if}
-		{#if selectedArchive}
-			<p class="mb-0 text-danger">
-				Archive entries delete their whole archive, including its other pending items.
-			</p>
-		{/if}
-	</BaseModal>
+	/>
 </AdminOnly>

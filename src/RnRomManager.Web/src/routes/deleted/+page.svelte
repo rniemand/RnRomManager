@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PermanentDeleteModal from '#lib/components/modals/PermanentDeleteModal.svelte';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -12,7 +13,6 @@
 		SystemInfo
 	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
@@ -21,7 +21,7 @@
 	import Loading from '#lib/components/common/Loading.svelte';
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatCount } from '#lib/format.js';
-	import { deleteIngestFiles, fileKey as key, modalListSize } from '#lib/ingestDelete.js';
+	import { deleteIngestFiles, fileKey as key } from '#lib/ingestDelete.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { refreshCounts } from '#lib/stores/navCounts.svelte.js';
@@ -203,22 +203,10 @@
 		{/each}
 	{/if}
 
-	<BaseModal
+	<PermanentDeleteModal
 		bind:open={deleteOpen}
-		title="Permanently delete {files(deleteEntries.length)}?"
-		confirmLabel="Delete"
-		confirmClass="btn-danger"
+		entries={deleteEntries}
 		busy={deleting}
 		onconfirm={() => runDelete(deleteEntries)}
-	>
-		<p>This can't be undone.</p>
-		<ul class="mb-0 text-break">
-			{#each deleteEntries.slice(0, modalListSize) as entry (`${entry.system}/${entry.name}`)}
-				<li><code>{entry.system}/{entry.name}</code></li>
-			{/each}
-			{#if deleteEntries.length > modalListSize}
-				<li>and {deleteEntries.length - modalListSize} more</li>
-			{/if}
-		</ul>
-	</BaseModal>
+	/>
 </AdminOnly>

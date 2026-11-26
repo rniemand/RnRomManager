@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DeleteCollectionModal from '#lib/components/modals/DeleteCollectionModal.svelte';
 	import { debounced } from '#lib/debounce.js';
 	import { onDestroy, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -15,7 +16,6 @@
 	} from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
 	import CollectionModal from '#lib/components/modals/CollectionModal.svelte';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import GameResults from '#lib/components/games/GameResults.svelte';
@@ -375,18 +375,12 @@
 	{/if}
 
 	<CollectionModal bind:open={editing} {collection} onchanged={(c) => (collection = c)} />
-	<BaseModal
+	<DeleteCollectionModal
 		bind:open={deleting}
-		title="Delete {collection.name}?"
-		confirmLabel="Delete"
-		confirmClass="btn-danger"
+		name={collection.name}
 		busy={deleteBusy}
 		onconfirm={confirmDelete}
-	>
-		<p class="mb-0">
-			The collection <strong>{collection.name}</strong> is deleted. Its games stay in the Library.
-		</p>
-	</BaseModal>
+	/>
 {/if}
 
 <style>

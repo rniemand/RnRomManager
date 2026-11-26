@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { BundleQueue, BundleQueueSummary } from '#lib/types/index.js';
 	import {
@@ -10,7 +11,6 @@
 	import { formatCount } from '#lib/format.js';
 	import { bundle } from '#lib/stores/bundle.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 
@@ -277,12 +277,11 @@
 	{/if}
 </section>
 
-<BaseModal
+<ConfirmModal
 	bind:open={confirmOpen}
 	title={confirmText.title}
+	message={confirmText.body}
 	confirmLabel={confirmText.label}
 	confirmClass={confirmText.danger ? 'btn-danger' : 'btn-primary'}
 	onconfirm={confirm}
->
-	<p class="mb-0">{confirmText.body}</p>
-</BaseModal>
+/>

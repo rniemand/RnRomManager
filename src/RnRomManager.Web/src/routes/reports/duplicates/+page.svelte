@@ -1,10 +1,10 @@
 <script lang="ts">
+	import MergeDuplicatesModal from '#lib/components/modals/MergeDuplicatesModal.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { Page, SystemInfo } from '#lib/types/index.js';
-	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
@@ -236,19 +236,10 @@
 	/>
 {/if}
 
-<BaseModal
+<MergeDuplicatesModal
 	bind:open={mergeOpen}
-	title="Merge duplicates"
-	confirmLabel="Merge"
-	confirmClass="btn-danger"
+	count={merging && mergeTarget ? merging.games.length - 1 : null}
+	targetTitle={mergeTarget?.displayTitle ?? null}
 	{busy}
 	onconfirm={merge}
->
-	{#if merging && mergeTarget}
-		<p class="mb-0">
-			Merge {merging.games.length - 1}
-			{merging.games.length === 2 ? 'game' : 'games'} into
-			<strong>{mergeTarget.displayTitle}</strong>? Their releases move into it and they are deleted.
-		</p>
-	{/if}
-</BaseModal>
+/>
