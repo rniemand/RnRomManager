@@ -11,7 +11,7 @@
 	} from '#lib/types/index.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
@@ -397,7 +397,7 @@
 </section>
 
 {#if auth.isAdmin}
-	<ConfirmModal
+	<BaseModal
 		bind:open={uploadOpen}
 		title="Upload Image"
 		confirmLabel="Upload"
@@ -519,12 +519,12 @@
 			</div>
 			{#if typeError}<div class="invalid-feedback d-block">{typeError}</div>{/if}
 		</div>
-	</ConfirmModal>
+	</BaseModal>
 {/if}
 
 {#if auth.isAdmin}
 	<!-- IGDB suggestions S12: info mode (Close only); Close stays enabled while an add runs (S13). -->
-	<ConfirmModal bind:open={suggestOpen} title="Suggest Images" size="lg">
+	<BaseModal bind:open={suggestOpen} title="Suggest Images" size="lg">
 		<!-- Only while open, so its controls never sit next to the Upload Image dialog's in the page. -->
 		{#if suggestOpen}
 			<div class="btn-group mb-3" role="group" aria-label="Image type">
@@ -613,10 +613,10 @@
 			</div>
 			<div class="form-text">Suggestions from IGDB.com. Click one to add it to the game.</div>
 		{/if}
-	</ConfirmModal>
+	</BaseModal>
 {/if}
 
-<ConfirmModal bind:open={viewOpen} title={viewing?.fileName ?? 'Image'} size="lg">
+<BaseModal bind:open={viewOpen} title={viewing?.fileName ?? 'Image'} size="lg">
 	{#if viewing}
 		<img
 			class="img-fluid d-block mx-auto"
@@ -626,9 +626,9 @@
 			alt="{game.displayTitle} {imageTypeLabels[viewing.type].toLowerCase()}, full size"
 		/>
 	{/if}
-</ConfirmModal>
+</BaseModal>
 
-<ConfirmModal
+<BaseModal
 	bind:open={deleteOpen}
 	title="Delete image"
 	confirmLabel="Delete image"
@@ -639,7 +639,7 @@
 	<p class="mb-0">
 		Delete <code>{deleting?.fileName}</code> from {game.displayTitle}? This can't be undone.
 	</p>
-</ConfirmModal>
+</BaseModal>
 
 <style>
 	.image-tile {

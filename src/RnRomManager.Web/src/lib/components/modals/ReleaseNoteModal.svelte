@@ -6,7 +6,7 @@
 	import { maxNoteBytes, normaliseNote, noteBytes, renderMarkdown } from '#lib/markdown.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 
@@ -138,7 +138,7 @@
 	];
 </script>
 
-<ConfirmModal
+<BaseModal
 	bind:open
 	title="Note — {rom?.fileName ?? ''}"
 	size="lg"
@@ -220,4 +220,4 @@
 			</div>
 		{/if}
 	{/if}
-</ConfirmModal>
+</BaseModal>

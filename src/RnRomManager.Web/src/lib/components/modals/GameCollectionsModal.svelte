@@ -4,7 +4,7 @@
 	import { collectionsApi } from '#lib/collections.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import CollectionChooser from '#lib/components/forms/CollectionChooser.svelte';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 
 	/** B25: tick/untick the caller's collections for one game; each change applies at once, optimistically. */
 	interface Props {
@@ -50,7 +50,7 @@
 	}
 </script>
 
-<ConfirmModal bind:open title="Collections — {title}">
+<BaseModal bind:open title="Collections — {title}">
 	<CollectionChooser active={open}>
 		{#snippet item(collection)}
 			<label class="list-group-item d-flex align-items-center gap-2">
@@ -66,4 +66,4 @@
 			</label>
 		{/snippet}
 	</CollectionChooser>
-</ConfirmModal>
+</BaseModal>

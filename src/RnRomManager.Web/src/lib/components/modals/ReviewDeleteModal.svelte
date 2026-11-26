@@ -4,7 +4,7 @@
 	import type { ReviewDetail } from '#lib/types/index.js';
 	import { formatDateTime, formatKey, formatValue } from '#lib/format.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
@@ -64,7 +64,7 @@
 	);
 </script>
 
-<ConfirmModal
+<BaseModal
 	bind:open
 	title={item ? `Delete File: ${item.originalFileName}` : 'Delete File'}
 	confirmLabel="Delete file"
@@ -125,4 +125,4 @@
 			</table>
 		</div>
 	{/if}
-</ConfirmModal>
+</BaseModal>

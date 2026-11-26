@@ -15,7 +15,7 @@
 	import { titleError, toForm, toPatch, validateGameEdit } from '#lib/gameEdit.js';
 	import { activity } from '#lib/stores/activity.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import GameTypeahead from '#lib/components/forms/GameTypeahead.svelte';
 	import IgdbLookup from '#lib/components/games/IgdbLookup.svelte';
 
@@ -306,7 +306,7 @@
 	{/if}
 {/snippet}
 
-<ConfirmModal
+<BaseModal
 	bind:open
 	{title}
 	{busy}
@@ -585,4 +585,4 @@
 			</p>
 		{/if}
 	{/if}
-</ConfirmModal>
+</BaseModal>

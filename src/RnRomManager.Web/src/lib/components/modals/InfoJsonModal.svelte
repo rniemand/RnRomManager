@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { api } from '#lib/api/client.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import CopyButton from '#lib/components/forms/CopyButton.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
@@ -46,7 +46,7 @@
 	const paneStyle = 'max-height: 60vh';
 </script>
 
-<ConfirmModal bind:open title="info.json" size="lg">
+<BaseModal bind:open title="info.json" size="lg">
 	{#if error}
 		<ErrorAlert {error} onretry={load} />
 	{:else if text === null}
@@ -67,4 +67,4 @@
 		</div>
 		<div class={paneClass} style={paneStyle}><pre class="small mb-0">{text}</pre></div>
 	{/if}
-</ConfirmModal>
+</BaseModal>

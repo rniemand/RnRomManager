@@ -9,7 +9,7 @@
 	} from '#lib/discovery.js';
 	import type { LogoKind } from '#lib/enums/index.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 
 	/**
@@ -96,7 +96,7 @@
 	}
 </script>
 
-<ConfirmModal
+<BaseModal
 	bind:open
 	title={item ? `Logo for ${item.name}` : 'Logo'}
 	confirmLabel="Save logo"
@@ -181,7 +181,7 @@
 			>
 		{/if}
 	{/if}
-</ConfirmModal>
+</BaseModal>
 
 <style>
 	.logo-preview {

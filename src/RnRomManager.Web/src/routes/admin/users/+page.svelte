@@ -4,7 +4,7 @@
 	import { isApiError } from '#lib/api/errors.js';
 	import type { UserInfo } from '#lib/types/index.js';
 	import type { Role } from '#lib/enums/index.js';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
@@ -233,7 +233,7 @@
 		</div>
 	</div>
 
-	<ConfirmModal
+	<BaseModal
 		bind:open={createOpen}
 		title="Create user"
 		confirmLabel="Create"
@@ -286,9 +286,9 @@
 			<!-- Enter in a field submits; the visible button is the modal's Create. -->
 			<button type="submit" class="d-none" tabindex="-1" aria-hidden="true"></button>
 		</form>
-	</ConfirmModal>
+	</BaseModal>
 
-	<ConfirmModal
+	<BaseModal
 		bind:open={resetOpen}
 		title="Reset password"
 		confirmLabel="Reset password"
@@ -311,5 +311,5 @@
 		/>
 		{#if resetError}<div class="invalid-feedback">{resetError}</div>{/if}
 		<div id="reset-password-help" class="form-text">{policyHint}</div>
-	</ConfirmModal>
+	</BaseModal>
 {/if}

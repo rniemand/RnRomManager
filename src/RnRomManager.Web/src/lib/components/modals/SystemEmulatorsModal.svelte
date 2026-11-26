@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { SystemInfo } from '#lib/types/index.js';
 	import { emulatorGroups, linkHost } from '#lib/systemEmulators.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 
 	/** Systems tab B7/B8: links to the known emulators for a system, grouped by OS. Links only; nothing is hosted. */
@@ -15,7 +15,7 @@
 	const groups = $derived(emulatorGroups(system.id));
 </script>
 
-<ConfirmModal bind:open title="{system.displayName} Emulators" size="lg">
+<BaseModal bind:open title="{system.displayName} Emulators" size="lg">
 	{#if groups.length === 0}
 		<div class="alert alert-info">There are no known emulators for {system.displayName}.</div>
 	{:else}
@@ -45,4 +45,4 @@
 	<p class="small text-body-secondary mt-3 mb-0">
 		Links go to each project's own site. RnRomManager doesn't host or check these downloads.
 	</p>
-</ConfirmModal>
+</BaseModal>

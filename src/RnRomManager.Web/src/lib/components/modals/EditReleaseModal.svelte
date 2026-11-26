@@ -10,7 +10,7 @@
 	import type { RomDetail, ReleaseTags } from '#lib/types/index.js';
 	import { editReleaseFileName } from '#lib/releaseName.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import type { ReleaseKind } from '#lib/enums/index.js';
@@ -217,7 +217,7 @@
 	];
 </script>
 
-<ConfirmModal bind:open title="Edit release" confirmLabel="Save" {busy} onconfirm={save}>
+<BaseModal bind:open title="Edit release" confirmLabel="Save" {busy} onconfirm={save}>
 	{#if rom}<p class="font-monospace small text-break mb-3">{rom.fileName}</p>{/if}
 	{#if loadError}
 		<ErrorAlert error={loadError} onretry={loadRegions} />
@@ -354,7 +354,7 @@
 			<p class="small mb-0">New file name: <code class="text-break">{preview}</code></p>
 		{/if}
 	{/if}
-</ConfirmModal>
+</BaseModal>
 
 <style>
 	.regions {

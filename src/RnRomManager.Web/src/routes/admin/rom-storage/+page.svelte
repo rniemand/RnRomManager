@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import type { RomStorageRow } from '#lib/types/index.js';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
@@ -334,7 +334,7 @@
 	<p class="small text-body-secondary mt-2">These numbers are typical estimates, not guarantees.</p>
 {/if}
 
-<ConfirmModal
+<BaseModal
 	bind:open={confirmOpen}
 	title={target
 		? `${target.embedRoms ? 'Store beside ZIP' : 'Store in ZIP'}: ${target.displayName}`
@@ -364,7 +364,7 @@
 			</p>
 		{/if}
 	{/if}
-</ConfirmModal>
+</BaseModal>
 
 {#snippet levelBadge(value: Level)}
 	<span class="badge {level(value).badge}">{level(value).label}</span>
@@ -389,7 +389,7 @@
 	</p>
 {/snippet}
 
-<ConfirmModal
+<BaseModal
 	bind:open={zipOpen}
 	title={zipTarget ? `ZIP compression: ${zipTarget.displayName}` : ''}
 	confirmLabel="Change and repack"
@@ -408,9 +408,9 @@
 		</div>
 		{@render repackWarning(zipTarget.displayName)}
 	{/if}
-</ConfirmModal>
+</BaseModal>
 
-<ConfirmModal
+<BaseModal
 	bind:open={repackOpen}
 	title={zipTarget ? `Repack ${zipTarget.displayName} ZIPs` : ''}
 	confirmLabel="Repack again"
@@ -420,4 +420,4 @@
 	{#if zipTarget}
 		{@render repackWarning(zipTarget.displayName)}
 	{/if}
-</ConfirmModal>
+</BaseModal>

@@ -34,9 +34,9 @@ SV4 src/RnRomManager.Web/src/lib/components/layout/AppFooter.svelte
 SV4 src/RnRomManager.Web/src/lib/components/layout/Navbar.svelte
 SV4 src/RnRomManager.Web/src/lib/components/layout/ToastHost.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/AboutModal.svelte
+SV4 src/RnRomManager.Web/src/lib/components/modals/BaseModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/CollectionModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/CollectionPickerModal.svelte
-SV4 src/RnRomManager.Web/src/lib/components/modals/ConfirmModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/EditReleaseModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/EmulatorModal.svelte
 SV4 src/RnRomManager.Web/src/lib/components/modals/GameAdminModal.svelte

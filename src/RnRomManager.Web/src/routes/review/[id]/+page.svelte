@@ -14,7 +14,7 @@
 		ManualForm
 	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import CopyButton from '#lib/components/forms/CopyButton.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
@@ -825,7 +825,7 @@
 			</div>
 		</div>
 
-		<ConfirmModal
+		<BaseModal
 			bind:open={confirmDismiss}
 			title="Dismiss"
 			confirmLabel="Dismiss"
@@ -838,7 +838,7 @@
 			{:else}
 				The file moves to the system's <code>_failed</code> folder.
 			{/if}
-		</ConfirmModal>
+		</BaseModal>
 
 		<ReviewDeleteModal bind:open={confirmDelete} id={item.id} ondeleted={deleted} />
 	{/if}

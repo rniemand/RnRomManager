@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import BundleDownload from '#lib/components/bundles/BundleDownload.svelte';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import SavedBundleQueues from '#lib/components/bundles/SavedBundleQueues.svelte';
@@ -133,7 +133,7 @@
 
 <div class="mt-4"><SavedBundleQueues /></div>
 
-<ConfirmModal
+<BaseModal
 	bind:open={clearOpen}
 	title="Clear the bundle?"
 	confirmLabel="Clear"
@@ -143,4 +143,4 @@
 	<p class="mb-0">
 		This removes all {formatCount(items.length)} files from the working cart. Saved queues are not affected.
 	</p>
-</ConfirmModal>
+</BaseModal>

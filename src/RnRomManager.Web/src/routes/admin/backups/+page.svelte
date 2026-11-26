@@ -4,7 +4,7 @@
 	import { isApiError } from '#lib/api/errors.js';
 	import type { BackupFile, BackupRestoreResult, BackupStatus } from '#lib/types/index.js';
 	import AccordionItem from '#lib/components/layout/AccordionItem.svelte';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
@@ -295,7 +295,7 @@
 	</AccordionItem>
 {/if}
 
-<ConfirmModal
+<BaseModal
 	bind:open={restoreOpen}
 	title="Restore backup"
 	confirmLabel="Restore"
@@ -323,4 +323,4 @@
 			</div>
 		{/if}
 	{/if}
-</ConfirmModal>
+</BaseModal>

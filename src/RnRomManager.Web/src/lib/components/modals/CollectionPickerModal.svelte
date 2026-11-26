@@ -3,7 +3,7 @@
 	import { collectionsApi } from '#lib/collections.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import CollectionChooser from '#lib/components/forms/CollectionChooser.svelte';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 
 	/** B26: pick one collection and add the selected games to it. */
@@ -45,7 +45,7 @@
 	}
 </script>
 
-<ConfirmModal
+<BaseModal
 	bind:open
 	title="Add {gameIds.length} {gameIds.length === 1 ? 'game' : 'games'} to a collection"
 	confirmLabel="Add"
@@ -69,4 +69,4 @@
 			</label>
 		{/snippet}
 	</CollectionChooser>
-</ConfirmModal>
+</BaseModal>

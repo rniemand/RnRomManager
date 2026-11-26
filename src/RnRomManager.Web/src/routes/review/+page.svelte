@@ -14,7 +14,7 @@
 		ReviewFilter
 	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
@@ -376,7 +376,7 @@
 
 	<ReviewDeleteModal bind:open={deleteOpen} id={deleteId} ondeleted={deleted} />
 
-	<ConfirmModal
+	<BaseModal
 		bind:open={bulkOpen}
 		title="Delete {selectedItems.length} review {plural(selectedItems.length)}?"
 		confirmLabel="Delete"
@@ -397,5 +397,5 @@
 				Archive entries delete their whole archive, including its other pending items.
 			</p>
 		{/if}
-	</ConfirmModal>
+	</BaseModal>
 </AdminOnly>

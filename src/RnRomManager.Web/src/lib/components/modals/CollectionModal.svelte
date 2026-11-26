@@ -13,7 +13,7 @@
 	} from '#lib/collections.js';
 	import { normaliseNote, noteBytes, renderMarkdown } from '#lib/markdown.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 
@@ -178,7 +178,7 @@
 	];
 </script>
 
-<ConfirmModal
+<BaseModal
 	bind:open
 	title={editing ? `Edit ${collection?.name ?? ''}` : 'New collection'}
 	size="lg"
@@ -338,7 +338,7 @@
 			</div>
 		</div>
 	</fieldset>
-</ConfirmModal>
+</BaseModal>
 
 <style>
 	.cover-preview {

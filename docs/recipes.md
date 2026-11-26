@@ -54,7 +54,7 @@ Short playbooks for the changes this repo gets most often: where each change mus
 ## SPA conventions
 - Numbers: `formatCount` from `lib/format.ts` ("1,234"). Sizes: the `FileSize` component.
 - Icons: `<Icon name=...>`, with the names mapped to Bootstrap Icons classes in `lib/icons/icons.ts`. Font Awesome is used for brands only.
-- Confirmations: `ConfirmModal`. Toasts: the `toasts` store (`toasts.jobRunning(err)` handles 409 `JobRunning`). Errors: `ErrorAlert`. Admin gating: `AdminOnly`.
+- Confirmations: `ConfirmModal` (a title and one plain-text message); anything richer is a `modals/<Name>Modal.svelte` built on `BaseModal`. Toasts: the `toasts` store (`toasts.jobRunning(err)` handles 409 `JobRunning`). Errors: `ErrorAlert`. Admin gating: `AdminOnly`.
 - Watching a job from a page: call `jobs.watch()` and `jobs.onEnded` on mount; disable action buttons while `jobs.current` is set.
 - Tests sit next to their source as `*.test.ts` (rune stores: `*.svelte.test.ts`). Run them with `npx vitest run <files>`, plus `npm run lint` and `npm run check`, all in `src/RnRomManager.Web`.
 

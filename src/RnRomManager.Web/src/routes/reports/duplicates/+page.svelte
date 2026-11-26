@@ -3,7 +3,7 @@
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { Page, SystemInfo } from '#lib/types/index.js';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
@@ -243,7 +243,7 @@
 	/>
 {/if}
 
-<ConfirmModal
+<BaseModal
 	bind:open={mergeOpen}
 	title="Merge duplicates"
 	confirmLabel="Merge"
@@ -258,4 +258,4 @@
 			<strong>{mergeTarget.displayTitle}</strong>? Their releases move into it and they are deleted.
 		</p>
 	{/if}
-</ConfirmModal>
+</BaseModal>

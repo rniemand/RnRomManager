@@ -17,7 +17,7 @@
 		AdminOutcome
 	} from '#lib/types/index.js';
 	import { collectionsApi } from '#lib/collections.js';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import CopyButton from '#lib/components/forms/CopyButton.svelte';
 	import GameAdminModal from '#lib/components/modals/GameAdminModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
@@ -1220,7 +1220,7 @@
 		<ZipBrowser {game} active={tab === 'zip'} bind:selected={zipSelected} expanded={zipExpanded} />
 	</div>
 
-	<ConfirmModal bind:open={headerOpen} title="Header — {headerRom?.fileName ?? ''}" size="lg">
+	<BaseModal bind:open={headerOpen} title="Header — {headerRom?.fileName ?? ''}" size="lg">
 		{#if headerRom?.header}
 			<table class="table table-sm table-striped table-hover mb-0">
 				<caption class="visually-hidden">Header of {headerRom.fileName}</caption>
@@ -1238,7 +1238,7 @@
 				</tbody>
 			</table>
 		{/if}
-	</ConfirmModal>
+	</BaseModal>
 
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 

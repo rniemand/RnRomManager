@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { About } from '#lib/types/index.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
@@ -32,7 +32,7 @@
 	});
 </script>
 
-<ConfirmModal bind:open title="About RnRomManager" size="lg">
+<BaseModal bind:open title="About RnRomManager" size="lg">
 	{#if error}
 		<ErrorAlert {error} {onretry} />
 	{:else if !about}
@@ -98,7 +98,7 @@
 			</div>
 		</div>
 	{/if}
-</ConfirmModal>
+</BaseModal>
 
 <style>
 	.licence-scroll {

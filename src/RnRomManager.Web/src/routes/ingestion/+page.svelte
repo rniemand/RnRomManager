@@ -19,7 +19,7 @@
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
 	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
@@ -415,7 +415,7 @@
 		</AccordionItem>
 	{/if}
 
-	<ConfirmModal
+	<BaseModal
 		bind:open={deleteOpen}
 		title={deleteTitle(deleteEntries)}
 		confirmLabel="Delete"
@@ -438,5 +438,5 @@
 				<li>and {deleteEntries.length - modalListSize} more</li>
 			{/if}
 		</ul>
-	</ConfirmModal>
+	</BaseModal>
 </AdminOnly>

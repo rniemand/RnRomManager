@@ -8,7 +8,7 @@
 	import { kindLabels, maxSaveBytes, savesApi } from '#lib/saves.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 
@@ -372,7 +372,7 @@
 	}
 </script>
 
-<ConfirmModal
+<BaseModal
 	bind:open
 	title="Play {discSet ?? rom?.fileName ?? ''}"
 	size="xl"
@@ -455,4 +455,4 @@
 			{/if}
 		{/if}
 	</div>
-</ConfirmModal>
+</BaseModal>

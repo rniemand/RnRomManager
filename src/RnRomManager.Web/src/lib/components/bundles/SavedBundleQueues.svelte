@@ -10,7 +10,7 @@
 	import { formatCount } from '#lib/format.js';
 	import { bundle } from '#lib/stores/bundle.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 
@@ -277,7 +277,7 @@
 	{/if}
 </section>
 
-<ConfirmModal
+<BaseModal
 	bind:open={confirmOpen}
 	title={confirmText.title}
 	confirmLabel={confirmText.label}
@@ -285,4 +285,4 @@
 	onconfirm={confirm}
 >
 	<p class="mb-0">{confirmText.body}</p>
-</ConfirmModal>
+</BaseModal>

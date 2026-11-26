@@ -16,7 +16,7 @@
 	} from '#lib/saves.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmulatorModal from '#lib/components/modals/EmulatorModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
@@ -280,7 +280,7 @@
 	{/if}
 </section>
 
-<ConfirmModal
+<BaseModal
 	bind:open
 	title={mode ? titles[mode] : ''}
 	confirmLabel={mode ? confirmLabels[mode] : 'Confirm'}
@@ -362,16 +362,16 @@
 			{/if}
 		</form>
 	{/if}
-</ConfirmModal>
+</BaseModal>
 
-<ConfirmModal
+<BaseModal
 	bind:open={batteryOpen}
 	title="Load battery save"
 	confirmLabel="Play"
 	onconfirm={playBattery}
 >
 	<p class="mb-0">Loading this battery save replaces the in-browser save for this release.</p>
-</ConfirmModal>
+</BaseModal>
 
 <EmulatorModal
 	bind:open={playOpen}

@@ -12,7 +12,7 @@
 		SystemInfo
 	} from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import BaseModal from '#lib/components/modals/BaseModal.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
@@ -203,7 +203,7 @@
 		{/each}
 	{/if}
 
-	<ConfirmModal
+	<BaseModal
 		bind:open={deleteOpen}
 		title="Permanently delete {files(deleteEntries.length)}?"
 		confirmLabel="Delete"
@@ -220,5 +220,5 @@
 				<li>and {deleteEntries.length - modalListSize} more</li>
 			{/if}
 		</ul>
-	</ConfirmModal>
+	</BaseModal>
 </AdminOnly>

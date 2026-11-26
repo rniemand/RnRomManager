@@ -15,7 +15,7 @@
 	} from '#lib/hotkeys.js';
 	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import ConfirmModal from './ConfirmModal.svelte';
+	import BaseModal from './BaseModal.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 
@@ -180,7 +180,7 @@
 		null;
 </script>
 
-<ConfirmModal
+<BaseModal
 	bind:open
 	title="Keyboard Shortcuts"
 	size="lg"
@@ -273,4 +273,4 @@
 			>Reset to defaults</button
 		>
 	{/if}
-</ConfirmModal>
+</BaseModal>
