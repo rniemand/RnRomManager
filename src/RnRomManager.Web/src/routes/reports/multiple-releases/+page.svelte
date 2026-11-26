@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { parseDir } from '#lib/sort.js';
 	import type { SortDir } from '#lib/enums/index.js';
 	import { resolve } from '$app/paths';
@@ -77,9 +78,6 @@
 
 	/** The last response's `maxReleases`; null until the first one arrives. */
 	let maxReleases = $state<number | null>(null);
-	let result = $state<(Page<MultipleRelease> & { maxReleases: number }) | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 	let systems = $state<SystemInfo[]>([]);
 
 	$effect(() => {
@@ -127,29 +125,22 @@
 		});
 	}
 
+	const report = useAbortableGet<Page<MultipleRelease> & { maxReleases: number }>(
+		() => {
+			let url = `/api/reports/multiple-releases?min=${min}&sort=${sort}&dir=${dir}&page=${pageNumber}&pageSize=${pageSize}`;
+			if (system) url += `&system=${encodeURIComponent(system)}`;
+			return url;
+		},
+		// B20: a page past the last one goes to the last page instead.
+		(p) => {
+			maxReleases = p.maxReleases;
+			show({ ...view, page: pageCount(p.total, pageSize) });
+		}
+	);
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 	$effect(() => {
-		let url = `/api/reports/multiple-releases?min=${min}&sort=${sort}&dir=${dir}&page=${pageNumber}&pageSize=${pageSize}`;
-		if (system) url += `&system=${encodeURIComponent(system)}`;
-		const current = view;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api
-			.get<Page<MultipleRelease> & { maxReleases: number }>(url, { signal: controller.signal })
-			.then(
-				(p) => {
-					maxReleases = p.maxReleases;
-					// B20: a page past the last one goes to the last page instead.
-					if (p.items.length === 0 && p.total > 0)
-						show({ ...current, page: pageCount(p.total, pageSize) });
-					else result = p;
-				},
-				(e) => {
-					if (!controller.signal.aborted) error = e;
-				}
-			);
-		return () => controller.abort();
+		if (report.result) maxReleases = report.result.maxReleases;
 	});
 </script>
 
@@ -181,7 +172,7 @@
 </div>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !result}
 	<Loading />
 {:else}

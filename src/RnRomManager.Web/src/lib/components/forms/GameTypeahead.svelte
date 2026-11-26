@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import { onDestroy } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import type { GameListItem, Page } from '#lib/types/index.js';
@@ -36,7 +37,7 @@
 	let query = $state('');
 	let results = $state<GameListItem[]>([]);
 	let searching = $state(false);
-	let timer: ReturnType<typeof setTimeout> | undefined;
+	const searchLater = debounced((q: string) => void search(q), 300);
 	let controller: AbortController | undefined;
 	/** C2: the overlay panel is closed by Escape or leaving it, and reopened by typing (always open without overlay). */
 	let open = $state(true);
@@ -79,7 +80,7 @@
 	}
 
 	function cancel(): void {
-		clearTimeout(timer);
+		searchLater.cancel();
 		controller?.abort();
 	}
 
@@ -94,7 +95,7 @@
 			return;
 		}
 		searching = true;
-		timer = setTimeout(() => void search(q), 300);
+		searchLater(q);
 	}
 
 	async function search(q: string): Promise<void> {

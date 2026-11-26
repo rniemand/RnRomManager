@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import { pageParam, replaceUrl } from '#lib/urlState.js';
 	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
@@ -57,8 +58,7 @@
 	let pageSize = $state(readPageSize(sizeKey));
 	let filter = $state('');
 	let creating = $state(false);
-	let filterTimer: ReturnType<typeof setTimeout> | undefined;
-	onDestroy(() => clearTimeout(filterTimer));
+	onDestroy(() => onFilterInput.cancel());
 
 	const q = $derived(page.url.searchParams.get('q')?.trim() ?? '');
 	const pageNumber = $derived(pageParam(page.url.searchParams));
@@ -161,12 +161,9 @@
 		return () => (stale = true);
 	});
 
-	function onFilterInput(): void {
-		clearTimeout(filterTimer);
-		filterTimer = setTimeout(() => {
-			if (filter.trim() !== q) go({ q: filter.trim(), page: 1 });
-		}, 300);
-	}
+	const onFilterInput = debounced(() => {
+		if (filter.trim() !== q) go({ q: filter.trim(), page: 1 });
+	}, 300);
 
 	function setPageSize(size: number): void {
 		pageSize = size;

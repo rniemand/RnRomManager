@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
+	import { debounced } from '#lib/debounce.js';
 	import { replaceUrl } from '#lib/urlState.js';
 	import { onDestroy } from 'svelte';
 	import { SvelteDate, SvelteURLSearchParams } from 'svelte/reactivity';
@@ -46,15 +48,13 @@
 	});
 	let actions = $state<string[]>([]);
 	let systems = $state<SystemInfo[]>([]);
-	let result = $state<Page<AuditItem> | null>(null);
-	let error = $state<unknown>(null);
 	let optionsError = $state<unknown>(null);
 	let reload = $state(0);
-	let userTimer: ReturnType<typeof setTimeout> | undefined;
-	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	const setUser = debounced((value: string) => update({ user: value.trim() }), 300);
+	const setSearch = debounced((value: string) => update({ q: value.trim() }), 300);
 	function cancelTimers(): void {
-		clearTimeout(userTimer);
-		clearTimeout(searchTimer);
+		setUser.cancel();
+		setSearch.cancel();
 	}
 	onDestroy(cancelTimers);
 
@@ -72,16 +72,11 @@
 		update(Object.fromEntries(keys.map((key) => [key, ''])));
 	}
 	function textInput(key: 'user' | 'q', value: string): void {
-		if (key === 'user') {
-			clearTimeout(userTimer);
-			userTimer = setTimeout(() => update({ user: value.trim() }), 300);
-		} else {
-			clearTimeout(searchTimer);
-			searchTimer = setTimeout(() => update({ q: value.trim() }), 300);
-		}
+		if (key === 'user') setUser(value);
+		else setSearch(value);
 	}
 	function setScheduled(checked: boolean): void {
-		clearTimeout(userTimer);
+		setUser.cancel();
 		update({ scheduled: checked ? 'true' : '', user: '' });
 	}
 	function midnight(day: string, nextDay: boolean): string {
@@ -119,23 +114,12 @@
 		);
 		return () => controller.abort();
 	});
-	$effect(() => {
-		if (!auth.isAdmin) return;
-		const url = apiUrl;
+	const report = useAbortableGet<Page<AuditItem>>(() => {
 		void reload;
-		const controller = new AbortController();
-		result = null;
-		error = null;
-		api.get<Page<AuditItem>>(url, { signal: controller.signal }).then(
-			(p) => {
-				if (!controller.signal.aborted) result = p;
-			},
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
+		return auth.isAdmin ? apiUrl : null;
 	});
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 </script>
 
 <svelte:head><title>Auditing · RnRomManager</title></svelte:head>

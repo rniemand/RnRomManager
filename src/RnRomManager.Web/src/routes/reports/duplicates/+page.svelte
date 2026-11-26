@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
@@ -42,9 +43,6 @@
 	let system = $state('');
 	let pageNumber = $state(1);
 	let systems = $state<SystemInfo[]>([]);
-	let result = $state<Page<DuplicateGroup> | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 	/** The chosen target per group (by games key); the first game until changed. */
 	let targets = $state<Record<string, string>>({});
 	let merging = $state<DuplicateGroup | null>(null);
@@ -61,21 +59,16 @@
 		);
 	});
 
-	$effect(() => {
+	const report = useAbortableGet<Page<DuplicateGroup>>(() => {
 		let url = `/api/reports/duplicates?match=${match}&page=${pageNumber}&pageSize=${pageSize}`;
 		if (system) url += `&system=${encodeURIComponent(system)}`;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		targets = {};
-		api.get<Page<DuplicateGroup>>(url, { signal: controller.signal }).then(
-			(p) => (result = p),
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
+		return url;
+	});
+	const result = $derived(report.result);
+	const error = $derived(report.error);
+	// A new page or a retry drops the picked merge targets.
+	$effect(() => {
+		if (!report.result) targets = {};
 	});
 
 	function askMerge(group: DuplicateGroup): void {
@@ -103,7 +96,7 @@
 		} finally {
 			busy = false;
 			mergeOpen = false;
-			reload++;
+			report.reload();
 		}
 	}
 
@@ -116,7 +109,7 @@
 					: { system: group.system, gamesKey: group.gamesKey, igdbId: group.igdbId }
 			);
 			toasts.show(`Dismissed ${group.baseTitle}.`, 'success');
-			reload++;
+			report.reload();
 		} catch (e) {
 			toasts.show(isApiError(e) ? e.title : 'Dismiss failed.', 'danger');
 		}
@@ -159,7 +152,7 @@
 </div>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !result}
 	<Loading />
 {:else if result.items.length === 0}

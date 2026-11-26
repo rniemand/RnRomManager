@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { replaceUrl } from '#lib/urlState.js';
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
-	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import type { SystemInfo } from '#lib/types/index.js';
@@ -23,11 +24,11 @@
 		}[];
 	}
 
-	let result = $state<NewlyAdded | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 	let systems = $state<SystemInfo[]>([]);
 
+	const report = useAbortableGet<NewlyAdded>(() => '/api/reports/newly-added');
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 	const requested = $derived(page.url.searchParams.get('system') ?? '');
 	const selected = $derived(
 		result?.systems.find((g) => g.system === requested) ?? result?.systems[0] ?? null
@@ -42,32 +43,14 @@
 	});
 
 	function choose(next: string): void {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
-		void goto(`${resolve('/reports/newly-added')}?system=${encodeURIComponent(next)}`, {
-			replace: true,
-			reset: false
-		});
+		void replaceUrl(`${resolve('/reports/newly-added')}?system=${encodeURIComponent(next)}`);
 	}
-
-	$effect(() => {
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api.get<NewlyAdded>('/api/reports/newly-added', { signal: controller.signal }).then(
-			(r) => (result = r),
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
-	});
 </script>
 
 <svelte:head><title>Newly Added · RnRomManager</title></svelte:head>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !result}
 	<Loading />
 {:else if !selected}

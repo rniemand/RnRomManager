@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import { onDestroy, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -52,8 +53,7 @@
 	let gamesError = $state<unknown>(null);
 	let reloadGames = $state(0);
 	let search = $state('');
-	let searchTimer: ReturnType<typeof setTimeout> | undefined;
-	onDestroy(() => clearTimeout(searchTimer));
+	onDestroy(() => onSearchInput.cancel());
 	let editing = $state(false);
 	let deleting = $state(false);
 	let deleteBusy = $state(false);
@@ -76,13 +76,10 @@
 		go({ ...filters, page: 1, ...changes });
 	}
 
-	function onSearchInput(): void {
-		clearTimeout(searchTimer);
-		searchTimer = setTimeout(() => {
-			const q = normaliseSearch(search);
-			if (q !== filters.q) update({ q });
-		}, 300);
-	}
+	const onSearchInput = debounced(() => {
+		const q = normaliseSearch(search);
+		if (q !== filters.q) update({ q });
+	}, 300);
 
 	// URL → search box (back/forward), without clobbering a 1-char draft.
 	$effect(() => {

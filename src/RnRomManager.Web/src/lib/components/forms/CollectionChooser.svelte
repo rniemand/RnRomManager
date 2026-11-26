@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import type { Snippet } from 'svelte';
 	import { onDestroy } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -25,13 +26,12 @@
 	let result = $state<Page<CollectionListItem> | null>(null);
 	let error = $state<unknown>(null);
 	let reload = $state(0);
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	onDestroy(() => clearTimeout(timer));
+	const setQuery = debounced(() => (q = filter.trim()), 300);
+	onDestroy(() => setQuery.cancel());
 	const uid = Math.random().toString(36).slice(2);
 
 	function oninput(): void {
-		clearTimeout(timer);
-		timer = setTimeout(() => (q = filter.trim()), 300);
+		setQuery();
 	}
 
 	$effect(() => {

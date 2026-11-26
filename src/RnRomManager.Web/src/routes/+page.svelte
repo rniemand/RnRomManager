@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import { replaceUrl } from '#lib/urlState.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
@@ -58,9 +59,8 @@
 	let error = $state<unknown>(null);
 	let reload = $state(0);
 	let search = $state('');
-	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	// A search typed just before leaving the page must not navigate back to it.
-	onDestroy(() => clearTimeout(searchTimer));
+	onDestroy(() => onSearchInput.cancel());
 
 	// B26: bulk "Add to collection…"; the selection is per page and filter state.
 	let selecting = $state(false);
@@ -138,7 +138,7 @@
 	/** B2: clears the search box (and its pending debounce), every filter and the page; keeps sort and direction. The
 	 * saved filter is then re-saved by the normal save path, holding just sort/dir. */
 	function resetFilters(): void {
-		clearTimeout(searchTimer);
+		onSearchInput.cancel();
 		search = '';
 		go({ ...parseFilters(new URLSearchParams()), sort: filters.sort, dir: filters.dir });
 	}
@@ -172,13 +172,10 @@
 		});
 	});
 
-	function onSearchInput(): void {
-		clearTimeout(searchTimer);
-		searchTimer = setTimeout(() => {
-			const q = normaliseSearch(search);
-			if (q !== filters.q) update({ q });
-		}, 300);
-	}
+	const onSearchInput = debounced(() => {
+		const q = normaliseSearch(search);
+		if (q !== filters.q) update({ q });
+	}, 300);
 
 	// URL → search box (back/forward, Clear filters), without clobbering a 1-char draft.
 	$effect(() => {

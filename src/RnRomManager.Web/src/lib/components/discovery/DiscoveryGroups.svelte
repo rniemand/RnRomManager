@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import { untrack } from 'svelte';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { resolve } from '$app/paths';
@@ -55,24 +56,20 @@
 
 	/** G7: cancels a pending search and empties the box; the page clears the URL. */
 	function clear(): void {
-		clearTimeout(findTimer);
+		onFindInput.cancel();
 		findText = '';
 		onclear?.();
 	}
 
 	/** B16: the search box; typing is debounced, and the URL is the source of truth (Back/Forward). */
 	let findText = $state(untrack(() => view.find ?? ''));
-	let findTimer: ReturnType<typeof setTimeout> | undefined;
-	function onFindInput(): void {
-		clearTimeout(findTimer);
-		findTimer = setTimeout(() => {
-			if (findText.trim() !== (view.find ?? '')) onfind?.(findText.trim());
-		}, 300);
-	}
+	const onFindInput = debounced(() => {
+		if (findText.trim() !== (view.find ?? '')) onfind?.(findText.trim());
+	}, 300);
 	// A pending search is dropped on unmount and when the kind changes (the list stays mounted between tabs).
 	$effect(() => {
 		void view.kind;
-		return () => clearTimeout(findTimer);
+		return () => onFindInput.cancel();
 	});
 	$effect(() => {
 		const current = view.find ?? '';

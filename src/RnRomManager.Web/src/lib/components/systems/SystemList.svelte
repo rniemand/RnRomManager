@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { SystemInfo } from '#lib/types/index.js';
@@ -64,21 +65,17 @@
 	}
 
 	let findText = $state(untrack(() => find ?? ''));
-	let findTimer: ReturnType<typeof setTimeout> | undefined;
-	function onFindInput(): void {
-		clearTimeout(findTimer);
-		findTimer = setTimeout(() => {
-			if (findText.trim() !== (find ?? '')) onfind?.(findText.trim());
-		}, 300);
-	}
+	const onFindInput = debounced(() => {
+		if (findText.trim() !== (find ?? '')) onfind?.(findText.trim());
+	}, 300);
 	/** G7: cancels a pending search and empties the box; the page clears the URL. */
 	function clear(): void {
-		clearTimeout(findTimer);
+		onFindInput.cancel();
 		findText = '';
 		onclear?.();
 	}
 	// A pending search is dropped on unmount.
-	$effect(() => () => clearTimeout(findTimer));
+	$effect(() => () => onFindInput.cancel());
 	// URL → box (Back/Forward).
 	$effect(() => {
 		const current = find ?? '';

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import { replaceUrl } from '#lib/urlState.js';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
@@ -67,16 +68,12 @@
 	});
 
 	let search = $state('');
-	let searchTimer: ReturnType<typeof setTimeout> | undefined;
-	onDestroy(() => clearTimeout(searchTimer));
+	onDestroy(() => onSearchInput.cancel());
 
-	function onSearchInput(): void {
-		clearTimeout(searchTimer);
-		searchTimer = setTimeout(() => {
-			const q = search.trim();
-			if (q !== filter.q) update({ q });
-		}, 300);
-	}
+	const onSearchInput = debounced(() => {
+		const q = search.trim();
+		if (q !== filter.q) update({ q });
+	}, 300);
 
 	// URL → search box (restore, Clear).
 	$effect(() => {
@@ -87,7 +84,7 @@
 	});
 
 	function clear(): void {
-		clearTimeout(searchTimer);
+		onSearchInput.cancel();
 		search = '';
 		go('');
 	}

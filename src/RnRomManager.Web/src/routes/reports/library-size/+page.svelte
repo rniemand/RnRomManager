@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { api } from '#lib/api/client.js';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
@@ -52,33 +52,13 @@
 	const base = resolve('/reports/library-size');
 
 	const system = $derived(page.url.searchParams.get('system'));
-	let library = $state<LibrarySize | null>(null);
-	let detail = $state<SystemSize | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 
-	$effect(() => {
-		const id = system;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		library = null;
-		detail = null;
-		const done = (e: unknown) => {
-			if (!controller.signal.aborted) error = e;
-		};
-		if (id)
-			api
-				.get<SystemSize>(`/api/reports/library-size/${encodeURIComponent(id)}`, {
-					signal: controller.signal
-				})
-				.then((d) => (detail = d), done);
-		else
-			api
-				.get<LibrarySize>('/api/reports/library-size', { signal: controller.signal })
-				.then((l) => (library = l), done);
-		return () => controller.abort();
-	});
+	const report = useAbortableGet<LibrarySize | SystemSize>(() =>
+		system ? `/api/reports/library-size/${encodeURIComponent(system)}` : '/api/reports/library-size'
+	);
+	const error = $derived(report.error);
+	const library = $derived(system ? null : (report.result as LibrarySize | null));
+	const detail = $derived(system ? (report.result as SystemSize | null) : null);
 
 	const systemHref = (id: string) => `${base}?system=${encodeURIComponent(id)}`;
 	const gameHref = (id: string) => resolve('/games/[id]', { id });
@@ -155,7 +135,7 @@
 </nav>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !library && !detail}
 	<Loading />
 {:else if count === 0}

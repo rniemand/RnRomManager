@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -50,7 +51,7 @@
 	let active = $state(0);
 	let status = $state<'hint' | 'loading' | 'done' | 'error'>('hint');
 	let error = $state('');
-	let timer: ReturnType<typeof setTimeout> | undefined;
+	const searchLater = debounced((q: string) => void search(q), 250);
 	let controller: AbortController | undefined;
 	let previous: HTMLElement | null = null;
 	let navigated = false;
@@ -129,7 +130,7 @@
 	}
 
 	function cancel(): void {
-		clearTimeout(timer);
+		searchLater.cancel();
 		controller?.abort();
 	}
 
@@ -145,7 +146,7 @@
 			return;
 		}
 		status = 'loading';
-		timer = setTimeout(() => void search(q), 250);
+		searchLater(q);
 	}
 
 	async function search(q: string): Promise<void> {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import type { Page, SystemInfo } from '#lib/types/index.js';
@@ -27,9 +28,6 @@
 	let system = $state('');
 	let pageNumber = $state(1);
 	let systems = $state<SystemInfo[]>([]);
-	let result = $state<Page<MissingImage> | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 
 	$effect(() => {
 		api.get<SystemInfo[]>('/api/systems').then(
@@ -38,21 +36,13 @@
 		);
 	});
 
-	$effect(() => {
+	const report = useAbortableGet<Page<MissingImage>>(() => {
 		let url = `/api/reports/missing-images?page=${pageNumber}&pageSize=${pageSize}`;
 		if (system) url += `&system=${encodeURIComponent(system)}`;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api.get<Page<MissingImage>>(url, { signal: controller.signal }).then(
-			(p) => (result = p),
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
+		return url;
 	});
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 </script>
 
 <svelte:head><title>Missing Images · RnRomManager</title></svelte:head>
@@ -74,7 +64,7 @@
 </div>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !result}
 	<Loading />
 {:else}

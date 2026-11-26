@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { replaceUrl } from '#lib/urlState.js';
 	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -68,9 +69,6 @@
 	}
 
 	let systems = $state<SystemInfo[]>([]);
-	let result = $state<Page<ImageResolutionItem> | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 
 	$effect(() => {
 		api.get<SystemInfo[]>('/api/systems').then(
@@ -79,26 +77,13 @@
 		);
 	});
 
-	$effect(() => {
-		const current = view;
-		const url = imageResolutionApiUrl(current, pageSize);
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api.get<Page<ImageResolutionItem>>(url, { signal: controller.signal }).then(
-			(p) => {
-				// As Multiple Releases B20: a page past the last one goes to the last page instead.
-				if (p.items.length === 0 && p.total > 0)
-					go(imageResolutionSearch({ ...current, page: pageCount(p.total, pageSize) }));
-				else result = p;
-			},
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
-	});
+	const report = useAbortableGet<Page<ImageResolutionItem>>(
+		() => imageResolutionApiUrl(view, pageSize),
+		// As Multiple Releases B20: a page past the last one goes to the last page instead.
+		(p) => go(imageResolutionSearch({ ...view, page: pageCount(p.total, pageSize) }))
+	);
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 </script>
 
 <svelte:head><title>Image Resolutions · RnRomManager</title></svelte:head>
@@ -165,7 +150,7 @@
 </div>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !result}
 	<Loading />
 {:else if result.total === 0}

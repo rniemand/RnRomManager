@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { pageParam } from '#lib/urlState.js';
 	import { parseDir } from '#lib/sort.js';
 	import type { SortDir } from '#lib/enums/index.js';
@@ -59,9 +60,6 @@
 	);
 	const dir = $derived(parseDir(page.url.searchParams.get('dir'), defaultDir(sort)));
 
-	let result = $state<Page<HackedGame> | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 	let systems = $state<SystemInfo[]>([]);
 
 	$effect(() => {
@@ -100,27 +98,17 @@
 		});
 	}
 
-	$effect(() => {
-		let url = `/api/reports/hacks?sort=${sort}&dir=${dir}&page=${pageNumber}&pageSize=${pageSize}`;
-		if (system) url += `&system=${encodeURIComponent(system)}`;
-		const current = view;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api.get<Page<HackedGame>>(url, { signal: controller.signal }).then(
-			(p) => {
-				// A page past the last one goes to the last page instead.
-				if (p.items.length === 0 && p.total > 0)
-					show({ ...current, page: pageCount(p.total, pageSize) });
-				else result = p;
-			},
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
-	});
+	const report = useAbortableGet<Page<HackedGame>>(
+		() => {
+			let url = `/api/reports/hacks?sort=${sort}&dir=${dir}&page=${pageNumber}&pageSize=${pageSize}`;
+			if (system) url += `&system=${encodeURIComponent(system)}`;
+			return url;
+		},
+		// A page past the last one goes to the last page instead.
+		(p) => show({ ...view, page: pageCount(p.total, pageSize) })
+	);
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 </script>
 
 <svelte:head><title>Games With Hacks · RnRomManager</title></svelte:head>
@@ -139,7 +127,7 @@
 </div>
 
 {#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
+	<ErrorAlert {error} onretry={() => report.reload()} />
 {:else if !result}
 	<Loading />
 {:else}

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { useAbortableGet } from '#lib/loadPage.svelte.js';
+	import { debounced } from '#lib/debounce.js';
 	import { pageParam } from '#lib/urlState.js';
 	import { parseDir } from '#lib/sort.js';
 	import type { SortDir } from '#lib/enums/index.js';
@@ -93,16 +95,12 @@
 	}
 
 	let search = $state('');
-	let searchTimer: ReturnType<typeof setTimeout> | undefined;
-	onDestroy(() => clearTimeout(searchTimer));
+	onDestroy(() => onSearchInput.cancel());
 
-	function onSearchInput(): void {
-		clearTimeout(searchTimer);
-		searchTimer = setTimeout(() => {
-			const q = search.trim();
-			if (q !== view.q) show({ ...view, q, page: 1 });
-		}, 300);
-	}
+	const onSearchInput = debounced(() => {
+		const q = search.trim();
+		if (q !== view.q) show({ ...view, q, page: 1 });
+	}, 300);
 
 	// URL → search box (restore, Clear).
 	$effect(() => {
@@ -113,15 +111,12 @@
 	});
 
 	function clear(): void {
-		clearTimeout(searchTimer);
+		onSearchInput.cancel();
 		search = '';
 		show({ ...view, system: '', status: 'missing', q: '', page: 1 });
 	}
 
 	let systems = $state<SystemInfo[]>([]);
-	let result = $state<Page<MissingIgdbItem> | null>(null);
-	let error = $state<unknown>(null);
-	let reload = $state(0);
 
 	$effect(() => {
 		api.get<SystemInfo[]>('/api/systems').then(
@@ -130,22 +125,14 @@
 		);
 	});
 
-	$effect(() => {
+	const report = useAbortableGet<Page<MissingIgdbItem>>(() => {
 		let url = `/api/reports/missing-igdb-ids?status=${view.status}&sort=${view.sort}&dir=${view.dir}&page=${view.page}&pageSize=${pageSize}`;
 		if (view.system) url += `&system=${encodeURIComponent(view.system)}`;
 		if (view.q) url += `&q=${encodeURIComponent(view.q)}`;
-		void reload;
-		const controller = new AbortController();
-		error = null;
-		result = null;
-		api.get<Page<MissingIgdbItem>>(url, { signal: controller.signal }).then(
-			(p) => (result = p),
-			(e) => {
-				if (!controller.signal.aborted) error = e;
-			}
-		);
-		return () => controller.abort();
+		return url;
 	});
+	const result = $derived(report.result);
+	const error = $derived(report.error);
 </script>
 
 <svelte:head><title>Missing IGDB IDs · RnRomManager</title></svelte:head>
@@ -197,7 +184,7 @@
 	</form>
 
 	{#if error}
-		<ErrorAlert {error} onretry={() => reload++} />
+		<ErrorAlert {error} onretry={() => report.reload()} />
 	{:else if !result}
 		<Loading />
 	{:else}

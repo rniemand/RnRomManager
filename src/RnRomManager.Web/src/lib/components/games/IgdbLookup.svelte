@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { debounced } from '#lib/debounce.js';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
@@ -112,19 +113,15 @@
 	}
 
 	let controller: AbortController | undefined;
-	let timer: ReturnType<typeof setTimeout> | undefined;
 
 	/** Typing searches by itself after a pause; a blank input or the text already shown sends nothing. */
-	function typed(): void {
-		clearTimeout(timer);
-		timer = setTimeout(() => {
-			const term = q.trim();
-			if (term && !(term === searched && matches && !searching)) void search();
-		}, autoSearchDelayMs);
-	}
+	const typed = debounced(() => {
+		const term = q.trim();
+		if (term && !(term === searched && matches && !searching)) void search();
+	}, autoSearchDelayMs);
 
 	async function search(): Promise<void> {
-		clearTimeout(timer);
+		typed.cancel();
 		const term = q.trim();
 		if (!term || notConfigured) return;
 		controller?.abort();
@@ -159,7 +156,7 @@
 
 	// M3: closing the modal unmounts the panel, which aborts a running search.
 	onDestroy(() => {
-		clearTimeout(timer);
+		typed.cancel();
 		controller?.abort();
 	});
 </script>
