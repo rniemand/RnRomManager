@@ -18,6 +18,7 @@
 	import BaseModal from './BaseModal.svelte';
 	import GameTypeahead from '#lib/components/forms/GameTypeahead.svelte';
 	import IgdbLookup from '#lib/components/games/IgdbLookup.svelte';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 
 	interface Props {
 		game: GameDetail;
@@ -45,6 +46,12 @@
 	let suggestionController: AbortController | undefined;
 	/** M1: Edit Metadata's tab; M2 opens it on Lookup Info with `lookup: true`. */
 	let editTab = $state<'details' | 'lookup'>('details');
+	const editTabs = (
+		[
+			['details', 'Details'],
+			['lookup', 'Lookup Info']
+		] as const
+	).map(([id, label]) => ({ id, label, tabId: `edit-${id}-tab`, controls: `edit-${id}-panel` }));
 	/** M1: the Lookup Info panel, and what its footer buttons need from it. */
 	let lookup = $state<ReturnType<typeof IgdbLookup>>();
 	let lookupChosen = $state<IgdbMatch | null>(null);
@@ -328,22 +335,13 @@
 				<div class="form-text">Saving… large games can take a minute.</div>
 			</div>
 		{/if}
-		<ul class="nav nav-tabs mb-3" role="tablist">
-			{#each [['details', 'Details'], ['lookup', 'Lookup Info']] as const as [value, label] (value)}
-				<li class="nav-item" role="presentation">
-					<button
-						type="button"
-						class="nav-link"
-						class:active={editTab === value}
-						id="edit-{value}-tab"
-						role="tab"
-						aria-selected={editTab === value}
-						aria-controls="edit-{value}-panel"
-						onclick={() => (editTab = value)}>{label}</button
-					>
-				</li>
-			{/each}
-		</ul>
+		<NavTabs
+			tabs={editTabs}
+			active={editTab}
+			onselect={(id) => (editTab = id)}
+			class="mb-3"
+			scroll={false}
+		/>
 		<!-- Both panels stay mounted (hidden) so switching tabs keeps every value. Lookup Info sits outside the form (M1). -->
 		<div
 			id="edit-details-panel"

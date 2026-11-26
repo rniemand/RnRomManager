@@ -50,13 +50,11 @@ SV4 src/RnRomManager.Web/src/routes/integrity/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/jobs/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/jobs/[id]/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/login/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/reports/activity/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/duplicates/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/image-resolutions/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/missing-igdb-ids/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/missing-metadata/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/reports/multiple-releases/+page.svelte
-SV4 src/RnRomManager.Web/src/routes/reports/newly-added/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/review/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/review/[id]/+page.svelte
 SV4 src/RnRomManager.Web/src/routes/timeline/+page.svelte

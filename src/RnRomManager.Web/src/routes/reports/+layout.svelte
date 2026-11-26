@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
-	import Icon from '#lib/icons/Icon.svelte';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 	import NotAllowed from '#lib/components/common/NotAllowed.svelte';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { reportTabs } from '#lib/reports.js';
@@ -25,19 +24,10 @@
 	<NotAllowed />
 {:else}
 	<PageTitle icon="reports" text="Reports" />
-	<ul class="nav nav-tabs mb-3" use:scrollActiveTab>
-		{#each tabs as tab (tab.href)}
-			<li class="nav-item">
-				<!-- eslint-disable svelte/no-navigation-without-resolve -- reportTabs' hrefs are resolved -->
-				<a
-					class="nav-link"
-					class:active={page.url.pathname === tab.href}
-					aria-current={page.url.pathname === tab.href ? 'page' : undefined}
-					href={tab.href}><Icon name={tab.icon} /> {tab.label}</a
-				>
-				<!-- eslint-enable svelte/no-navigation-without-resolve -->
-			</li>
-		{/each}
-	</ul>
+	<NavTabs
+		tabs={tabs.map((tab) => ({ ...tab, id: tab.href }))}
+		active={page.url.pathname}
+		class="mb-3"
+	/>
 	{@render children()}
 {/if}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import RomHeaderModal from '#lib/components/modals/RomHeaderModal.svelte';
 	import { replaceUrl } from '#lib/urlState.js';
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 	import { untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
@@ -821,24 +821,18 @@
 		</div>
 	</div>
 
-	<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
-		{#each tabs as [value, label, icon] (value)}
-			<li class="nav-item" role="presentation">
-				<button
-					type="button"
-					class="nav-link"
-					class:active={tab === value}
-					id="{value}-tab"
-					role="tab"
-					aria-selected={tab === value}
-					aria-controls={value === 'updates' || value === 'dlc'
-						? 'releases-panel'
-						: `${value}-panel`}
-					onclick={() => selectTab(value)}><Icon name={icon} /> {label}</button
-				>
-			</li>
-		{/each}
-	</ul>
+	<NavTabs
+		tabs={tabs.map(([value, label, icon]) => ({
+			id: value,
+			label,
+			icon,
+			tabId: `${value}-tab`,
+			controls: value === 'updates' || value === 'dlc' ? 'releases-panel' : `${value}-panel`
+		}))}
+		active={tab}
+		onselect={selectTab}
+		class="mb-3"
+	/>
 
 	<!-- Both panels stay mounted (hidden, not removed) so nothing unmounts on a tab switch. -->
 	<div id="releases-panel" role="tabpanel" aria-labelledby="{romTab}-tab" hidden={tab !== romTab}>

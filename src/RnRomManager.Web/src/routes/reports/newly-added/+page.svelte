@@ -10,7 +10,7 @@
 	import Loading from '#lib/components/common/Loading.svelte';
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import { formatDateTime } from '#lib/format.js';
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 
 	/**
 	 * Release editing B14: the 10 newest games per system, one tab per system (Report Polish L4–L5). The tab is URL state
@@ -56,24 +56,20 @@
 {:else if !selected}
 	<div class="card"><EmptyState message="No games yet." /></div>
 {:else}
-	<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
-		{#each result.systems as group (group.system)}
-			<li class="nav-item" role="presentation">
-				<button
-					type="button"
-					class="nav-link"
-					class:active={group.system === selected.system}
-					id="newly-added-{group.system}"
-					role="tab"
-					aria-selected={group.system === selected.system}
-					aria-controls="newly-added-panel"
-					title={group.systemName}
-					onclick={() => choose(group.system)}
-					><SystemBadge system={group.system} name={shortName(group.system)} /></button
-				>
-			</li>
-		{/each}
-	</ul>
+	<NavTabs
+		tabs={result.systems.map((group) => ({
+			id: group.system,
+			label: group.systemName,
+			tabId: `newly-added-${group.system}`,
+			controls: 'newly-added-panel',
+			title: group.systemName
+		}))}
+		active={selected.system}
+		onselect={choose}
+		class="mb-3"
+	>
+		{#snippet content(tab)}<SystemBadge system={tab.id} name={shortName(tab.id)} />{/snippet}
+	</NavTabs>
 	<div
 		class="card"
 		id="newly-added-panel"

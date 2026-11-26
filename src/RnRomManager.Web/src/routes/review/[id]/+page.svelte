@@ -1,6 +1,6 @@
 <script lang="ts">
 	import DismissReviewModal from '#lib/components/modals/DismissReviewModal.svelte';
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -525,22 +525,18 @@
 						Disc track files must match the Redump DAT to be imported.
 					</p>
 				{:else}
-					<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
-						{#each tabs as t (t)}
-							<li class="nav-item" role="presentation">
-								<button
-									type="button"
-									class="nav-link"
-									class:active={tab === t}
-									id="tab-{t}"
-									role="tab"
-									aria-selected={tab === t}
-									aria-controls="panel-{t}"
-									onclick={() => (chosenTab = t)}><Icon name={tabIcons[t]} /> {tabLabels[t]}</button
-								>
-							</li>
-						{/each}
-					</ul>
+					<NavTabs
+						tabs={tabs.map((t) => ({
+							id: t,
+							label: tabLabels[t],
+							icon: tabIcons[t],
+							tabId: `tab-${t}`,
+							controls: `panel-${t}`
+						}))}
+						active={tab}
+						onselect={(t) => (chosenTab = t)}
+						class="mb-3"
+					/>
 
 					<div id="panel-{tab}" role="tabpanel" aria-labelledby="tab-{tab}">
 						{#if tab === 'matched'}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { debounced } from '#lib/debounce.js';
 	import { pageParam, replaceUrl } from '#lib/urlState.js';
-	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
+	import NavTabs from '#lib/components/layout/NavTabs.svelte';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -211,18 +211,14 @@
 </div>
 
 <nav class="mb-3" aria-label="Collections views">
-	<ul class="nav nav-tabs" use:scrollActiveTab>
-		{#each collectionsTabs as item (item.tab)}
-			<li class="nav-item">
-				<a
-					class="nav-link"
-					class:active={tab === item.tab}
-					aria-current={tab === item.tab ? 'page' : undefined}
-					href="{resolve('/collections')}{tabSearch(item.tab)}">{item.label}</a
-				>
-			</li>
-		{/each}
-	</ul>
+	<NavTabs
+		tabs={collectionsTabs.map((item) => ({
+			id: item.tab,
+			label: item.label,
+			href: `${resolve('/collections')}${tabSearch(item.tab)}`
+		}))}
+		active={tab}
+	/>
 </nav>
 
 {#if tab === 'collections'}
