@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { descriptionError, fileError, maxSaveBytes, nameError } from './saves';
+import type { GameDetail, SaveItem } from './api/types';
+import { descriptionError, fileError, maxSaveBytes, nameError, playableRom } from './saves';
 
 describe('field rules (B8)', () => {
 	it('a name is trimmed, 1–100 characters, without control characters', () => {
@@ -26,5 +27,36 @@ describe('field rules (B8)', () => {
 		const big = new File([], 'big');
 		Object.defineProperty(big, 'size', { value: maxSaveBytes + 1 });
 		expect(fileError(big)).toBe('The save is larger than 256 MiB.');
+	});
+});
+
+describe('playableRom (S2, B16, B18)', () => {
+	const game = (browserCore: string | null) =>
+		({
+			browserCore,
+			roms: [
+				{ id: 1, fileName: 'a.gb', externalFileName: null },
+				{ id: 2, fileName: 'b.nds', externalFileName: null }
+			]
+		}) as unknown as GameDetail;
+	const save = (romId: number | null, kind: 'state' | 'battery' = 'state') =>
+		({ romId, kind }) as SaveItem;
+
+	it('is the save release when the core plays it in the Play dialog', () => {
+		expect(playableRom(game('gambatte'), save(1))?.id).toBe(1);
+		expect(playableRom(game('gambatte'), save(1, 'battery'))?.id).toBe(1);
+	});
+
+	it('is null without a release, a core, or for a core that opens in a new tab', () => {
+		expect(playableRom(game('gambatte'), save(99))).toBeNull();
+		expect(playableRom(game('gambatte'), save(null))).toBeNull();
+		expect(playableRom(game(null), save(1))).toBeNull();
+		expect(playableRom(game('ppsspp'), save(1))).toBeNull();
+	});
+
+	it('a DeSmuME or Opera battery save is null; their state saves play', () => {
+		expect(playableRom(game('desmume'), save(2, 'battery'))).toBeNull();
+		expect(playableRom(game('opera'), save(1, 'battery'))).toBeNull();
+		expect(playableRom(game('desmume'), save(2))?.id).toBe(2);
 	});
 });

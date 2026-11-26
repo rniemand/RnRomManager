@@ -46,6 +46,32 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
+    public async Task OwnSaveCount_IsTheViewersOwn_ForAdminsToo()
+    {
+        var id = await Tetris();
+        await SeedSaveCountsAsync(id);
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+            await connection.ExecuteAsync("INSERT INTO game_user_save_counts (game_id, username, save_count) VALUES (@id, 'boss', 1)", new { id });
+        using var admin = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+        using var stranger = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "stranger");
+        (await stranger.LoginAsync("stranger", TestUsers.Password)).Dispose();
+
+        async Task<(int Saves, int Own)> Counts(AuthClient client)
+        {
+            using var list = await client.GetAsync("/api/games");
+            var item = (await AuthClient.JsonAsync(list)).GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == id);
+            return (item.GetProperty("saveCount").GetInt32(), item.GetProperty("ownSaveCount").GetInt32());
+        }
+
+        Assert.That(await Counts(admin), Is.EqualTo((3, 1)), "the total stays the ZIP's count");
+        Assert.That(await Counts(_user), Is.EqualTo((2, 2)));
+        Assert.That(await Counts(stranger), Is.EqualTo((0, 0)));
+    }
+
+    [Test]
     public async Task SaveCount_InACollectionList_IsTheSiteUsersOwn()
     {
         var id = await Tetris();

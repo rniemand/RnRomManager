@@ -144,6 +144,8 @@ export interface GameListItem {
 	dlcCount: number;
 	/** Saves in the game's ZIP. */
 	saveCount: number;
+	/** S1: the viewer's own saves (Admins too). */
+	ownSaveCount: number;
 	/** Primary release to quick play (C2); null when the system has no browser core or the release is external. */
 	playRomId: number | null;
 	playRomFileName: string | null;

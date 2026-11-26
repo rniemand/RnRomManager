@@ -973,13 +973,22 @@ public static class LibraryEndpoints
     internal static string? SiteUserName(HttpContext ctx) =>
         ctx.User.IsInRole(Roles.Admin) ? null : ctx.User.Identity?.Name;
 
-    /// <summary>S7: for a Site user, each game's <c>saveCount</c> becomes their own count (0 without a row).</summary>
+    /// <summary>
+    /// S1: each game's <c>ownSaveCount</c> is the viewer's own saves (Admins too); S7: for a Site user <c>saveCount</c>
+    /// becomes that count as well (0 without a row).
+    /// </summary>
     internal static async Task<Page<GameListItem>> ForViewerAsync(Page<GameListItem> page, HttpContext ctx, IGameRepository repository)
     {
-        if (SiteUserName(ctx) is not { } username)
+        if (ctx.User.Identity?.Name is not { } username)
             return page;
         var counts = await repository.GetUserSaveCountsAsync(username, page.Items.Select(g => g.Id).ToList(), ctx.RequestAborted);
-        return page with { Items = page.Items.Select(g => g with { SaveCount = counts.GetValueOrDefault(g.Id) }).ToList() };
+        var site = SiteUserName(ctx) is not null;
+        return page with
+        {
+            Items = page.Items.Select(g => counts.GetValueOrDefault(g.Id) is var own
+                ? g with { OwnSaveCount = own, SaveCount = site ? own : g.SaveCount }
+                : g).ToList(),
+        };
     }
 
     /// <summary>
@@ -1035,6 +1044,7 @@ public static class LibraryEndpoints
             updateCount = game.UpdateCount,
             dlcCount = game.DlcCount,
             saveCount = game.SaveCount,
+            ownSaveCount = game.OwnSaveCount,
             playRomId = playable ? game.PrimaryRomId : null,
             playRomFileName = playable ? game.PrimaryRomFileName : null,
             // Sega CD B6: quick play adds disc=1 for an external primary, since a shared core can't tell on its own.
