@@ -1,13 +1,5 @@
 namespace RnRomManager.TestData;
 
-/// <summary>Nametable mirroring <see cref="SyntheticNesRomBuilder"/> writes (TestData doesn't reference the Systems project).</summary>
-public enum NesMirroring
-{
-    Horizontal,
-    Vertical,
-    FourScreen,
-}
-
 /// <summary>
 /// Deterministic, non-copyrighted headered <c>.nes</c> dumps for tests and seed sets: an iNES or NES 2.0 header,
 /// an optional 512-byte trainer, then seeded random PRG and CHR banks. Same properties → same bytes.

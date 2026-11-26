@@ -8,7 +8,11 @@ public class Nintendo3DsHeaderReaderTests
     private const int Partition = 0x4000;
 
     /// <summary>An NCSD header with partition 0 at 0x4000 holding an NCCH header, in a 0x4200-byte buffer.</summary>
-    private static byte[] Ncsd(int length = Partition + 0x200, uint partitionUnits = Partition / 0x200, bool ncch = true, byte[]? productCode = null)
+    private static byte[] Ncsd(
+        int length = Partition + 0x200,
+        uint partitionUnits = Partition / 0x200,
+        bool ncch = true,
+        byte[]? productCode = null)
     {
         var rom = new byte[length];
         "NCSD"u8.CopyTo(rom.AsSpan(0x100));

@@ -2,14 +2,6 @@ using System.Text;
 
 namespace RnRomManager.TestData;
 
-/// <summary>Which GameCube/Wii magic word a synthetic disc carries (disc systems B6).</summary>
-public enum NintendoDiscMagic
-{
-    None,
-    GameCube,
-    Wii,
-}
-
 /// <summary>
 /// Deterministic disc image bytes for the six disc systems (a <c>.iso</c> or a <c>.bin</c> track). With a
 /// <see cref="NintendoDiscMagic"/>, the GameCube/Wii header is written over the start: game id at 0x00, disc number and

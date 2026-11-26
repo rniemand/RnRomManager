@@ -27,7 +27,12 @@ public class MissingMetadataQueryTests
     private static readonly string[] Dev = ["Dev Co"];
     private static readonly string[] Pub = ["Pub Co"];
 
-    private async Task<Guid> Add(string title, string system = "gb", int? year = 1990, string[]? developers = null, string[]? publishers = null)
+    private async Task<Guid> Add(
+        string title,
+        string system = "gb",
+        int? year = 1990,
+        string[]? developers = null,
+        string[]? publishers = null)
     {
         var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with
         {
@@ -39,8 +44,14 @@ public class MissingMetadataQueryTests
         return game.GameId;
     }
 
-    private Task<Core.Database.Page<MissingMetadataItem>> List(string? system = null, MissingMetadataField missing = MissingMetadataField.Any,
-        string? q = null, MissingMetadataSort sort = MissingMetadataSort.Name, bool descending = false, int page = 1, int pageSize = 50) =>
+    private Task<Core.Database.Page<MissingMetadataItem>> List(
+        string? system = null,
+        MissingMetadataField missing = MissingMetadataField.Any,
+        string? q = null,
+        MissingMetadataSort sort = MissingMetadataSort.Name,
+        bool descending = false,
+        int page = 1,
+        int pageSize = 50) =>
         _reports.ListMissingMetadataAsync(system, missing, q, sort, descending, page, pageSize, default);
 
     [Test]

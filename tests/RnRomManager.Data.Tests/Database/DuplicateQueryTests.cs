@@ -25,7 +25,11 @@ public class DuplicateQueryTests
         _reports = new ReportRepository(_factory);
     }
 
-    private async Task<Guid> Add(string title, int? igdbId = null, string system = "gb", string? coverSha1 = null)
+    private async Task<Guid> Add(
+        string title,
+        int? igdbId = null,
+        string system = "gb",
+        string? coverSha1 = null)
     {
         var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with
         {

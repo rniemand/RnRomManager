@@ -26,7 +26,11 @@ public class MultipleReleasesQueryTests
     }
 
     /// <summary>Mirrors a game with one release per flag list (an empty list is a plain release) and the given ZIP size.</summary>
-    private async Task<Guid> Add(string title, string system, long zipSize, params string[][] flags)
+    private async Task<Guid> Add(
+        string title,
+        string system,
+        long zipSize,
+        params string[][] flags)
     {
         var roms = flags.Select((f, i) => Rom($"{title} {i}.gb", RomBytes(++_seed), isPrimary: i == 0) with { Flags = f }).ToArray();
         var game = Game(title, roms) with { System = system };
@@ -40,8 +44,13 @@ public class MultipleReleasesQueryTests
     private static readonly string[] Update = ["Update"];
     private static readonly string[] Dlc = ["DLC"];
 
-    private Task<Core.Database.Page<MultipleReleaseItem>> List(int min = 2, MultipleReleaseSort sort = MultipleReleaseSort.Releases,
-        bool descending = true, int page = 1, int pageSize = 50, string? system = null) =>
+    private Task<Core.Database.Page<MultipleReleaseItem>> List(
+        int min = 2,
+        MultipleReleaseSort sort = MultipleReleaseSort.Releases,
+        bool descending = true,
+        int page = 1,
+        int pageSize = 50,
+        string? system = null) =>
         _reports.ListMultipleReleasesAsync(system, min, sort, descending, page, pageSize, default);
 
     /// <summary>Release editing B12: the System filter narrows the list, its total and the max release count.</summary>

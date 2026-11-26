@@ -16,7 +16,11 @@ public static class TestMedia
     /// <param name="titleDbImages">The titledb CDN client; a client that is never used when null.</param>
     /// <param name="dats">The DATs titledb names are looked up in; an empty cache when null.</param>
     /// <param name="time">The body deadline's clock; the system clock when null.</param>
-    public static MediaService Create(HttpClient thumbnails, string thumbnailBaseUrl, HttpClient? titleDbImages = null, DatCache? dats = null,
+    public static MediaService Create(
+        HttpClient thumbnails,
+        string thumbnailBaseUrl,
+        HttpClient? titleDbImages = null,
+        DatCache? dats = null,
         TimeProvider? time = null) =>
         new(thumbnails, new TitleDbImageClient(titleDbImages ?? new HttpClient()),
             dats ?? new DatCache(Options.Create(new PathsOptions()), new SystemRegistry([]), NullLogger<DatCache>.Instance),

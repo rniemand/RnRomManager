@@ -11,7 +11,11 @@ public static class TestLibrary
 
     public static byte[] RomBytes(int seed) => new SyntheticRomBuilder { Seed = seed }.Build();
 
-    public static InfoJsonRom Rom(string fileName, byte[] bytes, bool isPrimary = true, IReadOnlyList<string>? regions = null) => new()
+    public static InfoJsonRom Rom(
+        string fileName,
+        byte[] bytes,
+        bool isPrimary = true,
+        IReadOnlyList<string>? regions = null) => new()
     {
         FileName = fileName,
         OriginalFileName = fileName,
@@ -51,7 +55,11 @@ public static class TestLibrary
     };
 
     /// <summary>Writes <paramref name="game"/> as a ZIP at <paramref name="path"/>; ROM content is regenerated from <paramref name="seeds"/>.</summary>
-    public static async Task WriteZipAsync(InfoJsonReader reader, string path, InfoJsonGame game, params int[] seeds)
+    public static async Task WriteZipAsync(
+        InfoJsonReader reader,
+        string path,
+        InfoJsonGame game,
+        params int[] seeds)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var content = game.Roms.Zip(seeds).ToDictionary(

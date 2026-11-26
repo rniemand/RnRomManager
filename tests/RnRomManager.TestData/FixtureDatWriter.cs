@@ -64,10 +64,22 @@ public static class FixtureDatWriter
         DatManifest.Write(Path.Combine(datsDirectory, DatManifest.FileName), manifest);
     }
 
-    private static DatManifestEntry WriteFile(string root, string kind, string datName, string? version, DateTimeOffset when, string text) =>
+    private static DatManifestEntry WriteFile(
+        string root,
+        string kind,
+        string datName,
+        string? version,
+        DateTimeOffset when,
+        string text) =>
         WriteBytes(root, DatKind.RelativePath(kind, datName), datName, version, when, Encoding.UTF8.GetBytes(text));
 
-    private static DatManifestEntry WriteBytes(string root, string relative, string datName, string? version, DateTimeOffset when, byte[] bytes)
+    private static DatManifestEntry WriteBytes(
+        string root,
+        string relative,
+        string datName,
+        string? version,
+        DateTimeOffset when,
+        byte[] bytes)
     {
         var path = Path.Combine(root, relative);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -93,7 +105,11 @@ public static class FixtureDatWriter
         return text.ToString();
     }
 
-    private static string Metadat(string datName, string field, IEnumerable<FixtureGame> games, Func<FixtureGame, IEnumerable<string>> values)
+    private static string Metadat(
+        string datName,
+        string field,
+        IEnumerable<FixtureGame> games,
+        Func<FixtureGame, IEnumerable<string>> values)
     {
         var text = new StringBuilder($"clrmamepro (\n\tname \"{datName}\"\n\tdescription \"{datName}\"\n)\n\n");
         foreach (var game in games)
@@ -106,16 +122,4 @@ public static class FixtureDatWriter
         }
         return text.ToString();
     }
-}
-
-/// <summary>B1/B2: where a fixture system's main DAT goes and which metadat files it gets.</summary>
-public sealed record FixtureDatLayout(string DatFolder, IReadOnlyList<string> MetadatKinds)
-{
-    public static FixtureDatLayout NoIntro { get; } = new(DatKind.NoIntro, DatKind.Metadat);
-
-    /// <summary>The seven disc systems' layout: <c>redump</c>, no metadat.</summary>
-    public static FixtureDatLayout Redump { get; } = new(DatKind.Redump, []);
-
-    /// <summary>Commodore PET: <c>tosec</c>, no metadat.</summary>
-    public static FixtureDatLayout Tosec { get; } = new(DatKind.Tosec, []);
 }

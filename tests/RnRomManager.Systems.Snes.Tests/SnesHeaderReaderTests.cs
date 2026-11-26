@@ -10,8 +10,18 @@ public class SnesHeaderReaderTests
     private const int Lo = 0x7FC0, Hi = 0xFFC0, ExHi = 0x40FFC0;
 
     /// <summary>Writes a header at <paramref name="offset"/>; the default checksum pair is valid (1234 + EDCB).</summary>
-    private static byte[] Write(byte[] rom, int offset, string title = "HAND WRITTEN", byte mapMode = 0x20, byte romType = 0,
-        byte romSize = 9, byte sram = 0, byte region = 1, byte version = 0, ushort checksum = 0x1234, ushort complement = 0xEDCB)
+    private static byte[] Write(
+        byte[] rom,
+        int offset,
+        string title = "HAND WRITTEN",
+        byte mapMode = 0x20,
+        byte romType = 0,
+        byte romSize = 9,
+        byte sram = 0,
+        byte region = 1,
+        byte version = 0,
+        ushort checksum = 0x1234,
+        ushort complement = 0xEDCB)
     {
         Encoding.Latin1.GetBytes(title.PadRight(21)).CopyTo(rom, offset);
         (rom[offset + 0x15], rom[offset + 0x16], rom[offset + 0x17], rom[offset + 0x18], rom[offset + 0x19], rom[offset + 0x1B]) =
@@ -60,7 +70,11 @@ public class SnesHeaderReaderTests
     [TestCase(0x8000, Lo, (byte)0x20, "LoROM")]
     [TestCase(0x10000, Hi, (byte)0x21, "HiROM")]
     [TestCase(0x410000, ExHi, (byte)0x25, "ExHiROM")]
-    public void EachMapping_IsFoundAtItsOffset(int size, int offset, byte mapMode, string mapping) =>
+    public void EachMapping_IsFoundAtItsOffset(
+        int size,
+        int offset,
+        byte mapMode,
+        string mapping) =>
         Assert.That(Field(Write(new byte[size], offset, mapMode: mapMode), "mapping"), Is.EqualTo(mapping));
 
     [Test]

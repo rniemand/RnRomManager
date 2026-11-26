@@ -103,7 +103,12 @@ public class SwitchHandlerTests
         Assert.That(Read(Nsp(SyntheticNspBuilder.TicketName(Id), SyntheticNspBuilder.TicketName(Id.ToLowerInvariant()))).Fields["titleId"], Is.EqualTo(Id));
 
     /// <summary>A PFS0 whose header and string table are written by hand.</summary>
-    private static byte[] Pfs0(uint count, uint tableSize, uint[] nameOffsets, byte[] table, int length = 2048)
+    private static byte[] Pfs0(
+        uint count,
+        uint tableSize,
+        uint[] nameOffsets,
+        byte[] table,
+        int length = 2048)
     {
         var rom = new byte[Math.Max(length, 0x10 + nameOffsets.Length * 0x18 + table.Length)];
         "PFS0"u8.CopyTo(rom);

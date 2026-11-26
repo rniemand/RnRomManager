@@ -25,7 +25,11 @@ public class NewlyAddedGamesQueryTests
     }
 
     /// <summary>Mirrors a game created <paramref name="minutes"/> after a fixed time, with one release per flag list.</summary>
-    private async Task<Guid> Add(string title, string system, int minutes, params string[][] flags)
+    private async Task<Guid> Add(
+        string title,
+        string system,
+        int minutes,
+        params string[][] flags)
     {
         if (flags.Length == 0)
             flags = [[]];

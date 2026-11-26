@@ -3,9 +3,6 @@ using System.Text;
 
 namespace RnRomManager.TestData;
 
-/// <summary>One track block of a synthetic <c>.nrg</c> DAO chunk; offsets are byte offsets into the image.</summary>
-public sealed record NrgBlock(ulong Index0, ulong Index1, ulong End, int Mode = 0x07, int SectorSize = 2352);
-
 /// <summary>
 /// Browser play format gaps N2: a Nero <c>.nrg</c> as libmirage reads it (big-endian): track data, then chunks, then a
 /// v2 (<c>NER5</c>, u64) or v1 (<c>NERO</c>, u32) footer pointing at the first chunk.

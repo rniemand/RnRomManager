@@ -57,7 +57,11 @@ public sealed record SyntheticMegaDriveRomBuilder
         return smd;
     }
 
-    private static void Write(byte[] image, int offset, int width, string value)
+    private static void Write(
+        byte[] image,
+        int offset,
+        int width,
+        string value)
     {
         if (value.Length > width)
             throw new ArgumentException($"'{value}' is over {width} characters.", nameof(value));

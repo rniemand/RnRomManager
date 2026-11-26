@@ -32,9 +32,20 @@ public class GameQueryTests
     }
 
     /// <summary>Inserts a game whose releases have the given region lists; <paramref name="addedMinutes"/> orders <c>created_at</c>.</summary>
-    private async Task<Guid> Add(string title, int? year = null, int addedMinutes = 0, string system = "gb", bool boxArt = true,
-        string? displayTitle = null, int? rating = null, bool favourite = false, string[]? developers = null,
-        string[]? publishers = null, string[]? genres = null, (string FileName, string[] Flags)[]? addOns = null, int? igdbId = null,
+    private async Task<Guid> Add(
+        string title,
+        int? year = null,
+        int addedMinutes = 0,
+        string system = "gb",
+        bool boxArt = true,
+        string? displayTitle = null,
+        int? rating = null,
+        bool favourite = false,
+        string[]? developers = null,
+        string[]? publishers = null,
+        string[]? genres = null,
+        (string FileName, string[] Flags)[]? addOns = null,
+        int? igdbId = null,
         params string[][] releases)
     {
         if (releases.Length == 0)

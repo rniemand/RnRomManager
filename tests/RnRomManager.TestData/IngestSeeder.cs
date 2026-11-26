@@ -185,7 +185,12 @@ public static class IngestSeeder
         return rom;
     }
 
-    public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time, IReadOnlyList<string>? ndsDatFiles = null)
+    public static void Seed(
+        string ingest,
+        string cache,
+        SeedSet set,
+        TimeProvider time,
+        IReadOnlyList<string>? ndsDatFiles = null)
     {
         ValidatePaths(ingest, cache);
         // Hashed first, so a missing or unreadable file fails before anything is written.

@@ -6,8 +6,14 @@ namespace RnRomManager.Systems.NintendoDisc.Tests;
 /// <summary>Disc systems B6: the GameCube/Wii disc header.</summary>
 public class NintendoDiscHeaderTests
 {
-    private static byte[] Disc(string gameId = "GALE01", byte disc = 0, byte version = 2, string title = "Super Smash Bros. Melee",
-        bool gameCube = false, bool wii = false, int length = 0x440)
+    private static byte[] Disc(
+        string gameId = "GALE01",
+        byte disc = 0,
+        byte version = 2,
+        string title = "Super Smash Bros. Melee",
+        bool gameCube = false,
+        bool wii = false,
+        int length = 0x440)
     {
         var rom = new byte[length];
         Encoding.ASCII.GetBytes(gameId).CopyTo(rom, 0);
