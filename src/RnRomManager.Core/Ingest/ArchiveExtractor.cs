@@ -8,35 +8,6 @@ using SharpCompress.Readers;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>One ROM entry extracted from an archive.</summary>
-/// <param name="EntryPath">Full path inside the archive (<c>archive_entry</c>), <c>/</c>-separated.</param>
-/// <param name="ExtractedPath">Where it was written under the work dir.</param>
-public sealed record ExtractedEntry(string EntryPath, string ExtractedPath, long SizeBytes)
-{
-    /// <summary>The file-name part: <c>originalFileName</c> (§7.3).</summary>
-    public string FileName => EntryPath[(EntryPath.LastIndexOf('/') + 1)..];
-}
-
-/// <summary>The whole archive is rejected (§7.3): a <c>Failed</c> reason code plus details.</summary>
-public sealed class ArchiveRejectedException(string reason, string details) : Exception(details)
-{
-    public string Reason { get; } = reason;
-}
-
-/// <summary>
-/// An extracted copy couldn't be created, written or closed in the work dir: an <c>IoError</c> of this app's own
-/// storage, not a fault of the archive.
-/// </summary>
-public sealed class ArchiveOutputException(string message, Exception inner) : Exception(message, inner);
-
-/// <summary>§7.3 archive reason codes (spec §23.1).</summary>
-public static class ArchiveFailures
-{
-    public const string ArchiveUnsafe = "ArchiveUnsafe";
-    public const string ArchiveCorrupt = "ArchiveCorrupt";
-    public const string ArchiveEncrypted = "ArchiveEncrypted";
-}
-
 /// <summary>
 /// Unpacks a <c>.zip</c> (System.IO.Compression) or <c>.7z</c> (SharpCompress) into a work dir (spec §7.2 step 1a, §7.3).
 /// Only entries with a ROM extension are extracted; other files and nested archives are skipped (logged at
@@ -71,7 +42,10 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     /// <param name="maxRomBytes">For an entry's extension: the ROM size limit, or null when it isn't a ROM extension.</param>
     /// <param name="skipped">When given, receives the path of every entry that wasn't extracted (not a ROM here, or a nested archive).</param>
     /// <exception cref="ArchiveRejectedException">The whole archive is refused; the work dir may hold partial output.</exception>
-    public IReadOnlyList<ExtractedEntry> Extract(string archivePath, string workDir, Func<string, long?> maxRomBytes,
+    public IReadOnlyList<ExtractedEntry> Extract(
+        string archivePath,
+        string workDir,
+        Func<string, long?> maxRomBytes,
         ICollection<string>? skipped = null) =>
         Guarded(() =>
         {
@@ -89,7 +63,7 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     /// For an external system (spec I1): reads the archive from the stream the caller opened and checked, and
     /// never uses an entry's name as a file name. Each ROM entry is written to
     /// <c>&lt;index&gt;/entry&lt;extension&gt;</c> under <paramref name="workDir"/>, which the caller created and
-    /// checked; <see cref="ExtractedEntry.EntryPath"/> keeps the entry's own path. Entry paths are checked as text,
+    /// checked; <see cref="ExtractedEntry.EntryPath"/> keeps the entry's own path. ArchiveExtractorEntry paths are checked as text,
     /// the same on every OS. Two ROM entries with the same path, or one too long to store, reject the archive
     /// before anything is written.
     /// </summary>
@@ -97,7 +71,11 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     /// <param name="archiveName">The archive's file name: its extension picks the reader, and it names the archive in logs.</param>
     /// <exception cref="ArchiveRejectedException">The whole archive is refused; the work dir may hold partial output.</exception>
     /// <exception cref="ArchiveOutputException">An extracted copy couldn't be written.</exception>
-    public IReadOnlyList<ExtractedEntry> Extract(Stream archive, string archiveName, string workDir, Func<string, long?> maxRomBytes,
+    public IReadOnlyList<ExtractedEntry> Extract(
+        Stream archive,
+        string archiveName,
+        string workDir,
+        Func<string, long?> maxRomBytes,
         ICollection<string>? skipped = null) =>
         Guarded(() =>
         {
@@ -133,10 +111,13 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
         }
     }
 
-    private sealed record Entry(string Name, bool IsDirectory, bool IsEncrypted, bool IsLink, Func<Stream> Open);
-
-    private IReadOnlyList<ExtractedEntry> ExtractAll(IEnumerable<Entry> entries, string archivePath, string workDir, Func<string, long?> maxRomBytes,
-        bool external, ICollection<string>? skipped)
+    private IReadOnlyList<ExtractedEntry> ExtractAll(
+        IEnumerable<ArchiveExtractorEntry> entries,
+        string archivePath,
+        string workDir,
+        Func<string, long?> maxRomBytes,
+        bool external,
+        ICollection<string>? skipped)
     {
         var files = entries.Where(e => !e.IsDirectory).ToList();
         if (files.Count > MaxEntries)
@@ -193,7 +174,7 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
             var fileName = entryPath[(entryPath.LastIndexOf('/') + 1)..];
             if (IsArchive(fileName) || maxRomBytes(Path.GetExtension(fileName)) is not { } maxRom)
             {
-                logger.LogInformation("{Archive} › {Entry}: not a ROM (or a nested archive); skipped", archivePath, entryPath);
+                logger.LogInformation("{Archive} › {ArchiveExtractorEntry}: not a ROM (or a nested archive); skipped", archivePath, entryPath);
                 skipped?.Add(entryPath);
                 continue;
             }
@@ -257,15 +238,13 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
         }
     }
 
-    private sealed class SourceReadException(Exception inner) : Exception(inner.Message, inner);
-
-    private static IEnumerable<Entry> ZipEntries(ZipArchive zip)
+    private static IEnumerable<ArchiveExtractorEntry> ZipEntries(ZipArchive zip)
     {
         foreach (var e in zip.Entries)
         {
             // Unix mode in the high 16 bits of the external attributes; 0xA000 = S_IFLNK.
             var isLink = ((e.ExternalAttributes >> 16) & 0xF000) == 0xA000;
-            yield return new Entry(e.FullName, e.FullName.EndsWith('/'), e.IsEncrypted, isLink, e.Open);
+            yield return new ArchiveExtractorEntry(e.FullName, e.FullName.EndsWith('/'), e.IsEncrypted, isLink, e.Open);
         }
     }
 
@@ -274,7 +253,7 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     /// solid 7z entry on its own decompresses its block from the start each time (quadratic for a big pack).
     /// <see cref="ExtractAll"/> opens entries in archive order, at most once each.
     /// </summary>
-    private static IEnumerable<Entry> SevenZipEntries(IArchive archive, IReader reader)
+    private static IEnumerable<ArchiveExtractorEntry> SevenZipEntries(IArchive archive, IReader reader)
     {
         foreach (var e in archive.Entries)
         {
@@ -283,7 +262,7 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
             var isLink = !string.IsNullOrEmpty(e.LinkTarget) || (attrib & 0x400) != 0
                 || ((attrib & 0x8000) != 0 && ((attrib >> 16) & 0xF000) == 0xA000);
             var key = e.Key;
-            yield return new Entry(key ?? "", e.IsDirectory, e.IsEncrypted, isLink, () => ForwardTo(reader, key));
+            yield return new ArchiveExtractorEntry(key ?? "", e.IsDirectory, e.IsEncrypted, isLink, () => ForwardTo(reader, key));
         }
     }
 

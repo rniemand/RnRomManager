@@ -1,21 +1,5 @@
 # CodeStyleTests baseline (docs/style-guide.md): existing violations, one "<rule> <path>" per line.
 # It may only shrink: delete the lines you fix; never add new ones.
-CS1 src/RnRomManager.Core/Ingest/ArchiveExtractor.cs
-CS1 src/RnRomManager.Core/Ingest/BoundedRomRead.cs
-CS1 src/RnRomManager.Core/Ingest/CloneCdSheet.cs
-CS1 src/RnRomManager.Core/Ingest/CueSheet.cs
-CS1 src/RnRomManager.Core/Ingest/IngestFileDeleter.cs
-CS1 src/RnRomManager.Core/Ingest/IngestFileScanner.cs
-CS1 src/RnRomManager.Core/Ingest/IngestJob.cs
-CS1 src/RnRomManager.Core/Ingest/IngestOutcome.cs
-CS1 src/RnRomManager.Core/Ingest/IngestPipeline.cs
-CS1 src/RnRomManager.Core/Ingest/IngestSetPlanner.cs
-CS1 src/RnRomManager.Core/Ingest/MameMatcher.cs
-CS1 src/RnRomManager.Core/Ingest/MdsSheet.cs
-CS1 src/RnRomManager.Core/Ingest/NrgSheet.cs
-CS1 src/RnRomManager.Core/Ingest/RemovedFileRestorer.cs
-CS1 src/RnRomManager.Core/Ingest/ReviewResolver.cs
-CS1 src/RnRomManager.Core/Ingest/TocSheet.cs
 CS1 src/RnRomManager.Core/Integrity/IntegrityJob.cs
 CS1 src/RnRomManager.Core/Integrity/OpenIssue.cs
 CS1 src/RnRomManager.Core/Jobs/IJob.cs
@@ -119,23 +103,6 @@ CS1 tests/RnRomManager.TestData/SyntheticNesRomBuilder.cs
 CS1 tests/RnRomManager.TestData/SyntheticNrgBuilder.cs
 CS1 tests/RnRomManager.TestData/SyntheticSnesRomBuilder.cs
 CS2 src/RnRomManager.Core/Database/Page.cs
-CS2 src/RnRomManager.Core/Ingest/ArchiveExtractor.cs
-CS2 src/RnRomManager.Core/Ingest/BoundedRomRead.cs
-CS2 src/RnRomManager.Core/Ingest/CloneCdSheet.cs
-CS2 src/RnRomManager.Core/Ingest/CueSheet.cs
-CS2 src/RnRomManager.Core/Ingest/IngestFileDeleter.cs
-CS2 src/RnRomManager.Core/Ingest/IngestFileScanner.cs
-CS2 src/RnRomManager.Core/Ingest/IngestJob.cs
-CS2 src/RnRomManager.Core/Ingest/IngestOutcome.cs
-CS2 src/RnRomManager.Core/Ingest/IngestPipeline.cs
-CS2 src/RnRomManager.Core/Ingest/MdsSheet.cs
-CS2 src/RnRomManager.Core/Ingest/NrgSheet.cs
-CS2 src/RnRomManager.Core/Ingest/RemovedFileRestorer.cs
-CS2 src/RnRomManager.Core/Ingest/ReviewResolveJob.cs
-CS2 src/RnRomManager.Core/Ingest/ReviewResolver.cs
-CS2 src/RnRomManager.Core/Ingest/ReviewSets.cs
-CS2 src/RnRomManager.Core/Ingest/SuggestionEngine.cs
-CS2 src/RnRomManager.Core/Ingest/TocSheet.cs
 CS2 src/RnRomManager.Core/Integrity/IIntegrityIssueRepository.cs
 CS2 src/RnRomManager.Core/Integrity/IntegrityFinding.cs
 CS2 src/RnRomManager.Core/Integrity/IntegrityJob.cs

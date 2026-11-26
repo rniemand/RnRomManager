@@ -19,9 +19,22 @@ namespace RnRomManager.Core.Ingest;
 /// Review actions (§7.5); shares the ingest writer and the global job lock. Resolve runs inside a
 /// <see cref="ReviewResolveJob"/>, whose runner holds the lock (B2); Dismiss and Delete take it themselves.
 /// </summary>
-public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository reviews, IGameRepository games, IRomRepository roms, DbSync dbSync,
-    IngestPipeline pipeline, DatCache dats, ISystemRegistry systems, ArchiveExtractor extractor, ReviewSets sets,
-    IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, TimeProvider time, ILogger<ReviewResolver> logger)
+public sealed class ReviewResolver(
+    JobLock jobLock,
+    IIngestReviewRepository reviews,
+    IGameRepository games,
+    IRomRepository roms,
+    DbSync dbSync,
+    IngestPipeline pipeline,
+    DatCache dats,
+    ISystemRegistry systems,
+    ArchiveExtractor extractor,
+    ReviewSets sets,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    AuditPaths auditPaths,
+    TimeProvider time,
+    ILogger<ReviewResolver> logger)
 {
     /// <summary>
     /// B2: resolves inside a job. The caller (the job runner) holds the lock; nothing here is cancellable. The result's
@@ -29,7 +42,11 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     /// (B14); empty when it no longer exists or isn't Pending.
     /// </summary>
     /// <param name="actor">The job's actor (AU3); <see cref="AuditActor.UserId"/> is required.</param>
-    public async Task<ReviewResolutionResult> ResolveInJobAsync(long id, ReviewResolutionRequest request, AuditActor actor, JobProgress? progress)
+    public async Task<ReviewResolutionResult> ResolveInJobAsync(
+        long id,
+        ReviewResolutionRequest request,
+        AuditActor actor,
+        JobProgress? progress)
     {
         var item = await reviews.GetAsync(id, CancellationToken.None).ConfigureAwait(false);
         if (item is not { Status: "Pending" })
@@ -205,7 +222,12 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     /// <c>VerifyFailed</c>. Every refusal keeps the Pending row.
     /// </summary>
     /// <returns>null when the SHA1 has no owner: resolve as usual.</returns>
-    private async Task<ReviewResolutionResult?> RecoverCommittedAsync(long id, ReviewItem item, IngestFile copy, ExternalFileSnapshot snapshot, int userId)
+    private async Task<ReviewResolutionResult?> RecoverCommittedAsync(
+        long id,
+        ReviewItem item,
+        IngestFile copy,
+        ExternalFileSnapshot snapshot,
+        int userId)
     {
         if (await Sha1Async(paths.Value.Cache, copy.FullPath, snapshot).ConfigureAwait(false) != item.Sha1)
             return new("VerifyFailed");
@@ -277,10 +299,26 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     /// T9: the prepared file is re-hashed streamed (its SHA1 must still be the item's) and moved next to its ZIP
     /// (I4). Nothing is read into memory, and every failure keeps the Pending row.
     /// </summary>
-    private async Task<ReviewResolutionResult> ResolveExternalAsync(long id, ReviewItem item, IngestFile file, ExternalFileSnapshot snapshot,
-        ISystemHandler system, string action, string filename, string title, IReadOnlyList<string> regions, IReadOnlyList<string> languages,
-        string? revision, IReadOnlyList<string> flags, InfoJsonIdentification identification, DatMetadata metadata, Guid? target,
-        AuditActor actor, int userId, JobProgress? progress, JsonObject? header)
+    private async Task<ReviewResolutionResult> ResolveExternalAsync(
+        long id,
+        ReviewItem item,
+        IngestFile file,
+        ExternalFileSnapshot snapshot,
+        ISystemHandler system,
+        string action,
+        string filename,
+        string title,
+        IReadOnlyList<string> regions,
+        IReadOnlyList<string> languages,
+        string? revision,
+        IReadOnlyList<string> flags,
+        InfoJsonIdentification identification,
+        DatMetadata metadata,
+        Guid? target,
+        AuditActor actor,
+        int userId,
+        JobProgress? progress,
+        JsonObject? header)
     {
         var now = time.GetUtcNow();
         var rom = new InfoJsonRom
@@ -301,9 +339,21 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     /// B14 steps 2 and 4: the set is stored as one release named by the action; every member's row is marked Resolved in
     /// one transaction once the mirror is written. A failure after the moves is <c>DbWriteFailed</c>, with the rows Pending.
     /// </summary>
-    private async Task<ReviewResolutionResult> ResolveSetAsync(IReadOnlyList<(IngestFile File, ReviewItem Row)> set, ISystemHandler system,
-        string action, string title, IReadOnlyList<string> regions, IReadOnlyList<string> languages, string? revision, IReadOnlyList<string> flags,
-        InfoJsonIdentification identification, DatMetadata metadata, Guid? target, AuditActor actor, int userId, JobProgress? progress)
+    private async Task<ReviewResolutionResult> ResolveSetAsync(
+        IReadOnlyList<(IngestFile File, ReviewItem Row)> set,
+        ISystemHandler system,
+        string action,
+        string title,
+        IReadOnlyList<string> regions,
+        IReadOnlyList<string> languages,
+        string? revision,
+        IReadOnlyList<string> flags,
+        InfoJsonIdentification identification,
+        DatMetadata metadata,
+        Guid? target,
+        AuditActor actor,
+        int userId,
+        JobProgress? progress)
     {
         var rom = new InfoJsonRom
         {
@@ -353,8 +403,14 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
 
     /// <summary>Resolve (<paramref name="request"/> set) or Dismiss of a Pending <paramref name="item"/>; the caller holds the lock.</summary>
     /// <param name="set">B14: the item's set, found under the lock; the whole set is resolved as one release.</param>
-    private async Task<ReviewResolutionResult> ActCoreAsync(long id, ReviewItem item, ReviewResolutionRequest? request, AuditActor actor,
-        CancellationToken ct, JobProgress? progress, IReadOnlyList<(IngestFile File, ReviewItem Row)>? set = null)
+    private async Task<ReviewResolutionResult> ActCoreAsync(
+        long id,
+        ReviewItem item,
+        ReviewResolutionRequest? request,
+        AuditActor actor,
+        CancellationToken ct,
+        JobProgress? progress,
+        IReadOnlyList<(IngestFile File, ReviewItem Row)>? set = null)
     {
         var userId = actor.UserId!.Value; // review actions always have a user: the signed-in one, or the job's requester
         if (!IsDismissible(item, systems, set is not null) && (request is null || set is null))
@@ -677,8 +733,3 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
 
     private static IReadOnlyList<string> Strings(JsonNode? array) => array?.AsArray().Select(n => n!.GetValue<string>()).ToList() ?? [];
 }
-
-/// <summary>Q4: the outcome of a batch review delete.</summary>
-public sealed record ReviewBatchDeleteResult(int Deleted, int Skipped, IReadOnlyList<ReviewBatchDeleteFailure> Failed);
-
-public sealed record ReviewBatchDeleteFailure(long Id, string Code);

@@ -3,9 +3,6 @@ using System.Text;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>One track of an <c>.nrg</c>'s DAO chunk; offsets are byte offsets into the image.</summary>
-public sealed record NrgTrack(int Number, int Mode, int SectorSize, ulong Index0, ulong Index1, ulong End);
-
 /// <summary>
 /// Browser play format gaps N2–N4: the tracks of a Nero <c>.nrg</c> (big-endian), read as libmirage's <c>image-nrg</c> does
 /// (<c>cdemu/cdemu</c> <c>libmirage/images/image-nrg/image-nrg.h</c> and <c>parser.c</c>). Only single-session DAO images

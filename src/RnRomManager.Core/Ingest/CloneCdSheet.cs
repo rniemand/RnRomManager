@@ -3,9 +3,6 @@ using System.Text;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>One <c>[TRACK n]</c> of a <c>.ccd</c>: its MODE (0 audio, 1, 2) and its INDEX 0 and INDEX 1 sectors.</summary>
-public sealed record CloneCdTrack(int Number, int Mode, int? Index0, int Index1);
-
 /// <summary>
 /// CloneCD B3: the tracks of a CloneCD <c>.ccd</c>. Only <c>[Disc]</c> <c>Sessions</c>/<c>DataTracksScrambled</c> and
 /// <c>[TRACK n]</c> <c>MODE</c>/<c>INDEX 0</c>/<c>INDEX 1</c> are read; every other section and key is ignored.
@@ -106,8 +103,13 @@ public sealed record CloneCdSheet(IReadOnlyList<CloneCdTrack> Tracks, string? Er
     /// <c>&lt;trackPrefix&gt;01.img</c>; the <c>.sub</c>, when there is one, is aliased to the cue's base name so PCSX
     /// ReARMed finds it.
     /// </summary>
-    public static PlaybackCue ForPlayback(ReadOnlySpan<byte> ccd, string ccdFileName, string imageName, long imageLength,
-        string? subName, string trackPrefix)
+    public static PlaybackCue ForPlayback(
+        ReadOnlySpan<byte> ccd,
+        string ccdFileName,
+        string imageName,
+        long imageLength,
+        string? subName,
+        string trackPrefix)
     {
         var sheet = Parse(ccd);
         if (sheet.Error is { } error)

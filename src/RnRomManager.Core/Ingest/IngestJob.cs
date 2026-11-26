@@ -179,11 +179,6 @@ public sealed class IngestJob(
         return check.Status == ExternalPathStatus.Missing;
     }
 
-    private sealed record Run(JobContext Context, Dictionary<string, int> Counts, CircuitBreaker Breaker);
-
-    /// <summary>B7: a planned unit: a set, a lone file, or members skipped with <paramref name="Reason"/>.</summary>
-    private sealed record WorkUnit(PlannedKind Kind, IReadOnlyList<IngestFile> Files, string? Reason = null);
-
     /// <summary>
     /// B7: one set, processed to the end (I2). Every member gets its own item, recorded before its <c>ItemDone</c>; a
     /// <c>DbWriteFailed</c> stops the job only once all of them are recorded.
@@ -225,7 +220,11 @@ public sealed class IngestJob(
     }
 
     /// <summary>One item: processes it (unless <paramref name="known"/>), records its row; null = left in ingest.</summary>
-    private async Task<IngestItemResult?> ItemAsync(Run run, IngestFile file, IngestItemResult? known, CancellationToken cancellationToken = default,
+    private async Task<IngestItemResult?> ItemAsync(
+        Run run,
+        IngestFile file,
+        IngestItemResult? known,
+        CancellationToken cancellationToken = default,
         bool stopOnDbWriteFailure = true)
     {
         var fileId = Guid.NewGuid();
@@ -393,8 +392,12 @@ public sealed class IngestJob(
     /// archive, which stays for the next run.
     /// </summary>
     /// <param name="stillTheArchive">External systems (I1): the archive is only moved or deleted while its path still names the extracted file.</param>
-    private async Task ApplyFateAsync(Run run, IngestFile archive, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes,
-        IReadOnlyList<string> unhandled, Func<Task<bool>>? stillTheArchive = null)
+    private async Task ApplyFateAsync(
+        Run run,
+        IngestFile archive,
+        IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes,
+        IReadOnlyList<string> unhandled,
+        Func<Task<bool>>? stillTheArchive = null)
     {
         var actor = run.Context.Actor;
         var fate = FateOf([.. outcomes.Select(o => o.Result)], unhandled.Count > 0);
@@ -428,14 +431,6 @@ public sealed class IngestJob(
             await ItemAsync(run, archive, error).ConfigureAwait(false);
     }
 
-    public enum ArchiveFate
-    {
-        Keep,
-        Failed,
-        Duplicates,
-        Delete,
-    }
-
     /// <summary>
     /// §7.3 as a decision. An entry that was <c>Skipped</c> (an external entry that was <c>TooRecent</c>, I1) keeps
     /// the archive like <c>Review</c> or <c>Error</c> does, even when other entries committed.
@@ -463,8 +458,13 @@ public sealed class IngestJob(
         + (unhandled.Count == 0 ? "" : "\nnot ingested (another system's ROM or a nested archive; drop it in the right folder):\n"
             + string.Join("\n", unhandled.Select(e => $"  {e}")));
 
-    private async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
-        CancellationToken cancellationToken, JobProgress progress)
+    private async Task<IngestItemResult?> ProcessAsync(
+        IngestFile file,
+        Guid jobId,
+        AuditActor actor,
+        CircuitBreaker breaker,
+        CancellationToken cancellationToken,
+        JobProgress progress)
     {
         try
         {
@@ -481,7 +481,11 @@ public sealed class IngestJob(
         }
     }
 
-    private async Task RecordAsync(JobContext context, IngestFile file, Guid fileId, IngestItemResult result)
+    private async Task RecordAsync(
+        JobContext context,
+        IngestFile file,
+        Guid fileId,
+        IngestItemResult result)
     {
         await items.InsertAsync(new JobItem
         {
@@ -504,6 +508,3 @@ public sealed class IngestJob(
             logger.LogInformation("{Path}: {Outcome} {Reason}", name, result.Outcome, result.Reason);
     }
 }
-
-/// <summary>An item hit <c>DbWriteFailed</c>: the job ends <c>Failed</c> with this message (§7.2 step 10).</summary>
-public sealed class IngestStoppedException(string message) : Exception(message);

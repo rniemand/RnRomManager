@@ -4,12 +4,6 @@ using System.Text;
 namespace RnRomManager.Core.Ingest;
 
 /// <summary>
-/// One track block of an <c>.mds</c> (offsets per libmirage's <c>image-mds.h</c>). <paramref name="Pregap"/> and
-/// <paramref name="Length"/> come from the extra block, 0 when there is none.
-/// </summary>
-public sealed record MdsTrack(int Number, int Mode, int Subchannel, int SectorSize, long StartSector, ulong StartOffset, long Pregap, long Length);
-
-/// <summary>
 /// File type gaps D7: the tracks of an Alcohol 120% <c>.mds</c> (version 1, little-endian). Only session 1's blocks are
 /// read; a block is a track when its <c>point</c> is 1–99.
 /// </summary>
@@ -75,7 +69,12 @@ public sealed record MdsSheet(int Sessions, IReadOnlyList<MdsTrack> Tracks, stri
     /// File type gaps D8a: a playback cue for a stored MDS set. Its one FILE is the <c>.mdf</c> as
     /// <c>&lt;trackPrefix&gt;01.bin</c>; each check runs over every track before the next check starts.
     /// </summary>
-    public static PlaybackCue ForPlayback(ReadOnlySpan<byte> mds, string mdsFileName, string mdfName, long mdfLength, string trackPrefix)
+    public static PlaybackCue ForPlayback(
+        ReadOnlySpan<byte> mds,
+        string mdsFileName,
+        string mdfName,
+        long mdfLength,
+        string trackPrefix)
     {
         var sheet = Parse(mds);
         if (sheet.Error is { } error)

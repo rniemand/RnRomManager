@@ -7,7 +7,11 @@ namespace RnRomManager.Core.Ingest;
 /// <summary>Review suggestions (§10.3, D45): one best release per distinct base title.</summary>
 public static class SuggestionEngine
 {
-    public static IReadOnlyList<Suggestion> Find(DatStore? store, string? headerTitle, string originalFileName, long sizeBytes)
+    public static IReadOnlyList<Suggestion> Find(
+        DatStore? store,
+        string? headerTitle,
+        string originalFileName,
+        long sizeBytes)
     {
         if (store is null)
             return [];

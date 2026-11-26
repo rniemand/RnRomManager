@@ -8,18 +8,17 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>D5: a restored Deleted ROM under its new pending name in <c>ingest/&lt;system&gt;/</c>.</summary>
-public sealed record RestoredFile(string System, string Name);
-
-/// <param name="Code"><c>JobRunning</c> when the lock was busy (nothing moved), else null.</param>
-public sealed record RemovedRestoreResult(IReadOnlyList<RestoredFile> Restored, IReadOnlyList<IngestDeleteRef> Failed, string? Code = null);
-
 /// <summary>
 /// Deleted ROMs restore (D5): moves files from <c>ingest/&lt;system&gt;/_removed/</c> back to <c>ingest/&lt;system&gt;/</c>
 /// under the global job lock, never replacing a pending file (a free <c> (N)</c> name instead). The caller starts the ingest job.
 /// </summary>
-public sealed class RemovedFileRestorer(JobLock jobLock, ISystemRegistry systems, IOptions<PathsOptions> paths, IAuditLog audit,
-    AuditPaths auditPaths, ILogger<RemovedFileRestorer> logger)
+public sealed class RemovedFileRestorer(
+    JobLock jobLock,
+    ISystemRegistry systems,
+    IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    AuditPaths auditPaths,
+    ILogger<RemovedFileRestorer> logger)
 {
     /// <param name="files">Already checked by <see cref="IngestFileDeleter.Validate"/> with folder <c>removed</c>; duplicates are ignored.</param>
     public RemovedRestoreResult Restore(IReadOnlyList<IngestDeleteRef> files, AuditActor actor)
