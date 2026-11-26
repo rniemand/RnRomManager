@@ -1,4 +1,8 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import SortHeader from '#lib/components/common/SortHeader.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { debounced } from '#lib/debounce.js';
@@ -13,7 +17,6 @@
 	import type { MissingMetadataItem, Page, SystemInfo } from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
-	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
@@ -153,11 +156,9 @@
 	>
 		<div class="input-group input-group-sm flex-grow-1 flex-md-grow-0 missing-metadata-title">
 			<label class="input-group-text" for="missing-metadata-q">Title</label>
-			<input
+			<SearchInput
 				id="missing-metadata-q"
-				type="search"
-				class="form-control"
-				maxlength="100"
+				maxlength={100}
 				bind:value={search}
 				oninput={onSearchInput}
 			/>
@@ -172,22 +173,17 @@
 		/>
 		<div class="input-group input-group-sm w-auto">
 			<label class="input-group-text" for="missing-metadata-missing">Missing</label>
-			<select
+			<Select
+				class="w-auto"
 				id="missing-metadata-missing"
-				class="form-select w-auto"
 				value={view.missing}
 				onchange={(e) => show({ ...view, missing: e.currentTarget.value as Missing, page: 1 })}
-			>
-				{#each missingOptions as option (option.value)}
+				>{#each missingOptions as option (option.value)}
 					<option value={option.value}>{option.label}</option>
-				{/each}
-			</select>
+				{/each}</Select
+			>
 		</div>
-		<button
-			type="button"
-			class="btn btn-sm btn-outline-secondary"
-			disabled={!filtered}
-			onclick={clear}>Clear</button
+		<Button variant="secondary" outline size="sm" disabled={!filtered} onclick={clear}>Clear</Button
 		>
 	</form>
 
@@ -202,43 +198,36 @@
 				{result.total === 1 ? 'game' : 'games'}
 			</p>
 		{/if}
-		<div class="card">
-			<div class="table-responsive">
-				{#if result.total === 0}
-					<EmptyState
-						message={filtered
-							? 'No games match these filters.'
-							: 'Every game has its year, developer and publisher.'}
-					/>
-				{:else}
-					<table class="table table-sm table-striped table-hover align-middle mb-0">
-						<thead class="table-dark">
-							<tr>
-								<SortHeader {columns} sort={view.sort} dir={view.dir} onsort={sortBy} />
-							</tr>
-						</thead>
-						<tbody>
-							{#each result.items as item (item.id)}
-								<tr>
-									<td>
-										<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query -->
-										<a href="{resolve('/games/[id]', { id: item.id })}?from=missing-metadata"
-											>{item.displayTitle}</a
-										>
-									</td>
-									<td><SystemBadge system={item.system} name={item.systemName} /></td>
-									<td
-										>{#if item.releaseYear === null}{@render missingBadge()}{:else}{item.releaseYear}{/if}</td
-									>
-									<td>{@render list(item.developers)}</td>
-									<td>{@render list(item.publishers)}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				{/if}
-			</div>
-		</div>
+		<DataTable
+			items={result.items}
+			key={(item) => item.id}
+			empty={filtered
+				? 'No games match these filters.'
+				: 'Every game has its year, developer and publisher.'}
+			emptyInCard
+		>
+			{#snippet head()}
+				<tr>
+					<SortHeader {columns} sort={view.sort} dir={view.dir} onsort={sortBy} />
+				</tr>
+			{/snippet}
+			{#snippet row(item)}
+				<tr>
+					<td>
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query -->
+						<a href="{resolve('/games/[id]', { id: item.id })}?from=missing-metadata"
+							>{item.displayTitle}</a
+						>
+					</td>
+					<td><SystemBadge system={item.system} name={item.systemName} /></td>
+					<td
+						>{#if item.releaseYear === null}{@render missingBadge()}{:else}{item.releaseYear}{/if}</td
+					>
+					<td>{@render list(item.developers)}</td>
+					<td>{@render list(item.publishers)}</td>
+				</tr>
+			{/snippet}
+		</DataTable>
 		<Pagination
 			page={view.page}
 			pages={pageCount(result.total, pageSize)}

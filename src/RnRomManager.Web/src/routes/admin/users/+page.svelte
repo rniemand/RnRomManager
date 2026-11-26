@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import Select from '#lib/components/forms/Select.svelte';
 	import Button from '#lib/components/forms/Button.svelte';
 	import ResetPasswordModal from '#lib/components/modals/ResetPasswordModal.svelte';
@@ -8,7 +9,6 @@
 	import { isApiError } from '#lib/api/errors.js';
 	import type { UserInfo } from '#lib/types/index.js';
 	import type { Role } from '#lib/enums/index.js';
-	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
@@ -85,78 +85,66 @@
 	<div class="d-flex justify-content-end mb-3">
 		<Button variant="primary" icon="add-user" onclick={openCreate}>Create user</Button>
 	</div>
-	<div class="card">
-		<div class="table-responsive">
-			{#if users.length === 0}
-				<EmptyState message="No users." />
-			{:else}
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<thead class="table-dark">
-						<tr class="small text-uppercase text-body-secondary">
-							<th scope="col">Username</th>
-							<th scope="col">Type</th>
-							<th scope="col">Status</th>
-							<th scope="col">Last sign-in</th>
-							<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each users as user (user.id)}
-							{@const self = user.id === auth.me?.id}
-							<tr>
-								<td>{user.username}</td>
-								<td>
-									<span use:tooltip={self ? selfHint : ''}>
-										<Select
-											size="sm"
-											class="w-auto"
-											aria-label="Account type of {user.username}"
-											value={typeOf(user)}
-											disabled={self}
-											onchange={(e) =>
-												update(user, { roles: rolesOf(e.currentTarget.value as AccountType) })}
-											options={typeOptions}
-										/>
-									</span>
-								</td>
-								<td>
-									{#if user.isDisabled}
-										<span class="badge text-bg-secondary">Disabled</span>
-									{:else}
-										<span class="badge text-bg-success">Enabled</span>
-									{/if}
-								</td>
-								<td class="text-nowrap"
-									>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Never'}</td
-								>
-								<td class="text-nowrap text-end">
-									<span class="d-inline-block" use:tooltip={self ? selfHint : ''}>
-										<Button
-											variant="secondary"
-											outline
-											size="sm"
-											icon={user.isDisabled ? 'enable' : 'disable'}
-											aria-label="{user.isDisabled ? 'Enable' : 'Disable'} {user.username}"
-											disabled={self}
-											onclick={() => update(user, { isDisabled: !user.isDisabled })}
-										/>
-									</span>
-									<Button
-										variant="secondary"
-										outline
-										size="sm"
-										icon="password"
-										aria-label="Reset password of {user.username}"
-										onclick={() => openReset(user)}
-									/>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
-		</div>
-	</div>
+	<DataTable items={users} key={(user) => user.id} empty="No users." emptyInCard>
+		{#snippet head()}
+			<tr class="small text-uppercase text-body-secondary">
+				<th scope="col">Username</th>
+				<th scope="col">Type</th>
+				<th scope="col">Status</th>
+				<th scope="col">Last sign-in</th>
+				<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
+			</tr>
+		{/snippet}
+		{#snippet row(user)}
+			{@const self = user.id === auth.me?.id}
+			<tr>
+				<td>{user.username}</td>
+				<td>
+					<span use:tooltip={self ? selfHint : ''}>
+						<Select
+							size="sm"
+							class="w-auto"
+							aria-label="Account type of {user.username}"
+							value={typeOf(user)}
+							disabled={self}
+							onchange={(e) =>
+								update(user, { roles: rolesOf(e.currentTarget.value as AccountType) })}
+							options={typeOptions}
+						/>
+					</span>
+				</td>
+				<td>
+					{#if user.isDisabled}
+						<span class="badge text-bg-secondary">Disabled</span>
+					{:else}
+						<span class="badge text-bg-success">Enabled</span>
+					{/if}
+				</td>
+				<td class="text-nowrap">{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Never'}</td>
+				<td class="text-nowrap text-end">
+					<span class="d-inline-block" use:tooltip={self ? selfHint : ''}>
+						<Button
+							variant="secondary"
+							outline
+							size="sm"
+							icon={user.isDisabled ? 'enable' : 'disable'}
+							aria-label="{user.isDisabled ? 'Enable' : 'Disable'} {user.username}"
+							disabled={self}
+							onclick={() => update(user, { isDisabled: !user.isDisabled })}
+						/>
+					</span>
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
+						icon="password"
+						aria-label="Reset password of {user.username}"
+						onclick={() => openReset(user)}
+					/>
+				</td>
+			</tr>
+		{/snippet}
+	</DataTable>
 
 	<CreateUserModal
 		bind:open={createOpen}

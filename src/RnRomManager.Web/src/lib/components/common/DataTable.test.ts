@@ -42,4 +42,30 @@ describe('DataTable', () => {
 		expect(container.querySelector('.card')).toBeNull();
 		expect(screen.getByText('Nothing here.')).toBeTruthy();
 	});
+
+	it('emptyInCard shows EmptyState inside the card in place of the table', () => {
+		const { container } = render(DataTable, {
+			items: [],
+			head,
+			row,
+			empty: 'Nothing here.',
+			emptyInCard: true,
+			class: 'mb-3'
+		});
+		const responsive = container.querySelector('.card.mb-3 > .table-responsive')!;
+		expect(responsive.querySelector('table')).toBeNull();
+		expect(responsive.textContent).toContain('Nothing here.');
+	});
+
+	it('emptyInCard renders the table when there are items', () => {
+		const { container } = render(DataTable, {
+			items: [1],
+			head,
+			row,
+			empty: 'Nothing here.',
+			emptyInCard: true
+		});
+		expect(container.querySelector('.card > .table-responsive > table')).not.toBeNull();
+		expect(screen.queryByText('Nothing here.')).toBeNull();
+	});
 });

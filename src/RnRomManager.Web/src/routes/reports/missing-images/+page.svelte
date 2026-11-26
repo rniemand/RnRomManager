@@ -1,9 +1,9 @@
 <script lang="ts">
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import type { Page, SystemInfo } from '#lib/types/index.js';
-	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
@@ -74,37 +74,30 @@
 			{result.total === 1 ? 'game' : 'games'}
 		</p>
 	{/if}
-	<div class="card">
-		<div class="table-responsive">
-			{#if result.items.length === 0}
-				<EmptyState message="Every game has a cover image." />
-			{:else}
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<thead class="table-dark">
-						<tr>
-							<th scope="col">Game</th>
-							<th scope="col">System</th>
-							<th scope="col">Reason</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each result.items as item (item.id)}
-							<tr>
-								<td>
-									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query -->
-									<a href="{resolve('/games/[id]', { id: item.id })}?tab=images"
-										>{item.displayTitle}</a
-									>
-								</td>
-								<td><SystemBadge system={item.system} name={item.systemName} /></td>
-								<td>{reasons[item.reason]}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
-		</div>
-	</div>
+	<DataTable
+		items={result.items}
+		key={(item) => item.id}
+		empty="Every game has a cover image."
+		emptyInCard
+	>
+		{#snippet head()}
+			<tr>
+				<th scope="col">Game</th>
+				<th scope="col">System</th>
+				<th scope="col">Reason</th>
+			</tr>
+		{/snippet}
+		{#snippet row(item)}
+			<tr>
+				<td>
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query -->
+					<a href="{resolve('/games/[id]', { id: item.id })}?tab=images">{item.displayTitle}</a>
+				</td>
+				<td><SystemBadge system={item.system} name={item.systemName} /></td>
+				<td>{reasons[item.reason]}</td>
+			</tr>
+		{/snippet}
+	</DataTable>
 	<Pagination
 		page={pageNumber}
 		pages={pageCount(result.total, pageSize)}

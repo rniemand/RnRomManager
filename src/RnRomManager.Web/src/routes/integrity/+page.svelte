@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -9,7 +12,6 @@
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import RomToolsTabs from '#lib/components/layout/RomToolsTabs.svelte';
 	import JobStepProgress from '#lib/components/common/JobStepProgress.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
@@ -182,10 +184,12 @@
 						<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 							<strong>{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''} running</strong>
 							{#if isCancellable(job.type)}
-								<button
-									type="button"
-									class="btn btn-sm btn-outline-danger ms-auto"
-									onclick={() => cancel(job.id)}>Cancel</button
+								<Button
+									variant="danger"
+									outline
+									size="sm"
+									class="ms-auto"
+									onclick={() => cancel(job.id)}>Cancel</Button
 								>
 							{/if}
 						</div>
@@ -206,35 +210,32 @@
 					</div>
 				{:else}
 					<div class="d-flex flex-wrap gap-2">
-						<button
-							type="button"
-							class="btn btn-primary"
+						<Button
+							variant="primary"
 							disabled={busy}
-							onclick={() => start('/api/jobs/integrity', { mode: 'Quick' })}>Run quick</button
+							onclick={() => start('/api/jobs/integrity', { mode: 'Quick' })}>Run quick</Button
 						>
-						<button
-							type="button"
-							class="btn btn-outline-primary"
+						<Button
+							variant="primary"
+							outline
 							disabled={busy}
-							onclick={() => start('/api/jobs/integrity', { mode: 'Deep' })}>Run deep</button
+							onclick={() => start('/api/jobs/integrity', { mode: 'Deep' })}>Run deep</Button
 						>
-						<button
-							type="button"
-							class="btn btn-outline-secondary"
+						<Button
+							variant="secondary"
+							outline
+							icon="retry"
 							disabled={busy}
-							onclick={() => start('/api/jobs/media-retry')}
+							onclick={() => start('/api/jobs/media-retry')}>Retry missing media</Button
 						>
-							<Icon name="retry" /> Retry missing media
-						</button>
 						{#if pendingGames > 0}
-							<button
-								type="button"
-								class="btn btn-outline-warning"
+							<Button
+								variant="warning"
+								outline
 								disabled={busy}
 								onclick={() => start('/api/jobs/storage-migration')}
+								>Resume ROM storage moves ({pendingGames})</Button
 							>
-								Resume ROM storage moves ({pendingGames})
-							</button>
 						{/if}
 					</div>
 				{/if}
@@ -250,22 +251,17 @@
 		<div class="row g-2 mb-2">
 			<div class="col-6 col-md-3">
 				<label class="form-label" for="issue-status">Status</label>
-				<select
-					id="issue-status"
-					class="form-select"
-					bind:value={issueStatus}
-					onchange={filterChanged}
+				<Select id="issue-status" bind:value={issueStatus} onchange={filterChanged}
+					><option value="">Any status</option>
+					{#each issueStatuses as s (s)}<option value={s}>{s}</option>{/each}</Select
 				>
-					<option value="">Any status</option>
-					{#each issueStatuses as s (s)}<option value={s}>{s}</option>{/each}
-				</select>
 			</div>
 			<div class="col-6 col-md-3">
 				<label class="form-label" for="issue-type">Type</label>
-				<select id="issue-type" class="form-select" bind:value={issueType} onchange={filterChanged}>
-					<option value="">Any type</option>
-					{#each issueTypes as t (t)}<option value={t}>{t}</option>{/each}
-				</select>
+				<Select id="issue-type" bind:value={issueType} onchange={filterChanged}
+					><option value="">Any type</option>
+					{#each issueTypes as t (t)}<option value={t}>{t}</option>{/each}</Select
+				>
 			</div>
 		</div>
 
@@ -276,64 +272,56 @@
 		{:else if issues.items.length === 0}
 			<EmptyState message="No issues." />
 		{:else}
-			<div class="card mb-2">
-				<div class="table-responsive">
-					<table class="table table-sm table-striped table-hover align-middle mb-0">
-						<thead class="table-dark">
-							<tr>
-								<th scope="col">Severity</th>
-								<th scope="col">Type</th>
-								<th scope="col">Path</th>
-								<th scope="col">Details</th>
-								<th scope="col">Status</th>
-								<th scope="col">Detected</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each issues.items as issue (issue.id)}
-								<tr>
-									<td
-										><span class="badge {severityClass(issue.severity)}">{issue.severity}</span></td
-									>
-									<td>{issue.type}</td>
-									<td class="text-break">
-										{#if issue.gameId}
-											<a href={resolve('/games/[id]', { id: issue.gameId })}
-												>{issue.zipPath ?? 'Game'}</a
-											>
-										{:else}
-											{issue.zipPath ?? '—'}
-										{/if}
-										{#if issue.entryName}<span class="text-body-secondary">
-												› {issue.entryName}</span
-											>{/if}
-									</td>
-									<td class="small text-break">{issue.details ?? ''}</td>
-									<td>{issue.status}</td>
-									<td class="text-nowrap">{formatDateTime(issue.detectedAt)}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			</div>
+			<DataTable items={issues.items} key={(issue) => issue.id} class="mb-2">
+				{#snippet head()}
+					<tr>
+						<th scope="col">Severity</th>
+						<th scope="col">Type</th>
+						<th scope="col">Path</th>
+						<th scope="col">Details</th>
+						<th scope="col">Status</th>
+						<th scope="col">Detected</th>
+					</tr>
+				{/snippet}
+				{#snippet row(issue)}
+					<tr>
+						<td><span class="badge {severityClass(issue.severity)}">{issue.severity}</span></td>
+						<td>{issue.type}</td>
+						<td class="text-break">
+							{#if issue.gameId}
+								<a href={resolve('/games/[id]', { id: issue.gameId })}>{issue.zipPath ?? 'Game'}</a>
+							{:else}
+								{issue.zipPath ?? '—'}
+							{/if}
+							{#if issue.entryName}<span class="text-body-secondary">
+									› {issue.entryName}</span
+								>{/if}
+						</td>
+						<td class="small text-break">{issue.details ?? ''}</td>
+						<td>{issue.status}</td>
+						<td class="text-nowrap">{formatDateTime(issue.detectedAt)}</td>
+					</tr>
+				{/snippet}
+			</DataTable>
 			{#if pages > 1}
 				<nav
 					class="d-flex justify-content-center align-items-center gap-3"
 					aria-label="Issue pages"
 				>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
 						disabled={issuePage <= 1}
-						onclick={() => issuePage--}>Previous</button
+						onclick={() => issuePage--}>Previous</Button
 					>
 					<span>Page {issuePage} of {pages}</span>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
+					<Button
+						variant="secondary"
+						outline
+						size="sm"
 						disabled={issuePage >= pages}
-						onclick={() => issuePage++}>Next</button
+						onclick={() => issuePage++}>Next</Button
 					>
 				</nav>
 			{/if}
@@ -348,36 +336,28 @@
 		{#if history.length === 0}
 			<EmptyState message="No checks have run yet." />
 		{:else}
-			<div class="card">
-				<div class="table-responsive">
-					<table class="table table-sm table-striped table-hover align-middle mb-0">
-						<thead class="table-dark">
-							<tr>
-								<th scope="col">Started</th>
-								<th scope="col">Job</th>
-								<th scope="col">Status</th>
-								<th scope="col">Trigger</th>
-								<th scope="col">Summary</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each history as run (run.id)}
-								<tr>
-									<td class="text-nowrap">
-										<a href={resolve('/jobs/[id]', { id: run.id })}
-											>{formatDateTime(run.startedAt)}</a
-										>
-									</td>
-									<td>{jobLabel(run.type)}{run.mode ? ` (${run.mode})` : ''}</td>
-									<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
-									<td>{run.triggerSource}</td>
-									<td class="small">{formatSummary(run.summary)}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			</div>
+			<DataTable items={history} key={(run) => run.id}>
+				{#snippet head()}
+					<tr>
+						<th scope="col">Started</th>
+						<th scope="col">Job</th>
+						<th scope="col">Status</th>
+						<th scope="col">Trigger</th>
+						<th scope="col">Summary</th>
+					</tr>
+				{/snippet}
+				{#snippet row(run)}
+					<tr>
+						<td class="text-nowrap">
+							<a href={resolve('/jobs/[id]', { id: run.id })}>{formatDateTime(run.startedAt)}</a>
+						</td>
+						<td>{jobLabel(run.type)}{run.mode ? ` (${run.mode})` : ''}</td>
+						<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
+						<td>{run.triggerSource}</td>
+						<td class="small">{formatSummary(run.summary)}</td>
+					</tr>
+				{/snippet}
+			</DataTable>
 		{/if}
 	</AccordionItem>
 </AdminOnly>

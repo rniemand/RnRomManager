@@ -1,4 +1,8 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import NumberInput from '#lib/components/forms/NumberInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { replaceUrl } from '#lib/urlState.js';
 	import { untrack } from 'svelte';
@@ -99,53 +103,45 @@
 	/>
 	<div class="input-group input-group-sm w-auto">
 		<label class="input-group-text" for="image-resolutions-type">Type</label>
-		<select
+		<Select
+			class="w-auto"
 			id="image-resolutions-type"
-			class="form-select w-auto"
 			value={view.type}
 			onchange={(e) => update({ type: e.currentTarget.value as ImageResolutionFilter['type'] })}
-		>
-			<option value="">All types</option>
+			><option value="">All types</option>
 			{#each Object.entries(imageTypeLabels) as [value, label] (value)}
 				<option {value}>{label}</option>
-			{/each}
-		</select>
+			{/each}</Select
+		>
 	</div>
 	<div class="input-group input-group-sm w-auto">
 		<label class="input-group-text" for="image-resolutions-max-width">Max width</label>
-		<input
+		<NumberInput
 			id="image-resolutions-max-width"
-			type="number"
-			class="form-control"
 			style="width: 6rem"
 			min="1"
 			max="100000"
 			step="1"
-			value={view.maxWidth ?? ''}
+			value={view.maxWidth ?? null}
 			onchange={(e) => onLimit(e, 'maxWidth')}
 		/>
 		<span class="input-group-text">px</span>
 	</div>
 	<div class="input-group input-group-sm w-auto">
 		<label class="input-group-text" for="image-resolutions-max-height">Max height</label>
-		<input
+		<NumberInput
 			id="image-resolutions-max-height"
-			type="number"
-			class="form-control"
 			style="width: 6rem"
 			min="1"
 			max="100000"
 			step="1"
-			value={view.maxHeight ?? ''}
+			value={view.maxHeight ?? null}
 			onchange={(e) => onLimit(e, 'maxHeight')}
 		/>
 		<span class="input-group-text">px</span>
 	</div>
-	<button
-		type="button"
-		class="btn btn-sm btn-outline-secondary"
-		disabled={!filtered}
-		onclick={() => go('')}>Clear</button
+	<Button variant="secondary" outline size="sm" disabled={!filtered} onclick={() => go('')}
+		>Clear</Button
 	>
 </div>
 
@@ -162,46 +158,38 @@
 		{formatCount(result.total)}
 		{result.total === 1 ? 'image' : 'images'}
 	</p>
-	<div class="card">
-		<div class="table-responsive">
-			<table class="table table-sm table-striped table-hover align-middle mb-0">
-				<thead class="table-dark">
-					<tr>
-						<th scope="col"><span class="visually-hidden">Preview</span></th>
-						<th scope="col">Game</th>
-						<th scope="col">System</th>
-						<th scope="col">Type</th>
-						<th scope="col">Resolution</th>
-						<th scope="col">Size</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each result.items as item (item.imageId)}
-						<tr>
-							<td>
-								<img
-									src="/api/games/{item.gameId}/images/{item.imageId}"
-									alt=""
-									loading="lazy"
-									style="max-width: 4rem; max-height: 4rem; object-fit: contain"
-								/>
-							</td>
-							<td>
-								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query -->
-								<a href="{resolve('/games/[id]', { id: item.gameId })}?tab=images"
-									>{item.displayTitle}</a
-								>
-							</td>
-							<td><SystemBadge system={item.system} name={item.systemName} /></td>
-							<td>{imageTypeLabels[item.type]}</td>
-							<td class="text-nowrap">{item.width} × {item.height}</td>
-							<td><FileSize bytes={item.sizeBytes} /></td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	</div>
+	<DataTable items={result.items} key={(item) => item.imageId}>
+		{#snippet head()}
+			<tr>
+				<th scope="col"><span class="visually-hidden">Preview</span></th>
+				<th scope="col">Game</th>
+				<th scope="col">System</th>
+				<th scope="col">Type</th>
+				<th scope="col">Resolution</th>
+				<th scope="col">Size</th>
+			</tr>
+		{/snippet}
+		{#snippet row(item)}
+			<tr>
+				<td>
+					<img
+						src="/api/games/{item.gameId}/images/{item.imageId}"
+						alt=""
+						loading="lazy"
+						style="max-width: 4rem; max-height: 4rem; object-fit: contain"
+					/>
+				</td>
+				<td>
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query -->
+					<a href="{resolve('/games/[id]', { id: item.gameId })}?tab=images">{item.displayTitle}</a>
+				</td>
+				<td><SystemBadge system={item.system} name={item.systemName} /></td>
+				<td>{imageTypeLabels[item.type]}</td>
+				<td class="text-nowrap">{item.width} × {item.height}</td>
+				<td><FileSize bytes={item.sizeBytes} /></td>
+			</tr>
+		{/snippet}
+	</DataTable>
 	<Pagination
 		page={view.page}
 		pages={pageCount(result.total, pageSize)}

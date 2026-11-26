@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
+	import Select from '#lib/components/forms/Select.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
 	import MergeDuplicatesModal from '#lib/components/modals/MergeDuplicatesModal.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
@@ -122,18 +125,17 @@
 	<div class="col-auto">
 		<div class="input-group input-group-sm w-auto">
 			<label class="input-group-text" for="duplicates-match">Match by</label>
-			<select
+			<Select
+				class="w-auto"
 				id="duplicates-match"
-				class="form-select w-auto"
 				value={match}
 				onchange={(e) => {
 					match = e.currentTarget.value === 'title' ? 'title' : 'igdb';
 					pageNumber = 1;
 				}}
+				><option value="igdb">IGDB ID</option>
+				<option value="title">Title</option></Select
 			>
-				<option value="igdb">IGDB ID</option>
-				<option value="title">Title</option>
-			</select>
 		</div>
 	</div>
 	<div class="col-12 col-sm-6 col-md-4">
@@ -192,12 +194,12 @@
 							<tr>
 								{#if auth.isAdmin}
 									<td>
-										<input
-											class="form-check-input"
+										<Checkbox
 											type="radio"
 											name="target-{group.gamesKey}"
 											aria-label="Merge into {game.displayTitle}"
-											checked={target(group) === game.id}
+											group={target(group)}
+											value={game.id}
 											onchange={() => (targets[group.gamesKey] = game.id)}
 										/>
 									</td>
@@ -217,13 +219,11 @@
 			</div>
 			{#if auth.isAdmin}
 				<div class="card-footer d-flex gap-2 justify-content-end">
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						onclick={() => dismiss(group)}>Dismiss</button
+					<Button variant="secondary" outline size="sm" onclick={() => dismiss(group)}
+						>Dismiss</Button
 					>
-					<button type="button" class="btn btn-sm btn-danger" onclick={() => askMerge(group)}
-						>Merge into selected</button
+					<Button variant="danger" size="sm" onclick={() => askMerge(group)}
+						>Merge into selected</Button
 					>
 				</div>
 			{/if}

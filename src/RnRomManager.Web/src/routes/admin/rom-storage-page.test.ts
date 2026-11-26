@@ -291,7 +291,9 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 			const repackButton = within(gba).getByRole('button', { name: repack });
 			expect(repackButton.hasAttribute('aria-label')).toBe(false);
 			expect(repackButton.textContent).toBe('Repack again Game Boy Advance ZIPs');
-			expect(repackButton.querySelector('.visually-hidden')?.textContent).toBe('Game Boy Advance ZIPs');
+			expect(repackButton.querySelector('.visually-hidden')?.textContent).toBe(
+				'Game Boy Advance ZIPs'
+			);
 			expect(repackButton.closest('td')).not.toBe(badge.closest('td'));
 			const nds = await row('Nintendo DS');
 			const cell = within(nds).getByText('Not applicable: ROMs are beside the ZIP').closest('td')!;

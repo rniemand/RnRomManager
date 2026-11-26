@@ -1,11 +1,11 @@
 <script lang="ts">
+	import Button from '#lib/components/forms/Button.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import { formatCount, formatSize } from '#lib/format.js';
 	import { systemColour } from '#lib/systemColours.js';
@@ -200,11 +200,15 @@
 								<td>
 									<div class="d-flex align-items-center gap-2">
 										<a href={systemHref(s.system)}>{s.systemName}</a>
-										<a
-											class="btn btn-sm btn-outline-secondary ms-auto"
+										<Button
+											variant="secondary"
+											outline
+											size="sm"
+											class="ms-auto"
+											icon="library"
 											href="{resolve('/')}?system={encodeURIComponent(s.system)}"
-											aria-label="Open {s.systemName} in Library"><Icon name="library" /></a
-										>
+											aria-label="Open {s.systemName} in Library"
+										/>
 									</div>
 								</td>
 								<td class="text-end">{formatCount(s.gameCount)}</td>

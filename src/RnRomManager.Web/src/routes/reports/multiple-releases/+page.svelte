@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import SortHeader from '#lib/components/common/SortHeader.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { parseDir } from '#lib/sort.js';
@@ -8,7 +10,6 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import type { Page, SystemInfo } from '#lib/types/index.js';
-	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
@@ -157,17 +158,16 @@
 	/>
 	<div class="input-group input-group-sm w-auto">
 		<label class="input-group-text" for="multiple-releases-min">Minimum releases</label>
-		<select
+		<Select
+			class="w-auto"
 			id="multiple-releases-min"
-			class="form-select w-auto"
 			value={String(min)}
 			disabled={maxReleases === null}
 			onchange={(e) => show({ ...view, min: Number(e.currentTarget.value), page: 1 })}
-		>
-			{#each options as option (option)}
+			>{#each options as option (option)}
 				<option value={String(option)}>{option}</option>
-			{/each}
-		</select>
+			{/each}</Select
+		>
 	</div>
 </div>
 
@@ -182,37 +182,32 @@
 			{result.total === 1 ? 'game' : 'games'}
 		</p>
 	{/if}
-	<div class="card">
-		<div class="table-responsive">
-			{#if result.total === 0}
-				<EmptyState message="No games have {min} or more releases." />
-			{:else}
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<thead class="table-dark">
-						<tr>
-							<SortHeader
-								columns={columns.map((c) => ({ ...c, class: c.numeric ? 'text-end' : undefined }))}
-								{sort}
-								{dir}
-								onsort={sortBy}
-							/>
-						</tr>
-					</thead>
-					<tbody>
-						{#each result.items as item (item.id)}
-							<tr>
-								<td><a href={resolve('/games/[id]', { id: item.id })}>{item.displayTitle}</a></td>
-								<td><SystemBadge system={item.system} name={item.systemName} /></td>
-								<td class="text-end text-nowrap">{item.releaseCount}</td>
-								<td class="text-end text-nowrap">{item.updateCount}</td>
-								<td class="text-end text-nowrap"><FileSize bytes={item.bytes} /></td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
-		</div>
-	</div>
+	<DataTable
+		items={result.items}
+		key={(item) => item.id}
+		empty="No games have {min} or more releases."
+		emptyInCard
+	>
+		{#snippet head()}
+			<tr>
+				<SortHeader
+					columns={columns.map((c) => ({ ...c, class: c.numeric ? 'text-end' : undefined }))}
+					{sort}
+					{dir}
+					onsort={sortBy}
+				/>
+			</tr>
+		{/snippet}
+		{#snippet row(item)}
+			<tr>
+				<td><a href={resolve('/games/[id]', { id: item.id })}>{item.displayTitle}</a></td>
+				<td><SystemBadge system={item.system} name={item.systemName} /></td>
+				<td class="text-end text-nowrap">{item.releaseCount}</td>
+				<td class="text-end text-nowrap">{item.updateCount}</td>
+				<td class="text-end text-nowrap"><FileSize bytes={item.bytes} /></td>
+			</tr>
+		{/snippet}
+	</DataTable>
 	<Pagination
 		page={pageNumber}
 		pages={pageCount(result.total, pageSize)}

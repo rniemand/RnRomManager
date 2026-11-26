@@ -1,4 +1,8 @@
 <script lang="ts">
+	import Select from '#lib/components/forms/Select.svelte';
+	import SearchInput from '#lib/components/forms/SearchInput.svelte';
+	import Button from '#lib/components/forms/Button.svelte';
+	import DataTable from '#lib/components/common/DataTable.svelte';
 	import SortHeader from '#lib/components/common/SortHeader.svelte';
 	import { useAbortableGet } from '#lib/loadPage.svelte.js';
 	import { debounced } from '#lib/debounce.js';
@@ -12,7 +16,6 @@
 	import { api } from '#lib/api/client.js';
 	import type { MissingIgdbItem, Page, SystemInfo } from '#lib/types/index.js';
 	import AdminOnly from '#lib/components/common/AdminOnly.svelte';
-	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import FilterDropdown from '#lib/components/forms/FilterDropdown.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
@@ -145,11 +148,9 @@
 	>
 		<div class="input-group input-group-sm flex-grow-1 flex-md-grow-0 missing-metadata-title">
 			<label class="input-group-text" for="missing-igdb-q">Title</label>
-			<input
+			<SearchInput
 				id="missing-igdb-q"
-				type="search"
-				class="form-control"
-				maxlength="100"
+				maxlength={100}
 				bind:value={search}
 				oninput={onSearchInput}
 			/>
@@ -164,22 +165,18 @@
 		/>
 		<div class="input-group input-group-sm w-auto">
 			<label class="input-group-text" for="missing-igdb-status">Show</label>
-			<select
+			<Select
+				class="w-auto"
 				id="missing-igdb-status"
-				class="form-select w-auto"
 				value={view.status}
 				onchange={(e) => show({ ...view, status: e.currentTarget.value as Status, page: 1 })}
-			>
-				{#each statusOptions as option (option.value)}
+				>{#each statusOptions as option (option.value)}
 					<option value={option.value}>{option.label}</option>
-				{/each}
-			</select>
+				{/each}</Select
+			>
 		</div>
-		<button
-			type="button"
-			class="btn btn-sm btn-outline-secondary"
-			disabled={!clearable}
-			onclick={clear}>Clear</button
+		<Button variant="secondary" outline size="sm" disabled={!clearable} onclick={clear}
+			>Clear</Button
 		>
 	</form>
 
@@ -194,43 +191,36 @@
 				{result.total === 1 ? 'game' : 'games'}
 			</p>
 		{/if}
-		<div class="card">
-			<div class="table-responsive">
-				{#if result.total === 0}
-					<EmptyState
-						message={filtered
-							? 'No games match these filters.'
-							: view.status === 'missing'
-								? 'Every game is linked to IGDB.'
-								: 'No games are marked as not on IGDB.'}
-					/>
-				{:else}
-					<table class="table table-sm table-striped table-hover align-middle mb-0">
-						<thead class="table-dark">
-							<tr>
-								<SortHeader {columns} sort={view.sort} dir={view.dir} onsort={sortBy} />
-							</tr>
-						</thead>
-						<tbody>
-							{#each result.items as item (item.id)}
-								<tr>
-									<td>
-										<!-- Unlinked games open Lookup Info, with Next missing IGDB ID (as Missing Metadata's links). -->
-										<a
-											href="{resolve('/games/[id]', { id: item.id })}{view.status === 'missing'
-												? '?from=missing-igdb'
-												: ''}">{item.displayTitle}</a
-										>
-									</td>
-									<td><SystemBadge system={item.system} name={item.systemName} /></td>
-									<td>{item.releaseYear ?? '—'}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				{/if}
-			</div>
-		</div>
+		<DataTable
+			items={result.items}
+			key={(item) => item.id}
+			empty={filtered
+				? 'No games match these filters.'
+				: view.status === 'missing'
+					? 'Every game is linked to IGDB.'
+					: 'No games are marked as not on IGDB.'}
+			emptyInCard
+		>
+			{#snippet head()}
+				<tr>
+					<SortHeader {columns} sort={view.sort} dir={view.dir} onsort={sortBy} />
+				</tr>
+			{/snippet}
+			{#snippet row(item)}
+				<tr>
+					<td>
+						<!-- Unlinked games open Lookup Info, with Next missing IGDB ID (as Missing Metadata's links). -->
+						<a
+							href="{resolve('/games/[id]', { id: item.id })}{view.status === 'missing'
+								? '?from=missing-igdb'
+								: ''}">{item.displayTitle}</a
+						>
+					</td>
+					<td><SystemBadge system={item.system} name={item.systemName} /></td>
+					<td>{item.releaseYear ?? '—'}</td>
+				</tr>
+			{/snippet}
+		</DataTable>
 		<Pagination
 			page={view.page}
 			pages={pageCount(result.total, pageSize)}

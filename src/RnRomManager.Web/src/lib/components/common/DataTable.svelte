@@ -13,34 +13,52 @@
 		key?: (item: T) => unknown;
 		/** Shown through `EmptyState` in place of the card when there are no items. */
 		empty?: string;
+		/** Shows `empty` inside the card (in place of the table) instead of in place of the card. */
+		emptyInCard?: boolean;
 		/** Appended to the card's `card`. */
 		class?: string;
 		/** Appended to the table's classes. */
 		tableClass?: string;
 	}
 
-	let { items, head, row, key, empty, class: className, tableClass, ...rest }: Props = $props();
+	let {
+		items,
+		head,
+		row,
+		key,
+		empty,
+		emptyInCard = false,
+		class: className,
+		tableClass,
+		...rest
+	}: Props = $props();
+
+	const isEmpty = $derived(empty !== undefined && items.length === 0);
 </script>
 
-{#if empty !== undefined && items.length === 0}
-	<EmptyState message={empty} />
+{#if isEmpty && !emptyInCard}
+	<EmptyState message={empty!} />
 {:else}
 	<div class={['card', className]}>
 		<div class="table-responsive">
-			<!-- A quoted class, so table-style.test.ts can read it. -->
-			<table
-				class="table table-sm table-striped table-hover align-middle mb-0{tableClass
-					? ` ${tableClass}`
-					: ''}"
-				{...rest}
-			>
-				<thead class="table-dark">{@render head()}</thead>
-				<tbody>
-					{#each items as item, i (key ? key(item) : i)}
-						{@render row(item, i)}
-					{/each}
-				</tbody>
-			</table>
+			{#if isEmpty}
+				<EmptyState message={empty!} />
+			{:else}
+				<!-- A quoted class, so table-style.test.ts can read it. -->
+				<table
+					class="table table-sm table-striped table-hover align-middle mb-0{tableClass
+						? ` ${tableClass}`
+						: ''}"
+					{...rest}
+				>
+					<thead class="table-dark">{@render head()}</thead>
+					<tbody>
+						{#each items as item, i (key ? key(item) : i)}
+							{@render row(item, i)}
+						{/each}
+					</tbody>
+				</table>
+			{/if}
 		</div>
 	</div>
 {/if}
