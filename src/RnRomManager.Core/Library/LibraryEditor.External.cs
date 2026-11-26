@@ -87,10 +87,10 @@ public sealed partial class LibraryEditor
         var placed = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
         foreach (var move in moves)
         {
-            var moved = ExternalRomMove.Move(library, move.From, move.To, move.Snapshot, logger, hooks: ExternalHooks?.Move);
+            var moved = ExternalRomMove.Move(library, move.From, move.To, move.Snapshot, logger, hooks: LibraryEditSupport.ExternalHooks?.Move);
             if (moved.Status != ExternalMoveStatus.Moved)
             {
-                UndoMoves(placed);
+                LibraryEditSupport.UndoMoves(placed);
                 return new(IoError, moved.Details);
             }
             placed.Add((move.From, moved.Path!, moved.Snapshot!));
@@ -100,20 +100,20 @@ public sealed partial class LibraryEditor
         try
         {
             var touched = placed.ToDictionary(m => Path.GetFileName(m.To), m => m.Snapshot, StringComparer.OrdinalIgnoreCase);
-            published = await Writer(game.System).WriteCheckedAsync(library, SafePath.Resolve(library, zipPath), existing,
-                new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>(), ExternalFiles: touched), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+            published = await LibraryEditSupport.Writer(game.System).WriteCheckedAsync(library, SafePath.Resolve(library, zipPath), existing,
+                new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>(), ExternalFiles: touched), ct, LibraryEditSupport.ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Writing {ZipPath} failed", zipPath);
-            UndoMoves(placed);
-            return WriteFailure(ex);
+            LibraryEditSupport.UndoMoves(placed);
+            return LibraryEditSupport.WriteFailure(ex);
         }
 
         if (actor is not null && ChangedFields(current, game) is { Count: > 0 } changed)
             audit.Record(new AuditEvent(AuditActions.GameUpdated, actor, game.System, row.Id, AuditPaths.Library(row.ZipPath),
                 AuditPaths.Library(zipPath), string.Join(", ", changed)));
-        var result = await MirrorAsync(() =>
+        var result = await LibraryEditSupport.MirrorAsync(() =>
         {
             // W1: stamped from the published ZIP, and only while the path still names it.
             if (ExternalRomPath.ClassifyFile(library, SafePath.Resolve(library, zipPath)).Snapshot != published)
@@ -121,36 +121,11 @@ public sealed partial class LibraryEditor
             return mirror.ReplaceAsync(new MirrorEntry(game, zipPath, published.Length, published.LastWriteTimeUtc), ct);
         }, zipPath).ConfigureAwait(false);
         if (result.Code is null && zipPath != row.ZipPath)
-            DeleteOldZipIfUnchanged(row.ZipPath, existing.Snapshot!, row.Id);
+            LibraryEditSupport.DeleteOldZipIfUnchanged(row.ZipPath, existing.Snapshot!, row.Id);
         if (result.Code is null)
             logger.LogInformation("Game {GameId} edited ({ZipPath})", row.Id, zipPath);
-        await ClearIgdbSyncAsync(current, game, result).ConfigureAwait(false);
+        await LibraryEditSupport.ClearIgdbSyncAsync(current, game, result).ConfigureAwait(false);
         return result;
-    }
-
-    /// <summary>W6: moves the files of a failed edit back, newest first; a move that fails is logged and left.</summary>
-    /// <param name="movedRoot">The root the files were moved under, when it isn't the library (<c>_removed/</c>).</param>
-    private void UndoMoves(List<(string From, string To, ExternalFileSnapshot Snapshot)> placed, string? movedRoot = null)
-    {
-        for (var i = placed.Count - 1; i >= 0; i--)
-        {
-            var (from, to, snapshot) = placed[i];
-            var back = ExternalRomMove.Move(movedRoot ?? paths.Value.Roms, to, from, snapshot, logger, hooks: ExternalHooks?.Move);
-            if (back.Status != ExternalMoveStatus.Moved)
-                logger.LogError("Moving {To} back to {From} failed ({Details}); integrity will report it", to, from, back.Details);
-        }
-    }
-
-    /// <summary>W1: the renamed game's old ZIP goes only while it is still the file the edit opened.</summary>
-    private void DeleteOldZipIfUnchanged(string zipPath, ExternalFileSnapshot opened, Guid gameId)
-    {
-        var path = SafePath.Resolve(paths.Value.Roms, zipPath);
-        if (ExternalRomPath.ClassifyFile(paths.Value.Roms, path) is not { Status: ExternalPathStatus.Found } current || current.Snapshot != opened)
-        {
-            logger.LogError("Game {GameId} moved away from {ZipPath}, but what is there now isn't the ZIP it left; it was kept", gameId, zipPath);
-            return;
-        }
-        DeleteOldZip(zipPath, gameId);
     }
 
     /// <summary>
@@ -191,14 +166,14 @@ public sealed partial class LibraryEditor
         var moved = fileSets ? rom : rom with { FileName = ExternalRomName.AllocateLogicalName(rom.FileName, targetNames) };
         var entries = new Dictionary<string, Func<Stream>>();
         var removed = new HashSet<string>(StringComparer.Ordinal);
-        CarryNote(sourceZip, rom.FileName, moved.FileName, entries, removed);
+        LibraryEditSupport.CarryNote(sourceZip, rom.FileName, moved.FileName, entries, removed);
 
         var claims = await roms.ListExternalAsync(ct).ConfigureAwait(false);
         InfoJsonGame targetGame;
         string targetPath;
         if (target is null)
         {
-            targetGame = await NewGameForAsync(row.SystemId, rom, newGameTitle!, [], entries, now, ct).ConfigureAwait(false);
+            targetGame = await LibraryEditSupport.NewGameForAsync(row.SystemId, rom, newGameTitle!, [], entries, now, ct).ConfigureAwait(false);
             targetPath =await ExternalRomName.AllocateZipPathAsync(library, row.SystemId, newGameTitle!, claims, games, ct).ConfigureAwait(false);
         }
         else
@@ -230,11 +205,11 @@ public sealed partial class LibraryEditor
             pointer = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(targetPath), moved.FileName, reservations);
         }
         moved = moved with { ExternalFileName = pointer };
-        targetGame = targetGame with { Roms = PrimaryRelease.Apply([.. targetGame.Roms, moved], DatSourceOf(row.SystemId), targetGame.ChosenPrimarySha1), Metadata = target is null ? targetGame.Metadata : Touched(targetGame) };
+        targetGame = targetGame with { Roms = PrimaryRelease.Apply([.. targetGame.Roms, moved], LibraryEditSupport.DatSourceOf(row.SystemId), targetGame.ChosenPrimarySha1), Metadata = target is null ? targetGame.Metadata : LibraryEditSupport.Touched(targetGame) };
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
-        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId), source.Game.ChosenPrimarySha1), Metadata = Touched(source.Game) };
+        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, LibraryEditSupport.DatSourceOf(row.SystemId), source.Game.ChosenPrimarySha1), Metadata = LibraryEditSupport.Touched(source.Game) };
         // B5: the last release deletes the source game, so its saves go with it into the target.
-        var (savesError, saves) = sourceGame is null ? CarrySaves(sourceZip, targetZip, Renames((rom.FileName, moved.FileName))) : (null, null);
+        var (savesError, saves) = sourceGame is null ? LibraryEditSupport.CarrySaves(sourceZip, targetZip, LibraryEditSupport.Renames((rom.FileName, moved.FileName))) : (null, null);
         if (savesError is not null)
             return savesError;
 
@@ -261,10 +236,10 @@ public sealed partial class LibraryEditor
         {
             try
             {
-                backup = await ExternalZipBackup.CreateAsync(library, sourceFull, sourceZip.Snapshot!, ExternalHooks?.Backup, ct).ConfigureAwait(false);
+                backup = await ExternalZipBackup.CreateAsync(library, sourceFull, sourceZip.Snapshot!, LibraryEditSupport.ExternalHooks?.Backup, ct).ConfigureAwait(false);
                 IReadOnlyList<MoveRecordFile>? recordFiles = rom.Files?.Select(f => new MoveRecordFile(f.ExternalFileName, f.ExternalFileName)).ToList();
                 recordSnapshot = await ExternalMoveRecord.WriteAsync(library, backup, new MoveRecord(MoveRecord.VersionFor(recordFiles), backup.Sha256, row.Id,
-                    row.ZipPath, targetGame.GameId, targetPath, rom.Metadata.Sha1, sourcePointer, pointer, recordFiles), reader, ExternalHooks?.Backup, ct)
+                    row.ZipPath, targetGame.GameId, targetPath, rom.Metadata.Sha1, sourcePointer, pointer, recordFiles), reader, LibraryEditSupport.ExternalHooks?.Backup, ct)
                     .ConfigureAwait(false);
             }
             catch (IOException ex)
@@ -278,10 +253,10 @@ public sealed partial class LibraryEditor
         var placed = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
         foreach (var (file, name) in toMove)
         {
-            var move = ExternalRomMove.Move(library, file.Path, Path.Combine(folder.Path, name), file.Snapshot!, logger, hooks: ExternalHooks?.Move);
+            var move = ExternalRomMove.Move(library, file.Path, Path.Combine(folder.Path, name), file.Snapshot!, logger, hooks: LibraryEditSupport.ExternalHooks?.Move);
             if (move.Status != ExternalMoveStatus.Moved)
             {
-                UndoMoves(placed);
+                LibraryEditSupport.UndoMoves(placed);
                 RemoveBackup(backup, recordSnapshot);
                 return new(IoError, move.Details);
             }
@@ -293,22 +268,22 @@ public sealed partial class LibraryEditor
         ExternalFileSnapshot publishedTarget;
         try
         {
-            publishedTarget = await Writer(targetGame.System).WriteCheckedAsync(library, targetFull, targetZip,
-                new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+            publishedTarget = await LibraryEditSupport.Writer(targetGame.System).WriteCheckedAsync(library, targetFull, targetZip,
+                new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, LibraryEditSupport.ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Writing {ZipPath} failed", targetPath);
-            UndoMoves(placed);
+            LibraryEditSupport.UndoMoves(placed);
             RemoveBackup(backup, recordSnapshot);
-            return WriteFailure(ex);
+            return LibraryEditSupport.WriteFailure(ex);
         }
 
         ExternalFileSnapshot? publishedSource = null;
         if (sourceGame is not null)
         {
-            ExternalHooks?.BeforeSourceRebuild?.Invoke();
-            if (!StillPublished(targetFull, publishedTarget))
+            LibraryEditSupport.ExternalHooks?.BeforeSourceRebuild?.Invoke();
+            if (!LibraryEditSupport.StillPublished(targetFull, publishedTarget))
             {
                 // W3: the target is gone, so the untouched source ZIP, the backup and the moved file are all kept for W7.
                 logger.LogError("Moving a release from {Source} to {Target}: the target was replaced before the source was rebuilt; " +
@@ -317,48 +292,48 @@ public sealed partial class LibraryEditor
             }
             try
             {
-                publishedSource = await Writer(sourceGame.System).WriteCheckedAsync(library, sourceFull, sourceZip,
-                    new LibraryZipChanges(sourceGame, new Dictionary<string, Func<Stream>>()), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+                publishedSource = await LibraryEditSupport.Writer(sourceGame.System).WriteCheckedAsync(library, sourceFull, sourceZip,
+                    new LibraryZipChanges(sourceGame, new Dictionary<string, Func<Stream>>()), ct, LibraryEditSupport.ExternalHooks?.Writer).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Rebuilding {ZipPath} failed", row.ZipPath);
                 if (await UndoExternalTargetAsync(targetPath, target?.Game, publishedTarget).ConfigureAwait(false))
-                    UndoMoves(placed);
+                    LibraryEditSupport.UndoMoves(placed);
                 else if (placed.Count > 0)
                     logger.LogError("The moved files stay at {Files}, beside {Target}", string.Join(", ", placed.Select(m => m.To)), targetPath);
                 // The backup goes only when everything is as it was, including the source ZIP the move opened.
-                if (StillPublished(sourceFull, sourceZip.Snapshot!) && placed.All(m => ExternalRomPath.ClassifyFile(library, m.From).Snapshot == m.Snapshot))
+                if (LibraryEditSupport.StillPublished(sourceFull, sourceZip.Snapshot!) && placed.All(m => ExternalRomPath.ClassifyFile(library, m.From).Snapshot == m.Snapshot))
                     RemoveBackup(backup, recordSnapshot);
                 else
                     logger.LogError("Kept the backup {Backup} of {ZipPath} for recovery", backup!.Path, row.ZipPath);
-                return WriteFailure(ex);
+                return LibraryEditSupport.WriteFailure(ex);
             }
         }
 
         audit.Record(new AuditEvent(AuditActions.ReleaseMoved, actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
             AuditPaths.Library(targetPath), rom.FileName));
-        ExternalHooks?.BeforeMirror?.Invoke();
-        var targetIntact = StillPublished(targetFull, publishedTarget);
-        var sourceIntact = publishedSource is null || StillPublished(sourceFull, publishedSource);
+        LibraryEditSupport.ExternalHooks?.BeforeMirror?.Invoke();
+        var targetIntact = LibraryEditSupport.StillPublished(targetFull, publishedTarget);
+        var sourceIntact = publishedSource is null || LibraryEditSupport.StillPublished(sourceFull, publishedSource);
         var result = targetIntact && sourceIntact
-            ? await MirrorAsync(() => mirror.ApplyAsync(
+            ? await LibraryEditSupport.MirrorAsync(() => mirror.ApplyAsync(
                 [new MirrorEntry(targetGame, targetPath, publishedTarget.Length, publishedTarget.LastWriteTimeUtc),
                     .. sourceGame is null ? Array.Empty<MirrorEntry>() : [new MirrorEntry(sourceGame, row.ZipPath, publishedSource!.Length, publishedSource.LastWriteTimeUtc)]],
                 sourceGame is null ? [row.Id] : [], ct), targetPath).ConfigureAwait(false)
             : new(DbWriteFailed, $"{(targetIntact ? row.ZipPath : targetPath)} was replaced after it was written");
 
         // W1/W3: cleanup only acts on files that are still what this move published or opened.
-        targetIntact = StillPublished(targetFull, publishedTarget);
+        targetIntact = LibraryEditSupport.StillPublished(targetFull, publishedTarget);
         if (sourceGame is null)
         {
             sourceZip.Dispose(); // Windows can't delete an open file.
             if (targetIntact)
-                DeleteOldZipIfUnchanged(row.ZipPath, sourceZip.Snapshot!, row.Id);
+                LibraryEditSupport.DeleteOldZipIfUnchanged(row.ZipPath, sourceZip.Snapshot!, row.Id);
             else
                 logger.LogError("Kept {Source}: the target {Target} was replaced after it was written", row.ZipPath, targetPath);
         }
-        else if (targetIntact && StillPublished(sourceFull, publishedSource!))
+        else if (targetIntact && LibraryEditSupport.StillPublished(sourceFull, publishedSource!))
         {
             RemoveBackup(backup, recordSnapshot);
         }
@@ -371,13 +346,10 @@ public sealed partial class LibraryEditor
         {
             logger.LogInformation("Release {FileName} moved from game {GameId} to {TargetId} ({ZipPath})", rom.FileName, row.Id, targetGame.GameId, targetPath);
             if (sourceGame is null)
-                await MoveCollectionMembershipsAsync(row.Id, targetGame.GameId).ConfigureAwait(false);
+                await LibraryEditSupport.MoveCollectionMembershipsAsync(row.Id, targetGame.GameId).ConfigureAwait(false);
         }
         return result with { GameId = targetGame.GameId };
     }
-
-    private bool StillPublished(string fullPath, ExternalFileSnapshot published) =>
-        ExternalRomPath.ClassifyFile(paths.Value.Roms, fullPath) is { Status: ExternalPathStatus.Found } current && current.Snapshot == published;
 
     /// <summary>Removes a move's backup and its record, each only while it is still the file the move published.</summary>
     /// <param name="record">The published record; null when none was published, so whatever is at its name isn't the move's.</param>
@@ -420,7 +392,7 @@ public sealed partial class LibraryEditor
         var path = SafePath.Resolve(library, targetPath);
         try
         {
-            if (!StillPublished(path, published))
+            if (!LibraryEditSupport.StillPublished(path, published))
             {
                 logger.LogError("Couldn't undo the write of {ZipPath}: it was replaced; the replacement is kept", targetPath);
                 return false;
@@ -438,8 +410,8 @@ public sealed partial class LibraryEditor
                 return false;
             }
             // The written target still has every entry it had before, so it can be rewritten from itself.
-            await Writer(before.System).WriteCheckedAsync(library, path, opened.Zip,
-                new LibraryZipChanges(before, new Dictionary<string, Func<Stream>>()), CancellationToken.None, ExternalHooks?.Writer).ConfigureAwait(false);
+            await LibraryEditSupport.Writer(before.System).WriteCheckedAsync(library, path, opened.Zip,
+                new LibraryZipChanges(before, new Dictionary<string, Func<Stream>>()), CancellationToken.None, LibraryEditSupport.ExternalHooks?.Writer).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)
@@ -488,7 +460,7 @@ public sealed partial class LibraryEditor
         var zipBase = Path.GetFileNameWithoutExtension(targetRow.ZipPath);
         var sourceFolder = Path.GetDirectoryName(sourceZip.Path)!;
         var merged = new List<InfoJsonRom>(into.Roms);
-        var renames = Renames();
+        var renames = LibraryEditSupport.Renames();
         var moves = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
         if (systems.ById(row.SystemId) is { FileSets: true })
         {
@@ -500,7 +472,7 @@ public sealed partial class LibraryEditor
                     return new(NameTaken, $"the target game already has a release named {rom.FileName}");
                 logical.Reserve(rom.FileName);
                 merged.Add(rom);
-                CarryNote(sourceZip, rom.FileName, rom.FileName, entries, removed);
+                LibraryEditSupport.CarryNote(sourceZip, rom.FileName, rom.FileName, entries, removed);
                 if (sameFolder)
                     continue;
                 foreach (var name in new[] { rom.ExternalFileName! }.Concat((rom.Files ?? []).Select(f => f.ExternalFileName)))
@@ -523,7 +495,7 @@ public sealed partial class LibraryEditor
             renames[rom.FileName] = name;
             var pointer = ExternalRomName.Allocate(zipBase, name, pointers);
             merged.Add(rom with { FileName = name, ExternalFileName = pointer });
-            CarryNote(sourceZip, rom.FileName, name, entries, removed);
+            LibraryEditSupport.CarryNote(sourceZip, rom.FileName, name, entries, removed);
             var file = ExternalRomPath.ClassifyFile(library, Path.Combine(sourceFolder, rom.ExternalFileName!));
             if (file.Status == ExternalPathStatus.Missing)
                 logger.LogWarning("Game {GameId}: {File} is missing, so only its pointer moves, to {Pointer}", row.Id, file.Path, pointer);
@@ -532,9 +504,9 @@ public sealed partial class LibraryEditor
             else
                 moves.Add((file.Path, Path.Combine(folder.Path, pointer), file.Snapshot!));
         }
-        var targetGame = MergedInto(into, from, merged, images);
+        var targetGame = LibraryEditSupport.MergedInto(into, from, merged, images);
         // B5: refused before any file moves.
-        var (savesError, saves) = CarrySaves(sourceZip, targetZip, renames);
+        var (savesError, saves) = LibraryEditSupport.CarrySaves(sourceZip, targetZip, renames);
         if (savesError is not null)
             return savesError;
 
@@ -542,10 +514,10 @@ public sealed partial class LibraryEditor
         var touched = new Dictionary<string, ExternalFileSnapshot>(StringComparer.OrdinalIgnoreCase);
         foreach (var (fromPath, toPath, snapshot) in moves)
         {
-            var move = ExternalRomMove.Move(library, fromPath, toPath, snapshot, logger, hooks: ExternalHooks?.Move);
+            var move = ExternalRomMove.Move(library, fromPath, toPath, snapshot, logger, hooks: LibraryEditSupport.ExternalHooks?.Move);
             if (move.Status != ExternalMoveStatus.Moved)
             {
-                UndoMoves(placed);
+                LibraryEditSupport.UndoMoves(placed);
                 return new(IoError, move.Details);
             }
             placed.Add((fromPath, move.Path!, move.Snapshot!));
@@ -555,29 +527,29 @@ public sealed partial class LibraryEditor
         ExternalFileSnapshot published;
         try
         {
-            published = await Writer(targetGame.System).WriteCheckedAsync(library, targetFull, targetZip,
-                new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+            published = await LibraryEditSupport.Writer(targetGame.System).WriteCheckedAsync(library, targetFull, targetZip,
+                new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, LibraryEditSupport.ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Writing {ZipPath} failed", targetRow.ZipPath);
-            UndoMoves(placed);
-            return WriteFailure(ex);
+            LibraryEditSupport.UndoMoves(placed);
+            return LibraryEditSupport.WriteFailure(ex);
         }
 
         audit.Record(new AuditEvent(AuditActions.GamesMerged, actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
             AuditPaths.Library(targetRow.ZipPath), $"{from.Roms.Count} releases, {copies.Count} images"));
-        ExternalHooks?.BeforeMirror?.Invoke();
-        var result = StillPublished(targetFull, published)
-            ? await MirrorAsync(() => mirror.ApplyAsync([new MirrorEntry(targetGame, targetRow.ZipPath, published.Length, published.LastWriteTimeUtc)],
+        LibraryEditSupport.ExternalHooks?.BeforeMirror?.Invoke();
+        var result = LibraryEditSupport.StillPublished(targetFull, published)
+            ? await LibraryEditSupport.MirrorAsync(() => mirror.ApplyAsync([new MirrorEntry(targetGame, targetRow.ZipPath, published.Length, published.LastWriteTimeUtc)],
                 [row.Id], ct), targetRow.ZipPath).ConfigureAwait(false)
             : new(DbWriteFailed, $"{targetRow.ZipPath} was replaced after it was written");
 
         // W1/W4: the source goes only while the target is still the ZIP this merge published.
         sourceZip.Dispose(); // Windows can't delete an open file.
-        if (StillPublished(targetFull, published))
+        if (LibraryEditSupport.StillPublished(targetFull, published))
         {
-            DeleteOldZipIfUnchanged(row.ZipPath, sourceZip.Snapshot!, row.Id);
+            LibraryEditSupport.DeleteOldZipIfUnchanged(row.ZipPath, sourceZip.Snapshot!, row.Id);
         }
         else
         {
@@ -587,9 +559,9 @@ public sealed partial class LibraryEditor
         if (result.Code is null)
         {
             logger.LogInformation("Game {GameId} merged into {TargetId} ({ZipPath})", row.Id, targetRow.Id, targetRow.ZipPath);
-            await MoveCollectionMembershipsAsync(row.Id, targetRow.Id).ConfigureAwait(false);
+            await LibraryEditSupport.MoveCollectionMembershipsAsync(row.Id, targetRow.Id).ConfigureAwait(false);
         }
-        await ClearIgdbSyncAsync(into, targetGame, result).ConfigureAwait(false);
+        await LibraryEditSupport.ClearIgdbSyncAsync(into, targetGame, result).ConfigureAwait(false);
         return result with { GameId = targetRow.Id };
     }
 
@@ -636,10 +608,10 @@ public sealed partial class LibraryEditor
                 var destination = ExternalRomName.AllocateSidePath(folder.Path, name);
                 var move = destination is null
                     ? new ExternalMoveResult(ExternalMoveStatus.Failed, Details: $"no name for {name} fits in {folder.Path}")
-                    : ExternalRomMove.Move(library, file.Path, destination, file.Snapshot!, logger, hooks: ExternalHooks?.Move);
+                    : ExternalRomMove.Move(library, file.Path, destination, file.Snapshot!, logger, hooks: LibraryEditSupport.ExternalHooks?.Move);
                 if (move.Status != ExternalMoveStatus.Moved)
                 {
-                    UndoMoves(placed, ingest);
+                    LibraryEditSupport.UndoMoves(placed, ingest);
                     return new(IoError, move.Details);
                 }
                 placed.Add((file.Path, move.Path!, move.Snapshot!));
@@ -655,25 +627,25 @@ public sealed partial class LibraryEditor
             ExternalFileSnapshot published;
             try
             {
-                published = await Writer(rebuilt.System).WriteCheckedAsync(library, zipFull, existing,
-                    new LibraryZipChanges(rebuilt, new Dictionary<string, Func<Stream>>()), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+                published = await LibraryEditSupport.Writer(rebuilt.System).WriteCheckedAsync(library, zipFull, existing,
+                    new LibraryZipChanges(rebuilt, new Dictionary<string, Func<Stream>>()), ct, LibraryEditSupport.ExternalHooks?.Writer).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Writing {ZipPath} failed", row.ZipPath);
-                UndoMoves(placed, ingest);
-                return WriteFailure(ex);
+                LibraryEditSupport.UndoMoves(placed, ingest);
+                return LibraryEditSupport.WriteFailure(ex);
             }
             var rom = removed[0];
             // B17: details name the main file, then each set file.
             audit.Record(new AuditEvent(AuditActions.ReleaseDeleted, actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
                 copies.TryGetValue(rom, out var copy) ? auditPaths.Of(copy) : null,
                 string.Join("; ", new[] { rom.FileName }.Concat((rom.Files ?? []).Select(f => f.FileName)))));
-            ExternalHooks?.BeforeMirror?.Invoke();
-            result = await MirrorAsync(() =>
+            LibraryEditSupport.ExternalHooks?.BeforeMirror?.Invoke();
+            result = await LibraryEditSupport.MirrorAsync(() =>
             {
                 // W1: stamped from the published ZIP, and only while the path still names it.
-                if (!StillPublished(zipFull, published))
+                if (!LibraryEditSupport.StillPublished(zipFull, published))
                     throw new IOException($"{row.ZipPath} is no longer the ZIP this edit published");
                 return mirror.ReplaceAsync(new MirrorEntry(rebuilt, row.ZipPath, published.Length, published.LastWriteTimeUtc), ct);
             }, row.ZipPath).ConfigureAwait(false);
@@ -683,20 +655,20 @@ public sealed partial class LibraryEditor
             existing.Dispose(); // Windows can't delete an open file.
             try
             {
-                if (!StillPublished(zipFull, existing.Snapshot!))
+                if (!LibraryEditSupport.StillPublished(zipFull, existing.Snapshot!))
                     throw new IOException($"{row.ZipPath} is no longer the ZIP that was opened; it was kept");
                 File.Delete(zipFull);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogError(ex, "Deleting {ZipPath} failed", row.ZipPath);
-                UndoMoves(placed, ingest);
+                LibraryEditSupport.UndoMoves(placed, ingest);
                 return new(IoError, ex.Message);
             }
             // Only the files went to _removed/; images and info.json were discarded.
             audit.Record(new AuditEvent(AuditActions.GameDeleted, actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
                 $"ingest/{row.SystemId}/{StorageFolders.RemovedFolder}/"));
-            result = await MirrorAsync(() => mirror.DeleteAsync(row.Id, ct), row.ZipPath).ConfigureAwait(false);
+            result = await LibraryEditSupport.MirrorAsync(() => mirror.DeleteAsync(row.Id, ct), row.ZipPath).ConfigureAwait(false);
         }
         return result;
     }

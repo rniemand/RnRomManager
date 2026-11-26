@@ -1,14 +1,31 @@
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RnRomManager.Core.Audit;
+using RnRomManager.Core.Collections;
+using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Dats;
+using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Media;
+using RnRomManager.Core.Naming;
+using RnRomManager.Core.Storage;
+using RnRomManager.Core.Systems;
 using static RnRomManager.Core.Library.LibraryEditResult;
 
 namespace RnRomManager.Core.Library;
 
 /// <summary>B8–B13: the save operations. Each takes the job lock, starts from the ZIP's <c>saves.json</c> and rewrites the ZIP.</summary>
-public sealed partial class LibraryEditor
+internal sealed class SaveEditor(
+    LibraryEditSupport libraryEditSupport,
+    JobLock jobLock,
+    IGameRepository games,
+    IRomRepository roms,
+    IAuditLog audit,
+    TimeProvider time,
+    ILogger<LibraryEditor> logger)
 {
     /// <summary>B8: adds a save for the release <paramref name="romId"/>.</summary>
-    public async Task<LibraryEditResult> AddSaveAsync(
+    internal async Task<LibraryEditResult> AddSaveAsync(
         Guid gameId,
         long romId,
         string kind,
@@ -52,7 +69,7 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>B9: changes a save's name and/or description; a change to neither writes nothing.</summary>
-    public async Task<LibraryEditResult> UpdateSaveAsync(
+    internal async Task<LibraryEditResult> UpdateSaveAsync(
         Guid gameId,
         string saveId,
         string? name,
@@ -83,7 +100,7 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>B10: replaces a save's bytes; the entry is renamed when the extension changes.</summary>
-    public async Task<LibraryEditResult> ReplaceSaveFileAsync(
+    internal async Task<LibraryEditResult> ReplaceSaveFileAsync(
         Guid gameId,
         string saveId,
         SaveUpload file,
@@ -107,7 +124,7 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>B11: removes a save, and <c>saves.json</c> with the last one.</summary>
-    public async Task<LibraryEditResult> DeleteSaveAsync(
+    internal async Task<LibraryEditResult> DeleteSaveAsync(
         Guid gameId,
         string saveId,
         AuditActor actor,
@@ -133,7 +150,7 @@ public sealed partial class LibraryEditor
     /// unknown id (S3). The operation checks them all again under the lock.
     /// </summary>
     /// <returns>null when the operation may go ahead.</returns>
-    public async Task<LibraryEditResult?> PrecheckSaveAsync(
+    internal async Task<LibraryEditResult?> PrecheckSaveAsync(
         Guid gameId,
         long? romId,
         string? saveId,
@@ -145,7 +162,7 @@ public sealed partial class LibraryEditor
         RomRow? romRow = null;
         if (romId is { } id && (romRow = await roms.GetAsync(gameId, id, ct).ConfigureAwait(false)) is null)
             return new(NotFound);
-        if (LegacyRefusal(row) is { } legacy)
+        if (libraryEditSupport.LegacyRefusal(row) is { } legacy)
             return legacy;
         using (var probe = jobLock.TryAcquire("Saving changes"))
         {
@@ -168,11 +185,11 @@ public sealed partial class LibraryEditor
     /// The game's ZIP and saves, in the B8 order after the game lookup: <c>StorageMigrationPending</c>, then
     /// <c>SavesUnreadable</c>. The caller disposes the ZIP.
     /// </summary>
-    private (LibraryEditResult? Error, LibraryZip? Zip, InfoJsonGame? Game, IReadOnlyList<GameSave>? Saves) OpenSaves(GameRow row)
+    internal (LibraryEditResult? Error, LibraryZip? Zip, InfoJsonGame? Game, IReadOnlyList<GameSave>? Saves) OpenSaves(GameRow row)
     {
-        if (LegacyRefusal(row) is { } legacy)
+        if (libraryEditSupport.LegacyRefusal(row) is { } legacy)
             return (legacy, null, null, null);
-        var target = OpenForEdit(row);
+        var target = libraryEditSupport.OpenForEdit(row);
         if (target.Code is not null)
             return (new(target.Code, target.Details), null, null, null);
         var read = GameSaves.Read(target.Zip!);
@@ -185,13 +202,13 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>S4: <c>MaxPerRelease</c> counts only <paramref name="username"/>'s own saves on the release.</summary>
-    private static int OwnSavesOn(IReadOnlyList<GameSave> saves, string releaseFileName, string? username) =>
+    internal static int OwnSavesOn(IReadOnlyList<GameSave> saves, string releaseFileName, string? username) =>
         saves.Count(s => GameSaves.Names(s, releaseFileName) && GameSaves.IsOwner(s, username));
 
     /// <summary>
     /// <see cref="OpenSaves"/> for one save; an unknown id, or one the viewer can't see (S3), is <c>NotFound</c> (B9: after <c>SavesUnreadable</c>).
     /// </summary>
-    private async Task<(LibraryEditResult? Error, LibraryZip? Zip, GameRow? Row, InfoJsonGame? Game, IReadOnlyList<GameSave>? Saves, GameSave? Save)>
+    internal async Task<(LibraryEditResult? Error, LibraryZip? Zip, GameRow? Row, InfoJsonGame? Game, IReadOnlyList<GameSave>? Saves, GameSave? Save)>
         OpenSaveAsync(Guid gameId, string saveId, SaveViewer viewer, CancellationToken ct)
     {
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
@@ -207,50 +224,8 @@ public sealed partial class LibraryEditor
         return (null, zip, row, game, saves, save);
     }
 
-    /// <summary>
-    /// B5: the target write's saves when a merge or a last-release move carries the source's saves: the target's records,
-    /// then the source's (a clashing id gets a new one), each source record's <c>release</c> renamed as its release was
-    /// (<paramref name="renames"/>, matched ignoring case; an orphan stays as it is), their bytes streamed from the source.
-    /// </summary>
-    /// <param name="target">The target's ZIP; null for a new game.</param>
-    /// <returns><c>SavesUnreadable</c> (either side) or <c>SavesIndexFull</c>; else the change, null when the source has no saves.</returns>
-    private static (LibraryEditResult? Error, SavesChange? Change) CarrySaves(LibraryZip source, LibraryZip? target,
-        IReadOnlyDictionary<string, string> renames)
-    {
-        var from = GameSaves.Read(source);
-        var into = target is null ? new SavesReadResult(SavesState.Absent) : GameSaves.Read(target);
-        if (from.State == SavesState.Unreadable || into.State == SavesState.Unreadable)
-            return (new(SavesUnreadable, SavesUnreadableTitle), null);
-        if (from.State == SavesState.Absent)
-            return (null, null);
-
-        var records = new List<GameSave>(into.Index?.Saves ?? []);
-        var ids = records.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
-        var added = new Dictionary<string, Func<Stream>>();
-        var removed = new HashSet<string>(StringComparer.Ordinal);
-        // B18: the target's own records are upgraded from the target ZIP (for a B9 rename the source is the target).
-        records = [.. GameSaves.Upgrade(records, s => () => (target ?? source).OpenEntry(s.Entry, s.SizeBytes), added, removed)];
-        var carriedRecords = new List<GameSave>();
-        foreach (var save in from.Index!.Saves)
-        {
-            var carried = ids.Add(save.Id) ? save : save with { Id = GameSaves.NewId() };
-            ids.Add(carried.Id);
-            if (renames.TryGetValue(save.Release, out var renamed))
-                carried = carried with { Release = renamed };
-            added[carried.Entry] = () => source.OpenEntry(save.Entry, save.SizeBytes);
-            carriedRecords.Add(carried);
-        }
-        // A carried legacy record's bytes are already in `added` under its legacy name, so Upgrade re-keys them.
-        records.AddRange(GameSaves.Upgrade(carriedRecords, s => () => source.OpenEntry(s.Entry, s.SizeBytes), added, removed));
-        // Only the target's own entries can be removed; a carried one never was in it.
-        removed.IntersectWith((target ?? source).EntryNames);
-        return GameSaves.Serialize(records) is { } index
-            ? (null, new SavesChange(index, added, removed))
-            : (new(SavesIndexFull, SavesIndexFullTitle), null);
-    }
-
     /// <summary>Writes the new <c>saves.json</c> (none when <paramref name="saves"/> is empty), mirrors the ZIP and audits (B13).</summary>
-    private async Task<LibraryEditResult> WriteSavesAsync(
+    internal async Task<LibraryEditResult> WriteSavesAsync(
         LibraryZip zip,
         GameRow row,
         InfoJsonGame game,
@@ -268,8 +243,8 @@ public sealed partial class LibraryEditor
         byte[]? index = null;
         if (saves.Count > 0 && (index = GameSaves.Serialize(saves)) is null)
             return new(SavesIndexFull, SavesIndexFullTitle);
-        var result = await WriteAsync(zip, row.ZipPath, game, saves: new SavesChange(index, added, removed)).ConfigureAwait(false);
-        if (FilesChanged(result))
+        var result = await libraryEditSupport.WriteAsync(zip, row.ZipPath, game, saves: new SavesChange(index, added, removed)).ConfigureAwait(false);
+        if (LibraryEditSupport.FilesChanged(result))
             audit.Record(new AuditEvent(action, actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
                 Details: $"{save.Kind} \"{save.Name}\" ({save.Id})"));
         if (result.Code is null)
