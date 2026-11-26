@@ -75,10 +75,11 @@ if (-not $SkipDb) {
 
 Write-Host '==> Creating ./.dev folders'
 $paths = [ordered]@{}
-foreach ($name in 'roms', 'ingest', 'logs', 'cache', 'backups', 'collections', 'bios') {
+foreach ($name in 'roms', 'ingest', 'logs', 'cache', 'backups', 'collections', 'bios', 'imagecache') {
     $path = Join-Path $repoRoot ".dev/$name"
     New-Item -ItemType Directory -Force -Path $path | Out-Null
-    $paths[(Get-Culture).TextInfo.ToTitleCase($name)] = [IO.Path]::GetFullPath($path)
+    $key = if ($name -eq 'imagecache') { 'ImageCache' } else { (Get-Culture).TextInfo.ToTitleCase($name) }
+    $paths[$key] = [IO.Path]::GetFullPath($path)
 }
 
 if (Test-Path -LiteralPath $settingsFile) {

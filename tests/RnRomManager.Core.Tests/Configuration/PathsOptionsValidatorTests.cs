@@ -15,6 +15,7 @@ public class PathsOptionsValidatorTests
         Backups = Path.Combine(Root, "backups"),
         Collections = Path.Combine(Root, "collections"),
         Bios = Path.Combine(Root, "bios"),
+        ImageCache = Path.Combine(Root, "imagecache"),
     };
 
     private static IEnumerable<string> Failures(PathsOptions options) =>
@@ -151,6 +152,15 @@ public class PathsOptionsValidatorTests
     {
         Assert.That(new PathsOptions().Bios, Is.EqualTo("/app/bios"));
         Assert.That(new PathsOptions().All(), Has.Member(("Paths:Bios", "/app/bios")));
+    }
+
+    [Test]
+    public void ImageCache_DefaultsToAppImageCache_AndIsTheEighthPath()
+    {
+        Assert.That(new PathsOptions().All(), Has.Count.EqualTo(8).And.Member(("Paths:ImageCache", "/app/imagecache")));
+        var options = Valid();
+        options.ImageCache = Path.Combine(options.Roms, "imagecache");
+        Assert.That(Failures(options), Has.Some.EqualTo("Paths:ImageCache must not be inside Paths:Roms."));
     }
 
     [Test]

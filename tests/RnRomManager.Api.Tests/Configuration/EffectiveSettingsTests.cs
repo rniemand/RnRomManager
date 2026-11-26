@@ -40,6 +40,7 @@ public class EffectiveSettingsTests
             ["Paths:Backups"] = Path.Combine(root, "backups"),
             ["Paths:Collections"] = Path.Combine(root, "collections"),
             ["Paths:Bios"] = Path.Combine(root, "bios"),
+            ["Paths:ImageCache"] = Path.Combine(root, "imagecache"),
             ["Backup:RestoreFrom"] = "rnrommanager-20261106-033000.zip",
             ["Emulator:GenesisCorePath"] = Path.Combine(root, "genesis"),
             ["Emulator:PicodriveCorePath"] = Path.Combine(root, "picodrive"),
@@ -121,6 +122,7 @@ public class EffectiveSettingsTests
             ["Paths:Backups"] = Path.Combine(root, "backups"),
             ["Paths:Collections"] = Path.Combine(root, "collections"),
             ["Paths:Bios"] = Path.Combine(root, "bios"),
+            ["Paths:ImageCache"] = Path.Combine(root, "imagecache"),
             ["Sources:IgdbClientId"] = "client-id",
             ["Sources:IgdbClientSecret"] = "s3cret",
         }).Build();
