@@ -25,12 +25,17 @@ public class DuplicateQueryTests
         _reports = new ReportRepository(_factory);
     }
 
-    private async Task<Guid> Add(string title, int? igdbId = null, string system = "gb")
+    private async Task<Guid> Add(string title, int? igdbId = null, string system = "gb", string? coverSha1 = null)
     {
         var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with
         {
             System = system,
             IgdbId = igdbId,
+            Images = coverSha1 is null ? [] : [new InfoJsonImage
+            {
+                FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = InfoJsonImage.SourceDefault, IsDefault = true, IsCover = true,
+                SizeBytes = 10, Sha1 = coverSha1, Width = 512, Height = 512, DateAdded = When,
+            }],
             Metadata = new InfoJsonGameMetadata(When, When, "0.1.0"),
         };
         var name = FileNameSanitizer.Sanitize(title) + ".zip";
@@ -41,13 +46,15 @@ public class DuplicateQueryTests
     [Test]
     public async Task SqlGamesKey_EqualsDuplicateGroupsGamesKey()
     {
-        var ids = new[] { await Add("Quest A"), await Add("Quest B"), await Add("Quest C") };
+        var ids = new[] { await Add("Quest A", coverSha1: new string('b', 40)), await Add("Quest B"), await Add("Quest C") };
         await using (var connection = _factory.Create())
             await connection.ExecuteAsync("UPDATE roms SET base_title = 'Quest'");
 
         var page = await _reports.ListDuplicatesAsync(DuplicateMatch.Title, null, 1, 25, default);
 
         var group = page.Items.Single();
+        Assert.That(group.Games.ToDictionary(g => g.Id, g => g.BoxArtSha1),
+            Is.EquivalentTo(new Dictionary<Guid, string?> { [ids[0]] = new string('b', 40), [ids[1]] = null, [ids[2]] = null }));
         Assert.That(group.GamesKey, Is.EqualTo(DuplicateGroups.GamesKey(ids)));
         Assert.That(group.GamesKey, Is.EqualTo(DuplicateGroups.GamesKey(ids.Reverse())));
         Assert.That(group.Games.Select(g => g.Id), Is.EquivalentTo(ids));

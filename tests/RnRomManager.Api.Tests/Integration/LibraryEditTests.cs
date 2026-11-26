@@ -206,6 +206,62 @@ public class LibraryEditTests
         Assert.That(((await Row(id))!.IgdbId, ReadZip(zipPath).IgdbId), Is.EqualTo(((int?)null, (int?)null)));
     }
 
+    [Test]
+    public async Task Patch_ChangedIgdbId_DropsActions_AndClearsTheIgdbColumns()
+    {
+        var id = await Tetris();
+        var zipPath = (await Row(id))!.ZipPath;
+        await GameActionsSeed.SeedAsync(_factory, id);
+        Assert.That(ReadZip(zipPath).Actions?.CoverImagePulled, Is.EqualTo(GameActionsSeed.Pulled));
+
+        using var set = await _admin.PatchAsync($"/api/games/{id}", new { igdbId = 1234 });
+
+        Assert.That(set.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(ReadZip(zipPath).Actions, Is.Null);
+        Assert.That(await GameActionsSeed.ReadAsync(_factory, id), Is.EqualTo(((DateTime?)null, (double?)null)));
+    }
+
+    [Test]
+    public async Task Patch_UnchangedIgdbId_KeepsActions_AndTheIgdbColumns()
+    {
+        var id = await Tetris();
+        var zipPath = (await Row(id))!.ZipPath;
+        await GameActionsSeed.SeedAsync(_factory, id);
+
+        await Rate(id, new GamePatch { SetRating = true, Rating = 4 });
+        using var same = await _admin.PatchAsync($"/api/games/{id}", new { igdbId = (int?)null, description = "Blocks." });
+
+        Assert.That(same.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(ReadZip(zipPath).Actions?.CoverImagePulled, Is.EqualTo(GameActionsSeed.Pulled));
+        Assert.That((await GameActionsSeed.ReadAsync(_factory, id))!.Value.Rating, Is.EqualTo(81.5));
+    }
+
+    [Test]
+    public async Task Patch_ChangedIgdbId_FailingClear_StillSucceeds()
+    {
+        var id = await Tetris();
+        await GameActionsSeed.SeedAsync(_factory, id);
+        // Fails only the clear: the mirror never touches igdb_rating.
+        await using (var db = Service<RnRomManager.Core.Database.IDbConnectionFactory>().Create())
+            await Dapper.SqlMapper.ExecuteAsync(db, """
+                CREATE TRIGGER fail_igdb_clear BEFORE UPDATE ON game_actions FOR EACH ROW
+                IF OLD.igdb_rating IS NOT NULL AND NEW.igdb_rating IS NULL THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'no'; END IF
+                """);
+        try
+        {
+            using var set = await _admin.PatchAsync($"/api/games/{id}", new { igdbId = 1234 });
+
+            Assert.That(set.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That((await Row(id))!.IgdbId, Is.EqualTo(1234));
+            Assert.That((await GameActionsSeed.ReadAsync(_factory, id))!.Value.Rating, Is.EqualTo(81.5), "the clear failed");
+        }
+        finally
+        {
+            await using var db = Service<RnRomManager.Core.Database.IDbConnectionFactory>().Create();
+            await Dapper.SqlMapper.ExecuteAsync(db, "DROP TRIGGER fail_igdb_clear");
+        }
+    }
+
     private async Task Rate(Guid id, GamePatch patch) =>
         Assert.That((await Service<LibraryEditor>().PatchAsync(id, patch, null, default)).Code, Is.Null);
 
@@ -437,7 +493,7 @@ public class LibraryEditTests
     {
         var id = await Tetris();
         var romId = await RomId(id, "Tetris (World).gb");
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         foreach (var (method, url) in new[] { (HttpMethod.Patch, $"/api/games/{id}"), (HttpMethod.Delete, $"/api/games/{id}/roms/{romId}"), (HttpMethod.Delete, $"/api/games/{id}") })
         {
@@ -499,7 +555,7 @@ public class LibraryEditTests
             Assert.That((await AuthClient.JsonAsync(update)).GetProperty("fileName").GetString(), Is.EqualTo("Tetris (World)[1.0.1].gb"));
         using (var missing = await _admin.PatchAsync($"/api/games/{id}/roms/999999", new { hack = true }))
             Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var busy = await _admin.PatchAsync($"/api/games/{id}/roms/{world}", new { hack = true });
             Assert.That(await AuthClient.CodeAsync(busy), Is.EqualTo("JobRunning"));

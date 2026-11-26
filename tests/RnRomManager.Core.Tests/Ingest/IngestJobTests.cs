@@ -289,7 +289,7 @@ public class IngestJobTests
 
         Assert.That(ex!.Code, Is.EqualTo(IngestJob.DatsMissing));
         await jobs.DidNotReceiveWithAnyArgs().InsertAsync(default!, default);
-        using var free = jobLock.TryAcquire();
+        using var free = jobLock.TryAcquire("test");
         Assert.That(free, Is.Not.Null);
     }
 

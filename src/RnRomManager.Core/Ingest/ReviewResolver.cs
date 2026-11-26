@@ -48,7 +48,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
 
     public async Task<ReviewResolutionResult> DismissAsync(long id, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Resolving review items");
         if (held is null)
             return new("JobRunning");
         var item = await reviews.GetAsync(id, ct).ConfigureAwait(false);
@@ -89,7 +89,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     /// </summary>
     public async Task<ReviewResolutionResult> DeleteSourceAsync(long id, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Resolving review items");
         if (held is null)
             return new("JobRunning");
         return await DeleteHeldAsync(id, actor, ct).ConfigureAwait(false);
@@ -101,7 +101,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     /// </summary>
     public async Task<ReviewBatchDeleteResult?> DeleteSourcesAsync(IReadOnlyList<long> ids, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Resolving review items");
         if (held is null)
             return null;
         int deleted = 0, skipped = 0;

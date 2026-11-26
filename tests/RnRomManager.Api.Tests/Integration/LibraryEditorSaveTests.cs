@@ -174,7 +174,7 @@ public class LibraryEditorSaveTests
     {
         var game = await WriteGame("Tetris", "Tetris (World).gb");
         var save = (await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "S", null, Upload([1]), Alice, default)).Save!;
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         Assert.That(new[]
         {
@@ -332,7 +332,7 @@ public class LibraryEditorSaveTests
             (await Editor.DeleteSaveAsync(game.Id, id, Alice, AliceViewer, default)).Code);
 
         Assert.That(await Outcome(bobs.Id), Is.EqualTo(await Outcome(unknown)));
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
             Assert.That(await Outcome(bobs.Id), Is.EqualTo(await Outcome(unknown)));
         using (var archive = ZipFile.Open(game.Zip, ZipArchiveMode.Update))
             archive.GetEntry(LibraryZip.SavesIndexEntry)!.Delete();

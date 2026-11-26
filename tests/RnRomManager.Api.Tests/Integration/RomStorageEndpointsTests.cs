@@ -169,7 +169,7 @@ public class RomStorageEndpointsTests
     [Test]
     public async Task Put_WhileAJobRuns_Is409_AndSavesNothing()
     {
-        using (Service<JobLock>().TryAcquire())
+        using (Service<JobLock>().TryAcquire("test"))
         {
             using var response = await Put("nds", new { embedRoms = true });
 

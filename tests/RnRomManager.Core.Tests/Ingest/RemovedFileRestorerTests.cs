@@ -109,12 +109,12 @@ public class RemovedFileRestorerTests
     {
         var source = Write("rom", "gb", "_removed", "a.gb");
 
-        using (_lock.TryAcquire())
+        using (_lock.TryAcquire("test"))
             Assert.That(_restorer.Restore([Removed("gb", "a.gb")], Actor).Code, Is.EqualTo("JobRunning"));
 
         Assert.That(File.Exists(source), Is.True);
         Assert.That(Recorded(), Is.Empty);
-        using var released = _lock.TryAcquire();
+        using var released = _lock.TryAcquire("test");
         Assert.That(released, Is.Not.Null);
     }
 

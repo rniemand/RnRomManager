@@ -22,7 +22,7 @@ public sealed partial class LibraryEditor
         if (GameSaves.DescriptionProblem(description) is { } descriptionProblem)
             return Invalid("description", descriptionProblem);
 
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row
@@ -58,7 +58,7 @@ public sealed partial class LibraryEditor
         if (GameSaves.DescriptionProblem(description) is { } descriptionProblem)
             return Invalid("description", descriptionProblem);
 
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         var (error, zip, row, game, saves, current) = await OpenSaveAsync(gameId, saveId, viewer, ct).ConfigureAwait(false);
@@ -77,7 +77,7 @@ public sealed partial class LibraryEditor
     public async Task<LibraryEditResult> ReplaceSaveFileAsync(Guid gameId, string saveId, SaveUpload file, AuditActor actor, SaveViewer viewer,
         CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         var (error, zip, row, game, saves, current) = await OpenSaveAsync(gameId, saveId, viewer, ct).ConfigureAwait(false);
@@ -95,7 +95,7 @@ public sealed partial class LibraryEditor
     /// <summary>B11: removes a save, and <c>saves.json</c> with the last one.</summary>
     public async Task<LibraryEditResult> DeleteSaveAsync(Guid gameId, string saveId, AuditActor actor, SaveViewer viewer, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         var (error, zip, row, game, saves, current) = await OpenSaveAsync(gameId, saveId, viewer, ct).ConfigureAwait(false);
@@ -123,7 +123,7 @@ public sealed partial class LibraryEditor
             return new(NotFound);
         if (LegacyRefusal(row) is { } legacy)
             return legacy;
-        using (var probe = jobLock.TryAcquire())
+        using (var probe = jobLock.TryAcquire("Saving changes"))
         {
             if (probe is null)
                 return new(JobRunning);

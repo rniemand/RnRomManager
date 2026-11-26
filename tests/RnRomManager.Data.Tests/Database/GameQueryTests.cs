@@ -345,8 +345,9 @@ public class GameQueryTests
         var tetris = items.Single(i => i.Id == id);
         var image = (await _images.ListByGameAsync(id, default)).Single();
         Assert.That(tetris.Regions, Is.EqualTo(new[] { "Europe", "USA", "World" }));
-        Assert.That((tetris.SystemId, tetris.ReleaseYear, tetris.RomCount, tetris.BoxArtImageId), Is.EqualTo(("gb", (int?)1989, 3, (long?)image.Id)));
-        Assert.That(noArt.BoxArtImageId, Is.Null);
+        Assert.That((tetris.SystemId, tetris.ReleaseYear, tetris.RomCount, tetris.BoxArtImageId, tetris.BoxArtSha1),
+            Is.EqualTo(("gb", (int?)1989, 3, (long?)image.Id, new string('a', 40))));
+        Assert.That((noArt.BoxArtImageId, noArt.BoxArtSha1), Is.EqualTo(((long?)null, (string?)null)));
     }
 
     [Test]
@@ -389,6 +390,27 @@ public class GameQueryTests
         var candidates = await _games.ListMediaRetryCandidatesAsync(default);
 
         Assert.That(candidates.Select(c => c.Title), Is.EqualTo(new[] { "Alpha Default", "Bare", "Default Art", "Real No Snap" }));
+    }
+
+    [Test]
+    public async Task PullCoverCandidates_LinkedAndNotPulled_ByTitleThenId()
+    {
+        await Add("Unlinked");
+        await Add("Not On Igdb", igdbId: 0);
+        var pulled = await Add("Pulled", igdbId: 3);
+        var rated = await Add("Rated", igdbId: 4);
+        var zeta = await Add("Zeta", igdbId: 5);
+        var twinA = await Add("Twin", igdbId: 6, system: "gb");
+        var twinB = await Add("Twin", igdbId: 7, system: "gbc");
+        await using (var connection = _factory.Create())
+        {
+            await Dapper.SqlMapper.ExecuteAsync(connection, "INSERT INTO game_actions (game_id, cover_image_pulled_at) VALUES (@pulled, UTC_TIMESTAMP())", new { pulled });
+            await Dapper.SqlMapper.ExecuteAsync(connection, "INSERT INTO game_actions (game_id, igdb_rating) VALUES (@rated, 70)", new { rated });
+        }
+
+        var candidates = await _games.ListPullCoverCandidatesAsync(default);
+
+        Assert.That(candidates.Select(c => c.Id), Is.EqualTo(new[] { rated }.Concat(new[] { twinA, twinB }.Order()).Append(zeta)));
     }
 
     [Test]

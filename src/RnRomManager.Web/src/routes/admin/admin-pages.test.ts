@@ -306,6 +306,10 @@ describe('admin pages', () => {
 		expect(screen.getByRole('link', { name: 'ROM Zip Config' }).getAttribute('href')).toBe(
 			'/admin/rom-storage'
 		);
+		expect(tabs.indexOf('Actions')).toBe(tabs.indexOf('BIOS info') + 1);
+		expect(screen.getByRole('link', { name: 'Actions' }).getAttribute('href')).toBe(
+			'/admin/actions'
+		);
 	});
 
 	it('each Admin tab has its icon (release editing B33)', () => {
@@ -321,6 +325,7 @@ describe('admin pages', () => {
 			['Settings', 'bi bi-gear'],
 			['ROM Zip Config', 'bi bi-file-zip'],
 			['BIOS info', 'bi bi-cpu'],
+			['Actions', 'bi bi-lightning-charge-fill'],
 			['Backups', 'bi bi-archive'],
 			['Logs', 'bi bi-journal-text'],
 			['Auditing', 'bi bi-clock-history']

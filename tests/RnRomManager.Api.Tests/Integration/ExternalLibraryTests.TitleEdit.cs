@@ -53,6 +53,20 @@ public partial class ExternalLibraryTests
         return library.InfoJson!.Game!;
     }
 
+    [TestCase(1234, true)]
+    [TestCase(null, false)]
+    public async Task IgdbEdit_ChangedLinkClearsActions_UnchangedKeepsThem(int? igdbId, bool cleared)
+    {
+        var gameId = await FirstReleaseAsync();
+        await GameActionsSeed.SeedAsync(_factory, gameId);
+
+        var result = await EditorWith().PatchAsync(gameId, new GamePatch { SetIgdbId = true, IgdbId = igdbId, SetRating = true, Rating = 3 }, Editor, default);
+
+        Assert.That(result.Code, Is.Null);
+        Assert.That(Read(ZipPath).Actions?.CoverImagePulled, Is.EqualTo(cleared ? null : GameActionsSeed.Pulled));
+        Assert.That((await GameActionsSeed.ReadAsync(_factory, gameId))!.Value.Rating, Is.EqualTo(cleared ? null : 81.5));
+    }
+
     private void AssertUntouched()
     {
         Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom));
@@ -283,7 +297,7 @@ public partial class ExternalLibraryTests
     public async Task BusyLock_ChangesNothing()
     {
         var gameId = await TwoReleaseGameAsync();
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         Assert.That((await RetitleAsync(gameId, "Star Game")).Code, Is.EqualTo(LibraryEditResult.JobRunning));
         AssertUntouched();

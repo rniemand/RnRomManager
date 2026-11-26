@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { GameDetail, RomDetail, SaveItem, SaveKind } from '../api/types';
-	import { canPlay, opensInNewTab, usesPlayDisc } from '../emulator';
+	import { usesPlayDisc } from '../emulator';
 	import { formatDateTime } from '../format';
 	import {
 		descriptionError,
@@ -10,6 +10,7 @@
 		maxDescriptionLength,
 		maxNameLength,
 		nameError,
+		playableRom,
 		savesApi
 	} from '../saves';
 	import { auth } from '../stores/auth.svelte';
@@ -55,15 +56,6 @@
 	let fileInput = $state<HTMLInputElement | null>(null);
 
 	const formId = `save-form-${Math.random().toString(36).slice(2)}`;
-
-	/** B16: the release a save plays on in the modal, or null when it can't be played from here. */
-	function playableRom(save: SaveItem): RomDetail | null {
-		const core = game.browserCore;
-		const rom = game.roms.find((r) => r.id === save.romId);
-		if (!rom || !core || !canPlay(game, rom) || opensInNewTab(core)) return null;
-		// B18: neither core's battery save goes through EmulatorJS's save file.
-		return save.kind === 'battery' && (core === 'desmume' || core === 'opera') ? null : rom;
-	}
 
 	let playOpen = $state(false);
 	let playing = $state<{ rom: RomDetail; save: SaveItem } | null>(null);
@@ -206,7 +198,7 @@
 				</thead>
 				<tbody>
 					{#each items as save (save.id)}
-						{@const playable = playableRom(save)}
+						{@const playable = playableRom(game, save)}
 						<tr>
 							<td>
 								<div class="text-break">{save.name}</div>

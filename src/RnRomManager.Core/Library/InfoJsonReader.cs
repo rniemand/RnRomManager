@@ -47,6 +47,10 @@ public sealed class InfoJsonReader(IEnumerable<IInfoJsonUpgrader> upgraders, ISy
             document["schemaVersion"] = version + 1;
         }
 
+        // A2: otherwise a non-object actions is a generic "wrongly typed field".
+        if (document["actions"] is not (null or JsonObject))
+            return InfoJsonReadResult.Invalid("actions must be an object", fileVersion);
+
         InfoJsonGame game;
         try
         {

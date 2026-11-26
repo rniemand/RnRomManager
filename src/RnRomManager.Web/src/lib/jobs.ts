@@ -11,7 +11,13 @@ export const outcomes = [
 	'Review',
 	'Failed',
 	'Error',
-	'Skipped'
+	'Skipped',
+	'Pulled',
+	'NoCover',
+	'ImageLimit',
+	'Updated',
+	'NoRating',
+	'NotFound'
 ];
 
 const statusClasses: Record<JobStatus, string> = {
@@ -31,7 +37,13 @@ const outcomeClasses: Record<string, string> = {
 	Review: 'text-bg-info',
 	Failed: 'text-bg-warning',
 	Error: 'text-bg-danger',
-	Skipped: 'text-bg-light'
+	Skipped: 'text-bg-light',
+	Pulled: 'text-bg-success',
+	NoCover: 'text-bg-secondary',
+	ImageLimit: 'text-bg-warning',
+	Updated: 'text-bg-success',
+	NoRating: 'text-bg-secondary',
+	NotFound: 'text-bg-warning'
 };
 
 export function statusClass(status: string): string {
@@ -50,7 +62,9 @@ const jobLabels: Record<CurrentJob['type'], string> = {
 	ReviewResolve: 'Review',
 	StorageMigration: 'Moving ROMs',
 	ZipRepack: 'Repacking ZIPs',
-	SaveFolders: 'Moving Saves to User Folders'
+	SaveFolders: 'Moving Saves to User Folders',
+	PullCovers: 'Pull Cover Images',
+	IgdbSync: 'Refresh IGDB Ratings'
 };
 
 /** ROM Zip Config B17: a job type's short label (footer, Jobs page); an unknown type shows as is. */

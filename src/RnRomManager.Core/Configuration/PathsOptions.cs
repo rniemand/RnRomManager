@@ -22,7 +22,10 @@ public sealed class PathsOptions
     /// </summary>
     public string Bios { get; set; } = "/app/bios";
 
+    /// <summary>Image cache C1: resized WebP covers, `<gameId>/<coverSha1>.webp`. Rebuilt from the ZIPs, so not in database backups.</summary>
+    public string ImageCache { get; set; } = "/app/imagecache";
+
     public IReadOnlyList<(string Key, string Path)> All() =>
         [("Paths:Roms", Roms), ("Paths:Ingest", Ingest), ("Paths:Logs", Logs), ("Paths:Cache", Cache), ("Paths:Backups", Backups),
-         ("Paths:Collections", Collections), ("Paths:Bios", Bios)];
+         ("Paths:Collections", Collections), ("Paths:Bios", Bios), ("Paths:ImageCache", ImageCache)];
 }

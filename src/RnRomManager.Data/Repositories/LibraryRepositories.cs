@@ -72,6 +72,70 @@ public sealed class GameRepository : IGameRepository
             .ToDictionary(r => r.GameId, r => r.SaveCount);
     }
 
+    public async Task ClearIgdbSyncAsync(Guid gameId, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE game_actions SET igdb_rating = NULL, igdb_rating_count = NULL, last_igdb_sync_at = NULL WHERE game_id = @gameId",
+            new { gameId }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<IReadOnlyList<GameRow>> ListIgdbLinkedAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<GameRow>(new CommandDefinition(
+            $"{Select} g WHERE g.igdb_id > 0 ORDER BY g.title, g.id", cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task SaveIgdbSyncAsync(Guid gameId, double? rating, int? count, DateTime syncedAt, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO game_actions (game_id, igdb_rating, igdb_rating_count, last_igdb_sync_at) VALUES (@gameId, @rating, @count, @syncedAt)
+            ON DUPLICATE KEY UPDATE igdb_rating = VALUES(igdb_rating), igdb_rating_count = VALUES(igdb_rating_count),
+                                    last_igdb_sync_at = VALUES(last_igdb_sync_at)
+            """, new { gameId, rating, count, syncedAt }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<GameActionsRow?> GetActionsAsync(Guid gameId, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return await connection.QuerySingleOrDefaultAsync<GameActionsRow>(new CommandDefinition("""
+            SELECT cover_image_pulled_at AS CoverImagePulledAt, last_igdb_sync_at AS LastIgdbSyncAt, igdb_rating AS IgdbRating,
+                   igdb_rating_count AS IgdbRatingCount
+            FROM game_actions WHERE game_id = @gameId
+            """, new { gameId }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, DateTime>> ListCoverPulledAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<(Guid GameId, DateTime PulledAt)>(new CommandDefinition(
+                "SELECT game_id, cover_image_pulled_at FROM game_actions WHERE cover_image_pulled_at IS NOT NULL", cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.GameId, r => DateTime.SpecifyKind(r.PulledAt, DateTimeKind.Utc));
+    }
+
+    public async Task<GameActionsSummary> GetActionsSummaryAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        var row = await connection.QuerySingleAsync<(long Linked, long Pending, DateTime? LastSync)>(new CommandDefinition("""
+            SELECT COUNT(*),
+                   CAST(COALESCE(SUM(a.cover_image_pulled_at IS NULL), 0) AS SIGNED),
+                   (SELECT MAX(last_igdb_sync_at) FROM game_actions)
+            FROM games g LEFT JOIN game_actions a ON a.game_id = g.id
+            WHERE g.igdb_id > 0
+            """, cancellationToken: cancellationToken));
+        return new GameActionsSummary((int)row.Linked, (int)row.Pending,
+            row.LastSync is { } last ? DateTime.SpecifyKind(last, DateTimeKind.Utc) : null);
+    }
+
+    public async Task<int> DeleteOrphanActionsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM game_actions WHERE NOT EXISTS (SELECT 1 FROM games g WHERE g.id = game_actions.game_id)", cancellationToken: cancellationToken));
+    }
+
     public async Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
@@ -199,6 +263,7 @@ public sealed class GameRepository : IGameRepository
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
                    (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.is_cover = 1) AS BoxArtImageId,
+                   (SELECT i.sha1 FROM images i WHERE i.game_id = g.id AND i.is_cover = 1 ORDER BY i.id LIMIT 1) AS BoxArtSha1,
                    (SELECT CAST(r.size_bytes + COALESCE((SELECT SUM(f.size_bytes) FROM rom_files f WHERE f.rom_id = r.id), 0) AS SIGNED)
                     FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY 1 DESC LIMIT 1) AS PrimarySizeBytes,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id AND JSON_CONTAINS(r.flags, '"Update"')) AS UpdateCount,
@@ -217,7 +282,7 @@ public sealed class GameRepository : IGameRepository
             """, args, cancellationToken: cancellationToken));
 
         var items = rows.Select(r => new GameListItem(
-            r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
+            r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId, r.BoxArtSha1,
             r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns)),
             (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true, r.IgdbId)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
@@ -385,6 +450,17 @@ public sealed class GameRepository : IGameRepository
             """, cancellationToken: cancellationToken))).AsList();
     }
 
+    public async Task<IReadOnlyList<GameRow>> ListPullCoverCandidatesAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<GameRow>(new CommandDefinition($"""
+            {Select} g
+            WHERE g.igdb_id > 0
+              AND NOT EXISTS (SELECT 1 FROM game_actions a WHERE a.game_id = g.id AND a.cover_image_pulled_at IS NOT NULL)
+            ORDER BY g.title, g.id
+            """, cancellationToken: cancellationToken))).AsList();
+    }
+
     public async Task<IReadOnlyList<GameRow>> ListStorageMovesAsync(IReadOnlyCollection<string> embedSystemIds,
         IReadOnlyCollection<string> externalSystemIds, CancellationToken cancellationToken)
     {
@@ -415,6 +491,7 @@ public sealed class GameRepository : IGameRepository
         public long RomCount { get; init; }
         public string? RegionKeys { get; init; }
         public long? BoxArtImageId { get; init; }
+        public string? BoxArtSha1 { get; init; }
         public long? PrimarySizeBytes { get; init; }
         public long UpdateCount { get; init; }
         public long DlcCount { get; init; }
@@ -629,6 +706,17 @@ public sealed class ImageRepository(IDbConnectionFactory connections) : IImageRe
         return await connection.QuerySingleOrDefaultAsync<ImageRow>(new CommandDefinition(
             $"{Select} WHERE id = @id AND game_id = @gameId", new { gameId, id }, cancellationToken: cancellationToken));
     }
+
+    public async Task<IReadOnlyList<CoverRow>> ListCoversAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return (await connection.QueryAsync<CoverRow>(new CommandDefinition("""
+            SELECT g.id AS GameId, g.zip_path AS ZipPath, i.file_name AS FileName, i.sha1 AS Sha1
+            FROM images i JOIN games g ON g.id = i.game_id
+            WHERE i.id = (SELECT MIN(c.id) FROM images c WHERE c.game_id = i.game_id AND c.is_cover = 1)
+            ORDER BY g.id
+            """, cancellationToken: cancellationToken))).AsList();
+    }
 }
 
 public sealed class LibraryMirror : ILibraryMirror
@@ -724,6 +812,23 @@ public sealed class LibraryMirror : ILibraryMirror
                         i.Width, i.Height, i.DateAdded,
                     }), transaction, cancellationToken: cancellationToken));
         }
+
+        // A4: game_actions has no FK, so the cover-pulled time is upserted here and the IGDB columns are never touched.
+        foreach (var entry in replace)
+        {
+            var pulled = InfoJsonActions.Parse(entry.Info.Actions?.CoverImagePulled)?.UtcDateTime;
+            await connection.ExecuteAsync(new CommandDefinition(pulled is null
+                    ? "UPDATE game_actions SET cover_image_pulled_at = NULL WHERE game_id = @Id"
+                    : """
+                      INSERT INTO game_actions (game_id, cover_image_pulled_at) VALUES (@Id, @Pulled)
+                      ON DUPLICATE KEY UPDATE cover_image_pulled_at = VALUES(cover_image_pulled_at)
+                      """,
+                new { Id = entry.Info.GameId, Pulled = pulled }, transaction, cancellationToken: cancellationToken));
+        }
+        var gone = delete.Except(rows.Select(r => r.Game.Id)).ToList();
+        if (gone.Count > 0)
+            await connection.ExecuteAsync(new CommandDefinition("DELETE FROM game_actions WHERE game_id IN @gone",
+                new { gone }, transaction, cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);
     }

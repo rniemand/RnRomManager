@@ -47,6 +47,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Paths:Backups"] = Path.Combine(Root, "backups"),
             ["Paths:Collections"] = Path.Combine(Root, "collections"),
             ["Paths:Bios"] = Path.Combine(Root, "bios"),
+            ["Paths:ImageCache"] = Path.Combine(Root, "imagecache"),
             // No scheduled quick check unless a test turns it on (it would start a real job at 03:00).
             ["Integrity:QuickCheckTime"] = "",
         };
@@ -139,7 +140,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         var deadline = DateTime.UtcNow.AddSeconds(30);
         while (true)
         {
-            using (var held = jobLock.TryAcquire())
+            using (var held = jobLock.TryAcquire("test"))
             {
                 if (held is not null)
                     return;

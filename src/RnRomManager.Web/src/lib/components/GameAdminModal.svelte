@@ -30,6 +30,7 @@
 		type GameEditErrors,
 		type GameEditForm
 	} from '../gameEdit';
+	import { activity } from '../stores/activity.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import GameTypeahead from './GameTypeahead.svelte';
@@ -274,6 +275,7 @@
 		if (!action || busy) return;
 		busy = true;
 		error = null;
+		if (action.kind === 'edit') void activity.refresh(); // L5: the footer shows the save at once
 		try {
 			const outcome = await run(action);
 			if (!outcome) return;
@@ -298,16 +300,25 @@
 <!-- M1: Lookup Info's actions sit in the modal footer, left of Cancel and Edit Metadata. -->
 {#snippet lookupFooter()}
 	{#if lookupChosen}
-		<button type="button" class="btn btn-success" onclick={() => lookup?.useMatch(false)}
-			>Use this match</button
+		<button
+			type="button"
+			class="btn btn-success"
+			disabled={busy}
+			onclick={() => lookup?.useMatch(false)}>Use this match</button
 		>
-		<button type="button" class="btn btn-success" onclick={() => lookup?.useMatch(true)}
-			>Use this match and save</button
+		<button
+			type="button"
+			class="btn btn-success"
+			disabled={busy}
+			onclick={() => lookup?.useMatch(true)}>Use this match and save</button
 		>
 	{/if}
 	{#if !lookupNotConfigured}
-		<button type="button" class="btn btn-outline-warning" onclick={() => lookup?.notOnIgdb()}
-			>Not on IGDB</button
+		<button
+			type="button"
+			class="btn btn-outline-warning"
+			disabled={busy}
+			onclick={() => lookup?.notOnIgdb()}>Not on IGDB</button
 		>
 	{/if}
 {/snippet}
@@ -325,6 +336,15 @@
 	{#if error}<div class="alert alert-danger py-2" role="alert">{error}</div>{/if}
 
 	{#if action?.kind === 'edit'}
+		{#if busy}
+			<!-- L5: a save rewrites the ZIP, which for a large game takes a while. -->
+			<div class="mb-3">
+				<div class="progress" role="progressbar" aria-label="Saving">
+					<div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div>
+				</div>
+				<div class="form-text">Saving… large games can take a minute.</div>
+			</div>
+		{/if}
 		<ul class="nav nav-tabs mb-3" role="tablist">
 			{#each [['details', 'Details'], ['lookup', 'Lookup Info']] as const as [value, label] (value)}
 				<li class="nav-item" role="presentation">
@@ -372,81 +392,83 @@
 					}
 				}}
 			>
-				<div class="row g-3">
-					<div class="col-12 col-md-9">
-						<label class="form-label" for="edit-title">Title</label>
-						<input
-							id="edit-title"
-							class="form-control"
-							class:is-invalid={errors.title}
-							maxlength="255"
-							bind:value={form.title}
-						/>
-						{#if errors.title}<div class="invalid-feedback">{errors.title}</div>{/if}
-						<div class="form-text">Renaming also renames the ZIP.</div>
-					</div>
-					<div class="col-12 col-md-3">
-						<label class="form-label" for="edit-year">Release year</label>
-						<input
-							id="edit-year"
-							class="form-control"
-							class:is-invalid={errors.releaseYear}
-							inputmode="numeric"
-							bind:value={form.releaseYear}
-						/>
-						{#if errors.releaseYear}<div class="invalid-feedback">{errors.releaseYear}</div>{/if}
-					</div>
-					{#each [['developers', 'Developers'], ['publishers', 'Publishers'], ['genres', 'Genres']] as const as [field, label] (field)}
-						<div class="col-12 col-md-4">
-							<label class="form-label" for="edit-{field}">{label}</label>
-							<textarea
-								id="edit-{field}"
+				<fieldset disabled={busy}>
+					<div class="row g-3">
+						<div class="col-12 col-md-9">
+							<label class="form-label" for="edit-title">Title</label>
+							<input
+								id="edit-title"
 								class="form-control"
-								class:is-invalid={errors[field]}
-								rows="3"
-								aria-describedby="edit-lists-help"
-								bind:value={form[field]}></textarea>
-							{#if errors[field]}<div class="invalid-feedback">{errors[field]}</div>{/if}
+								class:is-invalid={errors.title}
+								maxlength="255"
+								bind:value={form.title}
+							/>
+							{#if errors.title}<div class="invalid-feedback">{errors.title}</div>{/if}
+							<div class="form-text">Renaming also renames the ZIP.</div>
 						</div>
-					{/each}
-					<div id="edit-lists-help" class="col-12 form-text mt-1">
-						Developers, publishers and genres: one per line.
-					</div>
-					<div class="col-12">
-						<label class="form-label" for="edit-description">Description</label>
-						<textarea
-							id="edit-description"
-							class="form-control"
-							class:is-invalid={errors.description}
-							rows="4"
-							maxlength="4000"
-							bind:value={form.description}></textarea>
-						{#if errors.description}<div class="invalid-feedback">{errors.description}</div>{/if}
-					</div>
-					<div class="col-12">
-						<span class="form-text"
-							>IGDB: {form.igdbId === null
-								? 'not linked'
-								: form.igdbId === 0
-									? 'marked as not on IGDB'
-									: `linked (#${form.igdbId})`}</span
-						>
-						{#if form.igdbId !== null}
-							<button
-								type="button"
-								class="btn btn-link btn-sm p-0 ms-1 align-baseline"
-								onclick={() => {
-									form.igdbId = null;
-									pendingCover = null;
-								}}>Unlink</button
+						<div class="col-12 col-md-3">
+							<label class="form-label" for="edit-year">Release year</label>
+							<input
+								id="edit-year"
+								class="form-control"
+								class:is-invalid={errors.releaseYear}
+								inputmode="numeric"
+								bind:value={form.releaseYear}
+							/>
+							{#if errors.releaseYear}<div class="invalid-feedback">{errors.releaseYear}</div>{/if}
+						</div>
+						{#each [['developers', 'Developers'], ['publishers', 'Publishers'], ['genres', 'Genres']] as const as [field, label] (field)}
+							<div class="col-12 col-md-4">
+								<label class="form-label" for="edit-{field}">{label}</label>
+								<textarea
+									id="edit-{field}"
+									class="form-control"
+									class:is-invalid={errors[field]}
+									rows="3"
+									aria-describedby="edit-lists-help"
+									bind:value={form[field]}></textarea>
+								{#if errors[field]}<div class="invalid-feedback">{errors[field]}</div>{/if}
+							</div>
+						{/each}
+						<div id="edit-lists-help" class="col-12 form-text mt-1">
+							Developers, publishers and genres: one per line.
+						</div>
+						<div class="col-12">
+							<label class="form-label" for="edit-description">Description</label>
+							<textarea
+								id="edit-description"
+								class="form-control"
+								class:is-invalid={errors.description}
+								rows="4"
+								maxlength="4000"
+								bind:value={form.description}></textarea>
+							{#if errors.description}<div class="invalid-feedback">{errors.description}</div>{/if}
+						</div>
+						<div class="col-12">
+							<span class="form-text"
+								>IGDB: {form.igdbId === null
+									? 'not linked'
+									: form.igdbId === 0
+										? 'marked as not on IGDB'
+										: `linked (#${form.igdbId})`}</span
 							>
-						{/if}
-						{#if errors.igdbId}<div class="invalid-feedback d-block">{errors.igdbId}</div>{/if}
+							{#if form.igdbId !== null}
+								<button
+									type="button"
+									class="btn btn-link btn-sm p-0 ms-1 align-baseline"
+									onclick={() => {
+										form.igdbId = null;
+										pendingCover = null;
+									}}>Unlink</button
+								>
+							{/if}
+							{#if errors.igdbId}<div class="invalid-feedback d-block">{errors.igdbId}</div>{/if}
+						</div>
+						<div class="col-12 form-text">
+							Press Enter to save (Ctrl+Enter in a multi-line field).
+						</div>
 					</div>
-					<div class="col-12 form-text">
-						Press Enter to save (Ctrl+Enter in a multi-line field).
-					</div>
-				</div>
+				</fieldset>
 			</form>
 		</div>
 		<div
@@ -455,21 +477,23 @@
 			aria-labelledby="edit-lookup-tab"
 			hidden={editTab !== 'lookup'}
 		>
-			<IgdbLookup
-				bind:this={lookup}
-				bind:chosen={lookupChosen}
-				bind:notConfigured={lookupNotConfigured}
-				{game}
-				{form}
-				autostart={action.lookup}
-				onapply={(next, options) => {
-					form = next;
-					editTab = 'details';
-					igdbApplied = true;
-					pendingCover = (needsCover && options?.match?.coverImageUrl) || null;
-					if (options?.save) void confirm();
-				}}
-			/>
+			<fieldset disabled={busy}>
+				<IgdbLookup
+					bind:this={lookup}
+					bind:chosen={lookupChosen}
+					bind:notConfigured={lookupNotConfigured}
+					{game}
+					{form}
+					autostart={action.lookup}
+					onapply={(next, options) => {
+						form = next;
+						editTab = 'details';
+						igdbApplied = true;
+						pendingCover = (needsCover && options?.match?.coverImageUrl) || null;
+						if (options?.save) void confirm();
+					}}
+				/>
+			</fieldset>
 		</div>
 	{:else if action?.kind === 'retry'}
 		<p class="mb-0">Look up box art and a snap for {game.displayTitle} again?</p>

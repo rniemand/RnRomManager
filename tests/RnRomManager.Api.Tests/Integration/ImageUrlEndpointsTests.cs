@@ -388,7 +388,7 @@ public class ImageUrlEndpointsTests
     public async Task WhileAJobRuns_Is409()
     {
         _stub.Routes["/j.png"] = StubImageServer.Bytes(Png(3, 3));
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         using var response = await FromUrl(_stub.Url("/j.png").ToString());
 

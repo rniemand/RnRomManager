@@ -1,5 +1,15 @@
 import { api } from './api/client';
-import type { SaveItem, SaveKind } from './api/types';
+import type { GameDetail, RomDetail, SaveItem, SaveKind } from './api/types';
+import { canPlay, opensInNewTab } from './emulator';
+
+/** B16 (S2): the release a save plays on in the Play dialog, or null when it can't be played from here. */
+export function playableRom(game: GameDetail, save: SaveItem): RomDetail | null {
+	const core = game.browserCore;
+	const rom = game.roms.find((r) => r.id === save.romId);
+	if (!rom || !core || !canPlay(game, rom) || opensInNewTab(core)) return null;
+	// B18: neither core's battery save goes through EmulatorJS's save file.
+	return save.kind === 'battery' && (core === 'desmume' || core === 'opera') ? null : rom;
+}
 
 /** B8: the server's limits, mirrored for the client checks. */
 export const maxSaveBytes = 256 * 1024 * 1024;

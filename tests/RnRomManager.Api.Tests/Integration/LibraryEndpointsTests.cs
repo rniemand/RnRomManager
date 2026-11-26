@@ -200,6 +200,21 @@ public partial class LibraryEndpointsTests
         return await AuthClient.JsonAsync(response);
     }
 
+    [Test]
+    public async Task Detail_IgdbRating_NullUntilARefreshStoresAScore()
+    {
+        var id = await Tetris();
+        Assert.That((await GetJson($"/api/games/{id}")).GetProperty("igdbRating").ValueKind, Is.EqualTo(JsonValueKind.Null));
+
+        await Service<IGameRepository>().SaveIgdbSyncAsync(id, null, null, new DateTime(2026, 11, 26, 9, 0, 0), default);
+        Assert.That((await GetJson($"/api/games/{id}")).GetProperty("igdbRating").ValueKind, Is.EqualTo(JsonValueKind.Null), "no rating");
+
+        await Service<IGameRepository>().SaveIgdbSyncAsync(id, 81.6, null, new DateTime(2026, 11, 26, 9, 0, 0), default);
+        var rating = (await GetJson($"/api/games/{id}")).GetProperty("igdbRating");
+        Assert.That((rating.GetProperty("score").GetDouble(), rating.GetProperty("votes").GetInt32(), rating.GetProperty("syncedAt").GetString()),
+            Is.EqualTo((81.6, 0, "2026-11-26T09:00:00Z")));
+    }
+
     private async Task<string> ZipPath(Guid id) =>
         Path.Combine(_factory.Root, "roms", (await Service<IGameRepository>().GetAsync(id, default))!.ZipPath);
 
@@ -841,7 +856,7 @@ public partial class LibraryEndpointsTests
             Assert.That(bad.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
             Assert.That(await AuthClient.CodeAsync(bad), Is.EqualTo("ValidationFailed"));
         }
-        using (Service<RnRomManager.Core.Jobs.JobLock>().TryAcquire())
+        using (Service<RnRomManager.Core.Jobs.JobLock>().TryAcquire("test"))
         using (var busy = await admin.PatchAsync($"/api/games/{id}/rating", new { rating = 3 }))
         {
             Assert.That(busy.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
@@ -1278,7 +1293,7 @@ public partial class LibraryEndpointsTests
             Is.EqualTo(("snap-01.jpg", "upload", "Snap")));
         Assert.That(detail.GetProperty("hasDefaultBoxArt").GetBoolean(), Is.False, "the cover isn't the placeholder");
         var item = (await GetJson("/api/games")).GetProperty("items").EnumerateArray().Single();
-        Assert.That(item.GetProperty("boxArtUrl").GetString(), Is.EqualTo(cover.GetProperty("url").GetString()));
+        Assert.That(item.GetProperty("boxArtUrl").GetString(), Is.EqualTo($"/api/games/{id}/cover/{snap.Sha1}"));
 
         using var image = await _user.GetAsync(cover.GetProperty("url").GetString()!);
         Assert.That(image.StatusCode, Is.EqualTo(HttpStatusCode.OK));

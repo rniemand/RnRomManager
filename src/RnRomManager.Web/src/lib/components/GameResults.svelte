@@ -1,10 +1,14 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
-	import type { GameListItem } from '../api/types';
+	import { api } from '../api/client';
+	import type { GameDetail, GameListItem, RomDetail, SaveItem } from '../api/types';
 	import { formatCount } from '../format';
 	import { tooltip } from '../tooltip';
-	import { opensInNewTab, playLinkEvents, playUrl } from '../emulator';
+	import { opensInNewTab, playLinkEvents, playUrl, usesPlayDisc, type PlaySave } from '../emulator';
+	import { playableRom, savesApi } from '../saves';
+	import { toasts } from '../stores/toasts.svelte';
+	import ConfirmModal from './ConfirmModal.svelte';
 	import EmulatorModal from './EmulatorModal.svelte';
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
@@ -47,25 +51,91 @@
 	const releasesText = (n: number) => `${formatCount(n)} releases`;
 
 	// C2: one modal for every card; the list item carries what the emulator needs, so nothing is fetched.
-	let playing = $state<GameListItem | null>(null);
+	// S4: picking up a save plays that save's release instead.
+	type Playing = {
+		game: GameListItem;
+		rom?: Pick<RomDetail, 'id' | 'fileName'>;
+		save?: PlaySave;
+		disc?: boolean;
+	};
+	let playing = $state<Playing | null>(null);
 	let playOpen = $state(false);
 
 	function play(game: GameListItem): void {
-		playing = game;
+		playing = { game };
 		playOpen = true;
 	}
 
 	const canPlay = (game: GameListItem) => game.playRomId != null && !selected;
+	/** S3: the viewer has a save here and the core plays in the Play dialog. */
+	const canResume = (game: GameListItem) =>
+		canPlay(game) &&
+		game.ownSaveCount > 0 &&
+		!!game.browserCore &&
+		!opensInNewTab(game.browserCore);
+
+	let resuming = $state<string | null>(null);
+	let pendingBattery = $state<Playing | null>(null);
+	let batteryOpen = $state(false);
+
+	/** S4: the most recently updated own save that plays here, through the Saves tab's battery confirmation. */
+	async function resume(item: GameListItem): Promise<void> {
+		resuming = item.id;
+		try {
+			const [game, saves] = await Promise.all([
+				api.get<GameDetail>(`/api/games/${item.id}`),
+				savesApi.list(item.id)
+			]);
+			const me = auth.me?.username.toLowerCase();
+			let found: { save: SaveItem; rom: RomDetail } | null = null;
+			for (const save of saves) {
+				if (!me || save.uploadedBy?.toLowerCase() !== me) continue;
+				const rom = playableRom(game, save);
+				if (rom) {
+					found = { save, rom };
+					break;
+				}
+			}
+			if (!found) {
+				toasts.show('No save to pick up here.', 'info');
+				return;
+			}
+			const next: Playing = {
+				game: item,
+				rom: found.rom,
+				save: { saveId: found.save.id, saveKind: found.save.kind },
+				disc: usesPlayDisc(game.browserCore!, found.rom)
+			};
+			if (found.save.kind === 'battery') {
+				pendingBattery = next;
+				batteryOpen = true;
+			} else {
+				playing = next;
+				playOpen = true;
+			}
+		} catch {
+			toasts.show("Couldn't load your saves.", 'danger');
+		} finally {
+			resuming = null;
+		}
+	}
+
+	function playBattery(): void {
+		batteryOpen = false;
+		playing = pendingBattery;
+		playOpen = true;
+	}
 	const actionsColumn = $derived(!!action || games.some((g) => g.playRomId != null));
 </script>
 
 <!-- C2: Play, or (PSP B3) a link that opens the isolated player in its own tab. -->
-{#snippet playAction(game: GameListItem, classes: string)}
+{#snippet playAction(game: GameListItem, classes: string, style = '')}
 	{#if game.browserCore && opensInNewTab(game.browserCore)}
 		<!-- Static player page outside the SPA router. -->
 		<!-- eslint-disable svelte/no-navigation-without-resolve -->
 		<a
 			class={classes}
+			{style}
 			href={playUrl(
 				game.id,
 				{ id: game.playRomId!, fileName: game.playRomFileName ?? '' },
@@ -82,10 +152,25 @@
 		<button
 			type="button"
 			class={classes}
+			{style}
 			aria-label="Play {game.displayTitle}"
 			onclick={() => play(game)}><Icon name="play" /></button
 		>
 	{/if}
+{/snippet}
+
+<!-- S3: pick up where you left off: the viewer's latest playable save. -->
+{#snippet resumeAction(game: GameListItem, classes: string)}
+	<button
+		type="button"
+		class={classes}
+		aria-label="Pick up where you left off in {game.displayTitle}"
+		disabled={resuming === game.id}
+		use:tooltip={'Pick up where you left off'}
+		onclick={() => void resume(game)}
+		>{#if resuming === game.id}<span class="spinner-border spinner-border-sm" aria-hidden="true"
+			></span>{:else}<Icon name="play" />{/if}</button
+	>
 {/snippet}
 
 <!-- Saves: opens the game on its Saves tab, to load a save and carry on. -->
@@ -171,7 +256,17 @@
 							// Above the Play button when there is one.
 							canPlay(game) ? 'bottom: 2.25rem' : 'bottom: 0'
 						)}
-						{#if canPlay(game)}
+						{#if canResume(game)}
+							{@render playAction(
+								game,
+								'btn btn-sm btn-primary rounded-circle position-absolute bottom-0 m-1 z-2',
+								'right: 2.25rem'
+							)}
+							{@render resumeAction(
+								game,
+								'btn btn-sm btn-success rounded-circle position-absolute bottom-0 end-0 m-1 z-2'
+							)}
+						{:else if canPlay(game)}
 							{@render playAction(
 								game,
 								'btn btn-sm btn-primary rounded-circle position-absolute bottom-0 end-0 m-1 z-2'
@@ -279,6 +374,9 @@
 								{#if canPlay(game)}
 									{@render playAction(game, 'btn btn-sm btn-outline-success')}
 								{/if}
+								{#if canResume(game)}
+									{@render resumeAction(game, 'btn btn-sm btn-success rounded-circle ms-1')}
+								{/if}
 								{#if action}{@render action(game)}{/if}
 							</td>
 						{/if}
@@ -289,12 +387,23 @@
 	</div>
 {/if}
 
+<ConfirmModal
+	bind:open={batteryOpen}
+	title="Load battery save"
+	confirmLabel="Play"
+	onconfirm={playBattery}
+>
+	<p class="mb-0">Loading this battery save replaces the in-browser save for this release.</p>
+</ConfirmModal>
+
 <EmulatorModal
 	bind:open={playOpen}
-	gameId={playing?.id ?? ''}
-	core={playing?.browserCore ?? null}
-	rom={playing?.playRomId != null
-		? { id: playing.playRomId, fileName: playing.playRomFileName ?? '' }
-		: null}
-	disc={playing?.playDisc ?? false}
+	gameId={playing?.game.id ?? ''}
+	core={playing?.game.browserCore ?? null}
+	rom={playing?.rom ??
+		(playing?.game.playRomId != null
+			? { id: playing.game.playRomId, fileName: playing.game.playRomFileName ?? '' }
+			: null)}
+	disc={playing?.disc ?? playing?.game.playDisc ?? false}
+	save={playing?.save ?? null}
 />

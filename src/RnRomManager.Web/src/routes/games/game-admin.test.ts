@@ -872,6 +872,43 @@ describe('game detail admin actions', () => {
 				expect(footerButton('Not on IGDB')).toBeNull();
 			});
 
+			it('while saving: the Saving bar sits above the tabs; the fields, Lookup Info and its buttons are disabled (L5)', async () => {
+				await openEdit(configured());
+				const answer = globalThis.fetch;
+				let finish!: () => void;
+				const pending = new Promise<Response>(
+					(r) => (finish = () => r(new Response(JSON.stringify(configured()), { status: 200 })))
+				);
+				vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+					init?.method === 'PATCH' ? pending : answer(url, init)
+				);
+				expect(modal().queryByRole('progressbar', { name: 'Saving', hidden: true })).toBeNull();
+
+				await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+				await fireEvent.click(tab('Lookup Info'));
+
+				const bar = modal().getByRole('progressbar', { name: 'Saving', hidden: true });
+				expect(bar.className).toBe('progress');
+				expect(bar.firstElementChild!.className).toBe(
+					'progress-bar progress-bar-striped progress-bar-animated w-100'
+				);
+				expect(modal().getByText('Saving… large games can take a minute.')).toBeTruthy();
+				expect(
+					bar.parentElement!.compareDocumentPosition(
+						document.querySelector('.modal ul.nav-tabs')!
+					) & Node.DOCUMENT_POSITION_FOLLOWING
+				).toBeTruthy();
+				expect(panel('edit-details-panel').querySelector('fieldset')!.disabled).toBe(true);
+				expect(panel('edit-lookup-panel').querySelector('fieldset')!.disabled).toBe(true);
+				expect(footerButton('Not on IGDB')!.hasAttribute('disabled')).toBe(true);
+				expect(calls).toContain('GET /api/activity');
+
+				finish();
+				await vi.waitFor(() =>
+					expect(modal().queryByRole('progressbar', { name: 'Saving', hidden: true })).toBeNull()
+				);
+			});
+
 			it('Not on IGDB clears the link and switches to Details', async () => {
 				await openEdit(configured({ igdbId: 5 }));
 				await fireEvent.click(tab('Lookup Info'));

@@ -62,6 +62,31 @@ public interface IGameInfoLookup
     Task<GamePageResult> GamePageUrlAsync(int igdbId, CancellationToken cancellationToken);
 }
 
+/// <summary>P3: one IGDB game's cover and rating; each null when IGDB has none.</summary>
+public sealed record IgdbGameRating(int Id, string? CoverImageId, double? TotalRating, int? TotalRatingCount);
+
+/// <summary>
+/// P3: a cover download. <see cref="Bytes"/> on a 200 within <see cref="ImageFormats.MaxBytes"/>; else <see cref="Status"/>
+/// is the response's status (null for a connection error or timeout) and <see cref="Error"/> says why.
+/// </summary>
+public sealed record IgdbCoverDownload(byte[]? Bytes, int? Status, string? Error);
+
+/// <summary>Pull Cover Images and Refresh IGDB Ratings (P3, R2): batch reads by IGDB id and cover downloads.</summary>
+public interface IIgdbGames
+{
+    /// <summary>Both <c>Sources:Igdb*</c> keys are set.</summary>
+    bool Configured { get; }
+
+    /// <summary>
+    /// The games IGDB returns for <paramref name="ids"/>, queried in batches of <see cref="IgdbClient.MaxBatch"/>. A failure
+    /// throws with one of the <see cref="IgdbClient"/> failure titles as its message; cancellation propagates.
+    /// </summary>
+    Task<IReadOnlyList<IgdbGameRating>> GetGamesAsync(IReadOnlyList<int> ids, CancellationToken cancellationToken);
+
+    /// <summary>The <c>t_1080p</c> cover <paramref name="imageId"/>. Never throws but for cancellation.</summary>
+    Task<IgdbCoverDownload> DownloadCoverAsync(string imageId, CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// T7: IGDB page URLs by game id, per process; found pages and not-found (null) results only, never failures. Cleared
 /// whole when it holds <see cref="MaxEntries"/>.
@@ -130,8 +155,11 @@ public sealed class IgdbTokenCache(TimeProvider time)
 /// and no redirects.
 /// </summary>
 public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, IOptions<SourcesOptions> options, ILogger<IgdbClient> logger)
-    : IImageSuggestions, IGameInfoLookup
+    : IImageSuggestions, IGameInfoLookup, IIgdbGames
 {
+    /// <summary>P3: IGDB's largest page.</summary>
+    public const int MaxBatch = 500;
+
     public const string TokenUrl = "https://id.twitch.tv/oauth2/token";
     public const string GamesUrl = "https://api.igdb.com/v4/games";
     public const string ImageBaseUrl = "https://images.igdb.com/igdb/image/upload/";
@@ -199,6 +227,69 @@ public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, I
         {
             logger.LogWarning("IGDB page of {IgdbId} failed: {Type}: {Message}", igdbId, ex.GetType().Name, ex.Message);
             return new GamePageResult(null, Unreachable);
+        }
+    }
+
+    public async Task<IReadOnlyList<IgdbGameRating>> GetGamesAsync(IReadOnlyList<int> ids, CancellationToken cancellationToken)
+    {
+        if (!Configured)
+            throw new InvalidOperationException("IGDB isn't configured.");
+        var games = new List<IgdbGameRating>();
+        foreach (var batch in ids.Chunk(MaxBatch))
+        {
+            JsonElement root;
+            try
+            {
+                root = await SearchAsync(BatchBody(batch), cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not IgdbFailure && !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogWarning("IGDB batch read failed: {Type}: {Message}", ex.GetType().Name, ex.Message);
+                throw new IgdbFailure(Unreachable);
+            }
+            foreach (var game in root.EnumerateArray().Where(g => g.ValueKind == JsonValueKind.Object))
+            {
+                if (Dimension(game, "id") is not { } id)
+                    continue;
+                var cover = game.TryGetProperty("cover", out var c) ? Image(c)?.ImageId : null;
+                double? rating = game.TryGetProperty("total_rating", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetDouble() : null;
+                games.Add(new IgdbGameRating(id, cover, rating, Dimension(game, "total_rating_count")));
+            }
+        }
+        return games;
+    }
+
+    /// <summary>P3: the Apicalypse body for one batch of ids.</summary>
+    public static string BatchBody(IEnumerable<int> ids) =>
+        $"fields cover.image_id,total_rating,total_rating_count; where id = ({string.Join(',', ids.Select(i => i.ToString(CultureInfo.InvariantCulture)))}); limit {MaxBatch};";
+
+    /// <summary>P3: the cover at the size Use this match stores.</summary>
+    public static string CoverUrl(string imageId) => $"{ImageBaseUrl}t_1080p/{imageId}.jpg";
+
+    public async Task<IgdbCoverDownload> DownloadCoverAsync(string imageId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await http.GetAsync(CoverUrl(imageId), HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            var status = (int)response.StatusCode;
+            if (response.StatusCode != HttpStatusCode.OK)
+                return new IgdbCoverDownload(null, status, $"IGDB returned HTTP {status}.");
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using var buffer = new MemoryStream();
+            var chunk = new byte[81920];
+            int read;
+            // Bounded even if Content-Length lies: one byte past the limit is enough to refuse it.
+            while (buffer.Length <= ImageFormats.MaxBytes
+                && (read = await stream.ReadAsync(chunk.AsMemory(0, (int)Math.Min(chunk.Length, ImageFormats.MaxBytes + 1 - buffer.Length)), cancellationToken).ConfigureAwait(false)) > 0)
+                buffer.Write(chunk, 0, read);
+            return buffer.Length > ImageFormats.MaxBytes
+                ? new IgdbCoverDownload(null, status, "The image is larger than 8 MiB.")
+                : new IgdbCoverDownload(buffer.ToArray(), status, null);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning("IGDB cover {ImageId} failed: {Type}: {Message}", imageId, ex.GetType().Name, ex.Message);
+            return new IgdbCoverDownload(null, null, ex.Message);
         }
     }
 

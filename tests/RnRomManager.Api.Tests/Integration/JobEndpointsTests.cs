@@ -77,6 +77,33 @@ public class JobEndpointsTests
     }
 
     [Test]
+    public async Task Activity_FreeIs204_HeldIs200_ForASiteUser_AnonymousIs401()
+    {
+        using var user = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "plain");
+        (await user.LoginAsync("plain", TestUsers.Password)).Dispose();
+        using var anonymous = await AuthClient.CreateAsync(_factory);
+
+        using (var free = await user.GetAsync("/api/activity"))
+            Assert.That(free.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        using (_factory.Services.GetRequiredService<JobLock>().TryAcquire("Saving changes"))
+        {
+            using var held = await user.GetAsync("/api/activity");
+            Assert.That(held.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            var body = await AuthClient.JsonAsync(held);
+            Assert.That((body.GetProperty("activity").GetString(), body.GetProperty("jobType").ValueKind), Is.EqualTo(("Saving changes", JsonValueKind.Null)));
+        }
+        var (job, started) = await StartNoopAsync();
+        using (var running = await user.GetAsync("/api/activity"))
+            Assert.That((await AuthClient.JsonAsync(running)).GetProperty("jobType").GetString(), Is.EqualTo("Integrity"));
+        job.Release.SetResult();
+        await started.Completion.WaitAsync(Timeout);
+
+        using var anonymousResponse = await anonymous.GetAsync("/api/activity");
+        Assert.That(anonymousResponse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    [Test]
     public async Task Current_WhenIdle_Is204()
     {
         using var response = await _admin.GetAsync("/api/jobs/current");

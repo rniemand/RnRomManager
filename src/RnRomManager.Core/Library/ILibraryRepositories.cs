@@ -24,6 +24,28 @@ public interface IGameRepository
     /// <summary>S7: <paramref name="username"/>'s own save count per game (from <c>game_user_save_counts</c>); games without a row are absent.</summary>
     Task<IReadOnlyDictionary<Guid, int>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds, CancellationToken cancellationToken);
 
+    /// <summary>A6: the game's IGDB link changed: its <c>game_actions</c> rating, vote count and sync time become null.</summary>
+    Task ClearIgdbSyncAsync(Guid gameId, CancellationToken cancellationToken);
+
+    /// <summary>R2: every IGDB-linked game (<c>igdb_id &gt; 0</c>), by title then id.</summary>
+    Task<IReadOnlyList<GameRow>> ListIgdbLinkedAsync(CancellationToken cancellationToken);
+
+    /// <summary>R2: upserts the game's IGDB rating, vote count and sync time; never touches <c>cover_image_pulled_at</c>.</summary>
+    Task SaveIgdbSyncAsync(Guid gameId, double? rating, int? count, DateTime syncedAt, CancellationToken cancellationToken);
+
+    /// <summary>R4: the game's <c>game_actions</c> row, or null when it has none.</summary>
+    Task<GameActionsRow?> GetActionsAsync(Guid gameId, CancellationToken cancellationToken);
+
+    /// <summary>A5: <c>cover_image_pulled_at</c> (UTC) of every <c>game_actions</c> row that has one.</summary>
+    Task<IReadOnlyDictionary<Guid, DateTime>> ListCoverPulledAsync(CancellationToken cancellationToken);
+
+    /// <summary>T2: the Admin Actions tab's counts.</summary>
+    Task<GameActionsSummary> GetActionsSummaryAsync(CancellationToken cancellationToken);
+
+    /// <summary>A5: deletes the <c>game_actions</c> rows whose game is gone.</summary>
+    /// <returns>How many were deleted.</returns>
+    Task<int> DeleteOrphanActionsAsync(CancellationToken cancellationToken);
+
     /// <summary>The library list: filters, sort (year nulls last), tie-break <c>id</c>, one page (spec §23, §14.2).</summary>
     Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken);
 
@@ -44,6 +66,9 @@ public interface IGameRepository
 
     /// <summary>Games with the default box art, no <c>BoxArt</c> image or no <c>Snap</c>, ordered by title then id (§10.2).</summary>
     Task<IReadOnlyList<GameRow>> ListMediaRetryCandidatesAsync(CancellationToken cancellationToken);
+
+    /// <summary>P2: IGDB-linked games (<c>igdb_id &gt; 0</c>) without <c>cover_image_pulled_at</c>, by title then id.</summary>
+    Task<IReadOnlyList<GameRow>> ListPullCoverCandidatesAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// S4, ROM Zip Config B7: games whose ROM layout differs from their system's storage, by ZIP path: games of
@@ -120,7 +145,16 @@ public interface IImageRepository
 
     /// <summary>null when the image doesn't exist or belongs to another game.</summary>
     Task<ImageRow?> GetAsync(Guid gameId, long id, CancellationToken cancellationToken);
+
+    /// <summary>C5: every game's cover (its lowest-id <c>is_cover</c> image), with the game's ZIP.</summary>
+    Task<IReadOnlyList<CoverRow>> ListCoversAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>T2: linked games (<c>igdb_id &gt; 0</c>), those without a pulled cover, and the latest rating refresh (UTC).</summary>
+public sealed record GameActionsSummary(int IgdbLinked, int CoversPending, DateTime? LastIgdbSyncAt);
+
+/// <summary>C5: a game's cover image and the ZIP holding it (relative to <c>Paths:Roms</c>).</summary>
+public sealed record CoverRow(Guid GameId, string ZipPath, string FileName, string Sha1);
 
 /// <summary>
 /// The only writer of <c>games</c>/<c>roms</c>/<c>images</c> (spec §14.2 sync rule: ZIP first, then one transaction).

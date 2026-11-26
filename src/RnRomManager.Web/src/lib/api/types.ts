@@ -28,7 +28,9 @@ export interface CurrentJob {
 		| 'ReviewResolve'
 		| 'StorageMigration'
 		| 'ZipRepack'
-		| 'SaveFolders';
+		| 'SaveFolders'
+		| 'PullCovers'
+		| 'IgdbSync';
 	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;
@@ -37,6 +39,22 @@ export interface CurrentJob {
 	startedAt: string;
 	/** The current file's streamed phase; null (or absent from an older server) when none runs. */
 	step?: JobStep | null;
+}
+
+/** T2: `GET /api/admin/actions`, the Admin Actions tab's counts. */
+export interface AdminActions {
+	igdbConfigured: boolean;
+	igdbLinked: number;
+	coversPending: number;
+	lastIgdbSyncAt: string | null;
+}
+
+/** L2: `GET /api/activity`, what holds the job lock; 204 when free. */
+export interface Activity {
+	/** e.g. "Saving changes", or the job type's name for a job. */
+	activity: string;
+	/** The `JobType` name when a job holds the lock. */
+	jobType: string | null;
 }
 
 /** Large ROM import progress B1: one streamed phase of the current file. */
@@ -126,6 +144,8 @@ export interface GameListItem {
 	dlcCount: number;
 	/** Saves in the game's ZIP. */
 	saveCount: number;
+	/** S1: the viewer's own saves (Admins too). */
+	ownSaveCount: number;
 	/** Primary release to quick play (C2); null when the system has no browser core or the release is external. */
 	playRomId: number | null;
 	playRomFileName: string | null;
@@ -276,6 +296,8 @@ export interface GameDetail {
 	igdbId: number | null;
 	/** P3: whether the IGDB keys are set (Lookup Info and the banner need them). */
 	igdbConfigured: boolean;
+	/** R4: the IGDB rating from the last refresh; null until one stored a score. */
+	igdbRating?: { score: number; votes: number; syncedAt: string } | null;
 	metadata: { createdAt: string; updatedAt: string };
 	roms: RomDetail[];
 	images: ImageInfo[];

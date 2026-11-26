@@ -36,6 +36,7 @@ public class StorageFoldersTests
         Backups = Path.Combine(_root, "backups"),
         Collections = Path.Combine(_root, "collections"),
         Bios = Path.Combine(_root, "bios"),
+        ImageCache = Path.Combine(_root, "imagecache"),
     };
 
     [Test]

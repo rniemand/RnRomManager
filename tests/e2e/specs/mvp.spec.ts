@@ -547,6 +547,12 @@ test("browse, search and filter the library", async () => {
   await expect(
     page.getByRole("img", { name: "The Quest box art" }),
   ).toBeVisible();
+  // Admin actions C4: cards load their cover from the WebP image cache.
+  const questCover = page.getByRole("img", { name: "The Quest box art" });
+  await expect(questCover).toHaveAttribute("src", /\/api\/games\/[^/]+\/cover\/[0-9a-f]{40}$/);
+  await expect
+    .poll(() => questCover.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
 
   await page.getByRole("button", { name: "List view" }).click();
   await expect(page.getByRole("table")).toContainText("The Quest");
@@ -3481,6 +3487,19 @@ test("Admin: live logs", { tag: "@shard-b" }, async () => {
     page.getByRole("log", { name: "Live log" }).locator(".badge").first(),
   ).toBeVisible();
   await expectAccessible(page, "logs");
+});
+
+test("Admin: Actions without IGDB keys", { tag: "@shard-b" }, async () => {
+  // Admin actions T1, T4: both cards show; e2e sets no IGDB keys, so both buttons are disabled.
+  await page.goto("/admin/actions");
+  await expect(page.getByRole("heading", { name: "Pull Cover Images" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Refresh IGDB Ratings" })).toBeVisible();
+  await expect(
+    page.getByText("Set Sources:IgdbClientId and Sources:IgdbClientSecret to use IGDB actions."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pull Cover Images" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Refresh IGDB Ratings" })).toBeDisabled();
+  await expectAccessible(page, "actions");
 });
 
 test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async () => {

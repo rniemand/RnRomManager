@@ -24,6 +24,17 @@ public static class AdminEndpoints
         admin.MapGet("/settings", (IServiceProvider services) => Results.Ok(EffectiveSettings.From(services)));
 
         // The BIOS info tab: each BIOS file browser play needs, checked in Paths:Bios.
+        // T2: the Actions tab.
+        admin.MapGet("/actions", async (IGameRepository games, IOptions<SourcesOptions> sources, CancellationToken ct) =>
+        {
+            var summary = await games.GetActionsSummaryAsync(ct);
+            return Results.Ok(new
+            {
+                igdbConfigured = SourcesOptions.IgdbConfigured(sources.Value), igdbLinked = summary.IgdbLinked,
+                coversPending = summary.CoversPending, lastIgdbSyncAt = summary.LastIgdbSyncAt,
+            });
+        });
+
         admin.MapGet("/bios", (IConfiguration config, IOptions<PathsOptions> paths) => Results.Ok(BiosInfo.Check(paths.Value.Bios, config)));
 
         admin.MapGet("/logs", async (HttpContext ctx, LogArchive archive, TimeProvider time) =>

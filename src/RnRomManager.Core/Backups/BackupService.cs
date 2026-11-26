@@ -104,7 +104,7 @@ public sealed class BackupService(
             return new(BackupRestoreStatus.InvalidName);
 
         // 3: no job, library edit, scheduled backup or retention runs while it holds both locks.
-        using var job = jobLock.TryAcquire();
+        using var job = jobLock.TryAcquire("Restoring a backup");
         if (job is null)
             return new(BackupRestoreStatus.JobRunning);
         if (!await _lock.WaitAsync(0, cancellationToken))

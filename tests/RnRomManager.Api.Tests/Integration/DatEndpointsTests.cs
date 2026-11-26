@@ -380,7 +380,7 @@ public class DatEndpointsTests
     [Test]
     public async Task Refresh_WhenLockHeld_Is409JobRunning()
     {
-        using var held = _factory.Services.GetRequiredService<JobLock>().TryAcquire();
+        using var held = _factory.Services.GetRequiredService<JobLock>().TryAcquire("test");
 
         using var response = await _admin.PostAsync("/api/jobs/dat-refresh");
 

@@ -21,6 +21,7 @@ public class OptionsRegistrationTests
         ["Paths:Backups"] = Path.Combine(Root, "backups"),
         ["Paths:Collections"] = Path.Combine(Root, "collections"),
         ["Paths:Bios"] = Path.Combine(Root, "bios"),
+        ["Paths:ImageCache"] = Path.Combine(Root, "imagecache"),
     };
 
     private static ServiceProvider Build(Dictionary<string, string?> settings)

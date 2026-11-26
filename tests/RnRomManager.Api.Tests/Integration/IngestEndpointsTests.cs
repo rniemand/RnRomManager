@@ -119,7 +119,7 @@ public class IngestEndpointsTests
         Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("DatsMissing"));
         var jobs = await _factory.Services.GetRequiredService<IJobRepository>().ListAsync(null, 1, 10, CancellationToken.None);
         Assert.That(jobs.Total, Is.Zero);
-        using var free = _factory.Services.GetRequiredService<JobLock>().TryAcquire();
+        using var free = _factory.Services.GetRequiredService<JobLock>().TryAcquire("test");
         Assert.That(free, Is.Not.Null);
     }
 
@@ -160,7 +160,7 @@ public class IngestEndpointsTests
 
         using (var bad = await _admin.PostAsync("/api/jobs/ingest", new { files = Array.Empty<object>() }))
             Assert.That(bad.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        using var held = _factory.Services.GetRequiredService<JobLock>().TryAcquire();
+        using var held = _factory.Services.GetRequiredService<JobLock>().TryAcquire("test");
         using var busy = await _admin.PostAsync("/api/jobs/ingest", new { files = new[] { new { system = "gb", name = "x.gb" } } });
         Assert.That(await AuthClient.CodeAsync(busy), Is.EqualTo("JobRunning"));
     }
@@ -169,7 +169,7 @@ public class IngestEndpointsTests
     public async Task Start_WhenLockHeld_Is409JobRunning()
     {
         LoadDats();
-        using var held = _factory.Services.GetRequiredService<JobLock>().TryAcquire();
+        using var held = _factory.Services.GetRequiredService<JobLock>().TryAcquire("test");
 
         using var response = await _admin.PostAsync("/api/jobs/ingest");
 

@@ -124,6 +124,7 @@ public sealed partial class LibraryEditor
             DeleteOldZipIfUnchanged(row.ZipPath, existing.Snapshot!, row.Id);
         if (result.Code is null)
             logger.LogInformation("Game {GameId} edited ({ZipPath})", row.Id, zipPath);
+        await ClearIgdbSyncAsync(current, game, result).ConfigureAwait(false);
         return result;
     }
 
@@ -584,6 +585,7 @@ public sealed partial class LibraryEditor
             logger.LogInformation("Game {GameId} merged into {TargetId} ({ZipPath})", row.Id, targetRow.Id, targetRow.ZipPath);
             await MoveCollectionMembershipsAsync(row.Id, targetRow.Id).ConfigureAwait(false);
         }
+        await ClearIgdbSyncAsync(into, targetGame, result).ConfigureAwait(false);
         return result with { GameId = targetRow.Id };
     }
 

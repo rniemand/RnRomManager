@@ -233,7 +233,7 @@ public class NoteEndpointsTests
     [Test]
     public async Task WhileAJobRuns_PutAndDeleteAre409JobRunning()
     {
-        using var held = Service<JobLock>().TryAcquire();
+        using var held = Service<JobLock>().TryAcquire("test");
 
         using var put = await Put(new { text = "x" });
         using var delete = await Delete();

@@ -193,6 +193,40 @@ describe('game detail page', () => {
 		auth.set(null);
 	});
 
+	describe('IGDB rating badge (G1)', () => {
+		const show = async (igdbRating: GameDetail['igdbRating']) => {
+			answers.push({ status: 200, body: { ...game([1]), igdbRating } });
+			const view = render(GamePage);
+			await screen.findByRole('button', { name: 'Download ZIP' });
+			return view;
+		};
+		const badge = () => screen.queryByText(/^IGDB \d+\/100/);
+
+		it('shows the rounded score and votes after the rating, with the refresh time in its tooltip', async () => {
+			tooltips.length = 0;
+			await show({ score: 81.5, votes: 1234, syncedAt: '2026-11-20T10:00:00Z' });
+
+			const element = badge()!;
+			expect(element.textContent!.replace(/\s+/g, ' ').trim()).toBe('IGDB 82/100 · 1,234 votes');
+			expect(element.className).toBe('badge text-bg-light border');
+			expect(tooltips.find((t) => t.node === element)?.text).toBe(
+				`IGDB rating (users and critics), refreshed ${formatDateTime('2026-11-20T10:00:00Z')}`
+			);
+		});
+
+		it('one vote is singular; a Site user sees it too', async () => {
+			auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
+			await show({ score: 81.6, votes: 1, syncedAt: '2026-11-20T10:00:00Z' });
+
+			expect(badge()!.textContent!.replace(/\s+/g, ' ').trim()).toBe('IGDB 82/100 · 1 vote');
+		});
+
+		it('is hidden when null', async () => {
+			await show(null);
+			expect(badge()).toBeNull();
+		});
+	});
+
 	describe('IGDB banner (IGDB lookup N1)', () => {
 		const text = "This game isn't linked to IGDB.";
 		const banner = () => screen.queryByText(text);

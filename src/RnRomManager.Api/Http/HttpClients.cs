@@ -29,13 +29,15 @@ public static class HttpClients
         // T8: titledb's CDN, with the thumbnail retry policy and no redirects, so every request stays on the allowlisted host.
         Configure(services.AddHttpClient<TitleDbImageClient>(TitleDbImages, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
-        // IGDB suggestions S7: Twitch's token endpoint and the IGDB API (fixed hosts), retried like the thumbnails, no redirects.
+        // IGDB suggestions S7: Twitch's token endpoint, the IGDB API and images.igdb.com (Pull Cover Images; fixed hosts),
+        // retried like the thumbnails, no redirects.
         services.AddSingleton<IgdbTokenCache>();
         services.AddSingleton<IgdbPageUrlCache>();
         Configure(services.AddHttpClient<IgdbClient>(Igdb, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
         services.AddTransient<IImageSuggestions>(sp => sp.GetRequiredService<IgdbClient>());
         services.AddTransient<IGameInfoLookup>(sp => sp.GetRequiredService<IgdbClient>());
+        services.AddTransient<IIgdbGames>(sp => sp.GetRequiredService<IgdbClient>());
         services.AddSingleton(ImageUrlPolicy.Default);
         services.AddHttpClient<ImageUrlDownloader>(ImageUrls, client =>
             {

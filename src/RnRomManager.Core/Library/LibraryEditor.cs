@@ -53,7 +53,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// <param name="actor">The editing user; null (the rating/favourite endpoint) records nothing.</param>
     public async Task<LibraryEditResult> PatchAsync(Guid gameId, GamePatch patch, AuditActor? actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
@@ -96,13 +96,33 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
             DeleteOldZip(row.ZipPath, gameId);
         if (result.Code is null)
             logger.LogInformation("Game {GameId} edited ({ZipPath})", gameId, zipPath);
+        await ClearIgdbSyncAsync(current, game, result).ConfigureAwait(false);
         return result;
+    }
+
+    /// <summary>A6: a changed IGDB link drops <c>actions</c>, so both Admin actions pick the game up again.</summary>
+    private static InfoJsonGame Relinked(InfoJsonGame before, InfoJsonGame after) =>
+        after.IgdbId == before.IgdbId ? after : after with { Actions = null };
+
+    /// <summary>A6: once the mirror succeeded, a changed IGDB link clears the game's IGDB rating columns; a failure only warns.</summary>
+    private async Task ClearIgdbSyncAsync(InfoJsonGame before, InfoJsonGame after, LibraryEditResult result)
+    {
+        if (result.Code is not null || before.IgdbId == after.IgdbId)
+            return;
+        try
+        {
+            await games.ClearIgdbSyncAsync(after.GameId, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Clearing the IGDB sync of game {GameId} failed", after.GameId);
+        }
     }
 
     private InfoJsonGame Patched(InfoJsonGame current, GamePatch patch)
     {
         var title = patch.Title ?? current.Title;
-        return current with
+        return Relinked(current, current with
         {
             Title = title,
             DisplayTitle = DisplayTitle.From(title),
@@ -115,7 +135,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
             Favourite = patch.Favourite ?? current.Favourite,
             IgdbId = patch.SetIgdbId ? patch.IgdbId : current.IgdbId,
             Metadata = Touched(current),
-        };
+        });
     }
 
     /// <summary>Test seams of the external edit path: points where a test makes a move or the ZIP write fail.</summary>
@@ -136,7 +156,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     private async Task<LibraryEditResult> WriteNoteAsync(Guid gameId, long romId, byte[]? bytes, bool missingIsNotFound, int? userId,
         CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
@@ -166,7 +186,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
 
     public async Task<LibraryEditResult> DeleteReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
@@ -210,7 +230,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// </summary>
     public async Task<LibraryEditResult> SetPrimaryReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
@@ -249,7 +269,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// </summary>
     public async Task<LibraryEditResult> EditReleaseAsync(Guid gameId, long romId, ReleaseEdit patch, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
@@ -386,7 +406,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
 
     public async Task<LibraryEditResult> DeleteGameAsync(Guid gameId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
@@ -423,7 +443,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         if (ImageFormats.Read(bytes) is not var (format, width, height))
             return Invalid("file", "The image's dimensions can't be read.");
 
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
@@ -482,7 +502,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// </summary>
     public async Task<LibraryEditResult> DeleteImageAsync(Guid gameId, long imageId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         var (error, row, zip, current, image) = await OpenImageAsync(gameId, imageId, ct).ConfigureAwait(false);
@@ -521,7 +541,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// <summary>I7: makes one image the cover (any type, the placeholder too).</summary>
     public async Task<LibraryEditResult> SetCoverAsync(Guid gameId, long imageId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         var (error, row, zip, current, image) = await OpenImageAsync(gameId, imageId, ct).ConfigureAwait(false);
@@ -569,7 +589,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// <summary>§10.2 "Retry media" for one game, with its own circuit breaker. Nothing new found is still a success.</summary>
     public async Task<LibraryEditResult> RetryMediaAsync(Guid gameId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
@@ -590,7 +610,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     public async Task<LibraryEditResult> MoveReleaseAsync(Guid gameId, long romId, Guid? targetGameId, string? newGameTitle, AuditActor actor,
         CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (targetGameId == gameId)
@@ -738,7 +758,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     /// </summary>
     public async Task<LibraryEditResult> MergeAsync(Guid gameId, Guid targetGameId, AuditActor actor, CancellationToken ct)
     {
-        using var held = jobLock.TryAcquire();
+        using var held = jobLock.TryAcquire("Saving changes");
         if (held is null)
             return new(JobRunning);
         if (targetGameId == gameId)
@@ -801,11 +821,12 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
             logger.LogInformation("Game {GameId} merged into {TargetId} ({ZipPath})", gameId, targetGameId, targetRow.ZipPath);
             await MoveCollectionMembershipsAsync(gameId, targetGameId).ConfigureAwait(false);
         }
+        await ClearIgdbSyncAsync(into, targetGame, result).ConfigureAwait(false);
         return result with { GameId = targetGameId };
     }
 
     /// <summary>I4a: the target keeps its title, metadata and cover; empty fields are filled from the source.</summary>
-    private InfoJsonGame MergedInto(InfoJsonGame into, InfoJsonGame from, List<InfoJsonRom> roms, IReadOnlyList<InfoJsonImage> images) => into with
+    private InfoJsonGame MergedInto(InfoJsonGame into, InfoJsonGame from, List<InfoJsonRom> roms, IReadOnlyList<InfoJsonImage> images) => Relinked(into, into with
     {
         ReleaseYear = into.ReleaseYear ?? from.ReleaseYear,
         Developers = into.Developers.Count > 0 ? into.Developers : from.Developers,
@@ -819,7 +840,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         Roms = PrimaryRelease.Apply(roms, DatSourceOf(into.System), into.ChosenPrimarySha1 ?? from.ChosenPrimarySha1),
         Images = images,
         Metadata = Touched(into),
-    };
+    });
 
     /// <summary>
     /// B18: the deleted source game's collection memberships follow it to the target. The library change has already

@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import type { GameListItem } from '../api/types';
+import { resetClient } from '../api/client';
 import { auth } from '../stores/auth.svelte';
+import { toasts } from '../stores/toasts.svelte';
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
@@ -44,6 +46,7 @@ function game(id: string, extra: Partial<GameListItem> = {}): GameListItem {
 		updateCount: 0,
 		dlcCount: 0,
 		saveCount: 0,
+		ownSaveCount: 0,
 		playRomId: null,
 		playRomFileName: null,
 		playDisc: false,
@@ -379,5 +382,145 @@ describe('GameResults cards (C1, C2)', () => {
 		expect(container.querySelector('.row')!.className).toBe(
 			'row row-cols-2 game-grid-xs row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-3'
 		);
+	});
+});
+
+describe('Pick up where you left off (S3, S4)', () => {
+	const owned = (id: string, extra: Partial<GameListItem> = {}) =>
+		game(id, {
+			playRomId: 7,
+			playRomFileName: 'Game (World).gb',
+			browserCore: 'gambatte',
+			saveCount: 3,
+			ownSaveCount: 1,
+			...extra
+		});
+	const rom = (id: number) => ({ id, fileName: `Game ${id}.gb`, externalFileName: null });
+	const save = (id: string, romId: number | null, uploadedBy: string, kind = 'state') => ({
+		id,
+		name: id,
+		description: '',
+		kind,
+		releaseFileName: '',
+		romId,
+		sizeBytes: 1,
+		extension: '.state',
+		uploadedBy,
+		uploadedAt: '',
+		updatedBy: uploadedBy,
+		updatedAt: ''
+	});
+	let saves: unknown[];
+	let fail: boolean;
+
+	beforeEach(() => {
+		resetClient();
+		toasts.items = [];
+		fail = false;
+		saves = [];
+		auth.set({ id: 2, username: 'Sam', roles: [], mustChangePassword: false });
+		vi.stubGlobal('fetch', (url: string) => {
+			if (fail)
+				return Promise.resolve(new Response('{"status":500,"title":"Boom"}', { status: 500 }));
+			const body = url.endsWith('/saves')
+				? { items: saves }
+				: { id: 'a', browserCore: 'gambatte', roms: [rom(7), rom(8)] };
+			return Promise.resolve(new Response(JSON.stringify(body)));
+		});
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		auth.set(null);
+	});
+
+	const resumeButton = () =>
+		screen.getByRole('button', { name: 'Pick up where you left off in Game a' });
+
+	it('grid: the green button takes the Play corner; Play moves left of it', () => {
+		render(GameResults, { games: [owned('a')], view: 'grid' });
+
+		expect(resumeButton().className).toBe(
+			'btn btn-sm btn-success rounded-circle position-absolute bottom-0 end-0 m-1 z-2'
+		);
+		expect(resumeButton().querySelector('i.bi-play-fill, i.bi')).not.toBeNull();
+		expect(tooltips).toContain('Pick up where you left off');
+		const play = screen.getByRole('button', { name: 'Play Game a' });
+		expect(play.className).toBe(
+			'btn btn-sm btn-primary rounded-circle position-absolute bottom-0 m-1 z-2'
+		);
+		expect(play.style.right).toBe('2.25rem');
+	});
+
+	it('list: right after Play with ms-1', () => {
+		render(GameResults, { games: [owned('a')], view: 'list' });
+
+		expect(resumeButton().className).toBe('btn btn-sm btn-success rounded-circle ms-1');
+		expect(screen.getByRole('button', { name: 'Play Game a' }).nextElementSibling).toBe(
+			resumeButton()
+		);
+	});
+
+	it.each([
+		['no own save', { ownSaveCount: 0 }],
+		['not playable', { playRomId: null }],
+		['a core that opens in a new tab', { browserCore: 'ppsspp' }]
+	])('hidden with %s', (_, extra) => {
+		render(GameResults, { games: [owned('a', extra)], view: 'grid' });
+		expect(screen.queryByRole('button', { name: /Pick up where you left off/ })).toBeNull();
+	});
+
+	it('opens the most recently updated own save that plays here', async () => {
+		saves = [
+			save('theirs', 7, 'other'),
+			save('unplayable', 99, 'sam'),
+			save('mine', 8, 'SAM'),
+			save('older', 7, 'sam')
+		];
+		render(GameResults, { games: [owned('a')], view: 'grid' });
+
+		await fireEvent.click(resumeButton());
+
+		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
+		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+			'/emulator/play.html?game=a&rom=8&core=gambatte&name=Game%208.gb&save=mine&saveKind=state'
+		);
+	});
+
+	it('a battery save asks first', async () => {
+		saves = [save('battery', 7, 'sam', 'battery')];
+		render(GameResults, { games: [owned('a')], view: 'grid' });
+
+		await fireEvent.click(resumeButton());
+
+		await screen.findByText(
+			'Loading this battery save replaces the in-browser save for this release.'
+		);
+		expect(document.querySelector('iframe')).toBeNull();
+		await fireEvent.click(screen.getByRole('button', { name: 'Play', hidden: true }));
+		await vi.waitFor(() =>
+			expect(document.querySelector('iframe')!.getAttribute('src')).toContain(
+				'&save=battery&saveKind=battery'
+			)
+		);
+	});
+
+	it('no playable own save → an info toast; a load error → a danger toast', async () => {
+		saves = [save('theirs', 7, 'other')];
+		render(GameResults, { games: [owned('a')], view: 'grid' });
+
+		await fireEvent.click(resumeButton());
+		await vi.waitFor(() =>
+			expect(toasts.items.at(-1)).toMatchObject({ text: 'No save to pick up here.', kind: 'info' })
+		);
+
+		fail = true;
+		await fireEvent.click(resumeButton());
+		await vi.waitFor(() =>
+			expect(toasts.items.at(-1)).toMatchObject({
+				text: "Couldn't load your saves.",
+				kind: 'danger'
+			})
+		);
+		expect(document.querySelector('iframe')).toBeNull();
 	});
 });

@@ -32,6 +32,7 @@ public partial class IntegrityJobTests
     private IRomStorageSettings _romStorage = null!;
     private DbSync _sync = null!;
     private TempDir _dir = null!;
+    private TempDir _cache = null!;
     private Action? _onScan;
     private int _seed;
     private DateTime _mtime = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -60,6 +61,7 @@ public partial class IntegrityJobTests
         });
         _reader = new InfoJsonReader([], _systems);
         _dir = new TempDir();
+        _cache = new TempDir();
         _sync = new DbSync(_games, new RomRepository(_factory), new LibraryMirror(_factory), _reader, _systems,
             Options.Create(new PathsOptions { Roms = _dir.Path }), NullLogger<DbSync>.Instance);
         _onScan = null;
@@ -67,30 +69,42 @@ public partial class IntegrityJobTests
     }
 
     [TearDown]
-    public void TearDown() => _dir.Dispose();
+    public void TearDown()
+    {
+        _dir.Dispose();
+        _cache.Dispose();
+    }
+
+    private IOptions<PathsOptions> Paths() => Options.Create(new PathsOptions { Roms = _dir.Path, ImageCache = _cache.Path });
+
+    private IntegrityJob Job(JobMode mode, IntegrityHooks? hooks = null) => new(mode, _games, new RomRepository(_factory), _sync, _issues, _jobs, _reader, _systems, Paths(),
+        TimeProvider.System, NullLogger<IntegrityJob>.Instance, new ImageRepository(_factory),
+        new CoverCache(Paths(), NullLogger<CoverCache>.Instance), new LibraryMirror(_factory)) { Hooks = hooks };
 
     private string Abs(string relative) => _dir.Combine(relative.Split('/'));
 
-    private static InfoJsonImage BoxArt(bool isDefault) => new()
+    private static InfoJsonImage BoxArt(bool isDefault, byte[]? bytes = null) => new()
     {
         FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro,
-        IsDefault = isDefault, IsCover = true, SizeBytes = Png.Length, Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(Png)),
+        IsDefault = isDefault, IsCover = true, SizeBytes = (bytes ?? Png).Length, Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes ?? Png)),
         Width = 2, Height = 2, DateAdded = When,
     };
 
     /// <summary>Writes a valid one-ROM game ZIP with a real (or default, or no) box art; returns its info.json.</summary>
-    private async Task<InfoJsonGame> Write(string zipPath, string title, bool? defaultBoxArt = false, Guid? gameId = null, int? seed = null)
+    private async Task<InfoJsonGame> Write(string zipPath, string title, bool? defaultBoxArt = false, Guid? gameId = null, int? seed = null,
+        byte[]? image = null, Func<InfoJsonGame, InfoJsonGame>? edit = null)
     {
         var romSeed = seed ?? ++_seed;
         var rom = Rom($"{title} (World).gb", RomBytes(romSeed));
-        var game = Game(title, rom) with { Images = defaultBoxArt is { } d ? [BoxArt(d)] : [] };
+        var game = Game(title, rom) with { Images = defaultBoxArt is { } d ? [BoxArt(d, image)] : [] };
+        game = edit?.Invoke(game) ?? game;
         if (gameId is { } id)
             game = game with { GameId = id };
         var path = Abs(zipPath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var entries = new Dictionary<string, Func<Stream>> { [LibraryZip.RomEntry(rom.FileName)] = () => new MemoryStream(RomBytes(romSeed)) };
         if (defaultBoxArt is not null)
-            entries[LibraryZip.ImageEntry("boxart-01.png")] = () => new MemoryStream(Png);
+            entries[LibraryZip.ImageEntry("boxart-01.png")] = () => new MemoryStream(image ?? Png);
         await new LibraryZipWriter(_reader).WriteAsync(path, null, new LibraryZipChanges(game, entries));
         Touch(zipPath);
         return game;
@@ -122,8 +136,7 @@ public partial class IntegrityJobTests
         JobProgress? progress = null)
     {
         var jobId = Guid.NewGuid();
-        var job = new IntegrityJob(mode, _games, new RomRepository(_factory), _sync, _issues, _jobs, _reader, _systems, Options.Create(new PathsOptions { Roms = _dir.Path }),
-            TimeProvider.System, NullLogger<IntegrityJob>.Instance) { Hooks = hooks };
+        var job = Job(mode, hooks);
         var summary = await job.RunAsync(new JobContext(jobId, progress ?? new JobProgress()), ct);
         return (jobId, System.Text.Json.JsonSerializer.Serialize(summary));
     }
@@ -563,8 +576,8 @@ public partial class IntegrityJobTests
 
     private async Task<string> RunGame(string zipPath, CancellationToken ct = default)
     {
-        var job = new IntegrityJob(JobMode.Game, _games, new RomRepository(_factory), _sync, _issues, _jobs, _reader, _systems,
-            Options.Create(new PathsOptions { Roms = _dir.Path }), TimeProvider.System, NullLogger<IntegrityJob>.Instance) { ZipPath = zipPath };
+        var job = Job(JobMode.Game);
+        job.ZipPath = zipPath;
         return System.Text.Json.JsonSerializer.Serialize(await job.RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), ct));
     }
 

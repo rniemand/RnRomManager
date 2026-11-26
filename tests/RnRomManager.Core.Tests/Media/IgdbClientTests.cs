@@ -19,6 +19,7 @@ public class IgdbClientTests
     {
         public Func<HttpRequestMessage, string, Task<HttpResponseMessage>> Token { get; set; } = (_, _) => Task.FromResult(Json(TokenJson));
         public Func<HttpRequestMessage, string, Task<HttpResponseMessage>> Games { get; set; } = (_, _) => Task.FromResult(Json("[]"));
+        public Func<HttpRequestMessage, Task<HttpResponseMessage>> Images { get; set; } = _ => Task.FromResult(Status(HttpStatusCode.NotFound));
         public ConcurrentQueue<(HttpRequestMessage Request, string Body)> Requests { get; } = new();
 
         public IEnumerable<(HttpRequestMessage Request, string Body)> TokenRequests => Requests.Where(r => r.Request.RequestUri!.Host == "id.twitch.tv");
@@ -33,6 +34,7 @@ public class IgdbClientTests
             {
                 "id.twitch.tv" => await Token(request, body),
                 "api.igdb.com" => await Games(request, body),
+                "images.igdb.com" => await Images(request),
                 _ => throw new InvalidOperationException($"Unexpected host {request.RequestUri}"),
             };
         }
@@ -556,5 +558,102 @@ public class IgdbClientTests
 
         _igdb.Games = (_, _) => throw new HttpRequestException("down");
         Assert.That((await Client().GamePageUrlAsync(42, CancellationToken.None)).FailedTitle, Is.EqualTo("IGDB couldn't be reached."));
+    }
+
+    // --- P3: batch reads and cover downloads ---
+
+    [Test]
+    public async Task GetGames_501Ids_TwoRequestsWithThePinnedBodies()
+    {
+        var ids = Enumerable.Range(1, 501).ToList();
+
+        await Client().GetGamesAsync(ids, CancellationToken.None);
+
+        var bodies = _igdb.GameRequests.Select(r => r.Body).ToList();
+        Assert.That(bodies, Is.EqualTo(new[]
+        {
+            $"fields cover.image_id,total_rating,total_rating_count; where id = ({string.Join(',', ids.Take(500))}); limit 500;",
+            "fields cover.image_id,total_rating,total_rating_count; where id = (501); limit 500;",
+        }));
+    }
+
+    [Test]
+    public async Task GetGames_MapsFields_MissingOnesAreNull()
+    {
+        Games("""{"id":1,"cover":{"image_id":"co1abc"},"total_rating":81.6,"total_rating_count":12}""", """{"id":2}""",
+            """{"id":3,"cover":{"image_id":"../x"}}""", """{"name":"no id"}""");
+
+        var games = await Client().GetGamesAsync([1, 2, 3], CancellationToken.None);
+
+        Assert.That(games, Is.EqualTo(new[]
+        {
+            new IgdbGameRating(1, "co1abc", 81.6, 12), new IgdbGameRating(2, null, null, null), new IgdbGameRating(3, null, null, null),
+        }));
+    }
+
+    [TestCase(HttpStatusCode.TooManyRequests, IgdbClient.Busy)]
+    [TestCase(HttpStatusCode.InternalServerError, "IGDB returned HTTP 500.")]
+    public async Task GetGames_FailingStatus_ThrowsWithTheTitle(HttpStatusCode status, string title)
+    {
+        _igdb.Games = (_, _) => Task.FromResult(Status(status));
+
+        var ex = await Assert.CatchAsync(() => Client().GetGamesAsync([1], CancellationToken.None));
+        Assert.That(ex!.Message, Is.EqualTo(title));
+    }
+
+    [Test]
+    public async Task GetGames_RefusedUnreadableAndUnreachable_ThrowWithTheirTitles()
+    {
+        _igdb.Games = (_, _) => Task.FromResult(Status(HttpStatusCode.Unauthorized));
+        Assert.That((await Assert.CatchAsync(() => Client().GetGamesAsync([1], CancellationToken.None)))!.Message, Is.EqualTo(IgdbClient.Refused));
+
+        _igdb.Games = (_, _) => Task.FromResult(Json("{}"));
+        Assert.That((await Assert.CatchAsync(() => Client().GetGamesAsync([1], CancellationToken.None)))!.Message, Is.EqualTo(IgdbClient.Unreadable));
+
+        _igdb.Games = (_, _) => throw new HttpRequestException("down");
+        Assert.That((await Assert.CatchAsync(() => Client().GetGamesAsync([1], CancellationToken.None)))!.Message, Is.EqualTo(IgdbClient.Unreachable));
+    }
+
+    [Test]
+    public async Task DownloadCover_200_GivesTheBytes_FromThe1080pUrl()
+    {
+        _igdb.Images = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) });
+
+        var result = await Client().DownloadCoverAsync("co1abc", CancellationToken.None);
+
+        Assert.That(result, Is.EqualTo(new IgdbCoverDownload(result.Bytes, 200, null)));
+        Assert.That(result.Bytes, Is.EqualTo(new byte[] { 1, 2, 3 }));
+        Assert.That(_igdb.Requests.Single().Request.RequestUri!.ToString(), Is.EqualTo("https://images.igdb.com/igdb/image/upload/t_1080p/co1abc.jpg"));
+    }
+
+    [TestCase(HttpStatusCode.NotFound, 404)]
+    [TestCase(HttpStatusCode.ServiceUnavailable, 503)]
+    public async Task DownloadCover_OtherStatus_GivesTheStatus(HttpStatusCode status, int code)
+    {
+        _igdb.Images = _ => Task.FromResult(Status(status));
+
+        var result = await Client().DownloadCoverAsync("co1", CancellationToken.None);
+
+        Assert.That((result.Bytes, result.Status, result.Error), Is.EqualTo(((byte[]?)null, (int?)code, $"IGDB returned HTTP {code}.")));
+    }
+
+    [Test]
+    public async Task DownloadCover_ConnectionError_HasNoStatus()
+    {
+        _igdb.Images = _ => throw new HttpRequestException("down");
+
+        var result = await Client().DownloadCoverAsync("co1", CancellationToken.None);
+
+        Assert.That((result.Bytes, result.Status, result.Error), Is.EqualTo(((byte[]?)null, (int?)null, "down")));
+    }
+
+    [Test]
+    public async Task DownloadCover_OverTheLimit_IsRefused()
+    {
+        _igdb.Images = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[ImageFormats.MaxBytes + 10]) });
+
+        var result = await Client().DownloadCoverAsync("co1", CancellationToken.None);
+
+        Assert.That((result.Bytes, result.Status, result.Error), Is.EqualTo(((byte[]?)null, (int?)200, "The image is larger than 8 MiB.")));
     }
 }
