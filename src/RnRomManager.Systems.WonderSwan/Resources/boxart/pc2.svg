@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Pocket Challenge V2). Made for this project; MIT licensed like the rest of the repo.
+       Exported to pc2.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#f3efff"/>
+  <!-- tall, flat cartridge shell with a clipped top-right corner -->
+  <path d="M140 72 H336 L380 116 V424 Q380 440 364 440 H148 Q132 440 132 424 V88 Q132 72 148 72 Z"
+        fill="#d0bfff" stroke="#4b3a80" stroke-width="4"/>
+  <!-- grip ridges -->
+  <g stroke="#4b3a80" stroke-width="4" stroke-linecap="round" opacity="0.6">
+    <line x1="176" y1="96" x2="300" y2="96"/>
+    <line x1="176" y1="112" x2="300" y2="112"/>
+  </g>
+  <!-- label -->
+  <rect x="160" y="140" width="192" height="248" rx="10" fill="#ffffff"/>
+  <!-- stylised question mark: a quiz cart -->
+  <g fill="none" stroke="#4b3a80" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M222 214 Q222 180 256 180 Q290 180 290 210 Q290 232 256 244 V262"/>
+  </g>
+  <circle cx="256" cy="290" r="9" fill="#4b3a80"/>
+  <text x="256" y="346" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="34" font-weight="800" fill="#4b3a80">PC2</text>
+  <text x="256" y="372" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="14" font-weight="700" fill="#4b3a80" letter-spacing="2">CHALLENGE</text>
+</svg>
