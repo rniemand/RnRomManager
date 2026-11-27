@@ -144,6 +144,7 @@ public partial class EndpointRoleMatrixTests
 
         ["GET /api/integrity/status"] = Role.Admin,
         ["GET /api/integrity/issues"] = Role.Admin,
+        ["POST /api/integrity/issues/{id:long}/delete-file"] = Role.Admin,
 
         ["GET /api/admin/dats"] = Role.Admin,
         ["GET /api/admin/dats/{datName}/download"] = Role.Admin,

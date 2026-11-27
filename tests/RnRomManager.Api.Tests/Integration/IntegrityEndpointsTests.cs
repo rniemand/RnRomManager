@@ -1,5 +1,8 @@
 using System.Net;
 using System.Text.Json;
+using Dapper;
+using RnRomManager.Core.Audit;
+using RnRomManager.Core.Database;
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
@@ -56,6 +59,7 @@ public class IntegrityEndpointsTests
         yield return new TestCaseData("GET", "/api/integrity/issues").SetName("RoleMatrix GET integrity/issues");
         yield return new TestCaseData("GET", "/api/jobs/storage-migration").SetName("RoleMatrix GET jobs/storage-migration");
         yield return new TestCaseData("POST", "/api/jobs/storage-migration").SetName("RoleMatrix POST jobs/storage-migration");
+        yield return new TestCaseData("POST", "/api/integrity/issues/1/delete-file").SetName("RoleMatrix POST integrity/issues/delete-file");
     }
 
     [TestCaseSource(nameof(Endpoints))]
@@ -197,5 +201,60 @@ public class IntegrityEndpointsTests
             using var bad = await _admin.GetAsync("/api/integrity/issues?" + query);
             Assert.That(bad.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), query);
         }
+    }
+
+    private async Task<long> OrphanIssueId(string name)
+    {
+        await File.WriteAllTextAsync(Path.Combine(_factory.Root, "roms", name), "x");
+        await RunIntegrity("Quick");
+        using var orphans = await _admin.GetAsync($"/api/integrity/issues?status=Open&type={IntegrityIssueType.OrphanFile}");
+        return (await AuthClient.JsonAsync(orphans)).GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("zipPath").GetString() == name).GetProperty("id").GetInt64();
+    }
+
+    [Test]
+    public async Task DeleteFile_DeletesTheOrphan_ResolvesTheIssue_AndAudits()
+    {
+        await Start();
+        var id = await OrphanIssueId("stray.txt");
+
+        using var response = await _admin.PostAsync($"/api/integrity/issues/{id}/delete-file");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(File.Exists(Path.Combine(_factory.Root, "roms", "stray.txt")), Is.False);
+        using var open = await _admin.GetAsync("/api/integrity/issues?status=Open");
+        Assert.That((await AuthClient.JsonAsync(open)).GetProperty("total").GetInt64(), Is.EqualTo(0));
+        await Service<AuditWriter>().FlushAsync();
+        await using (var db = Service<IDbConnectionFactory>().Create())
+            Assert.That(await db.QueryAsync<string>("SELECT path FROM audit_events WHERE action = 'OrphanFileDeleted'"),
+                Is.EqualTo(new[] { "roms/stray.txt" }));
+
+        using var again = await _admin.PostAsync($"/api/integrity/issues/{id}/delete-file");
+        Assert.That(again.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(again), Is.EqualTo("NotOpenOrphan"));
+    }
+
+    [Test]
+    public async Task DeleteFile_UnknownIssue_Is404()
+    {
+        await Start();
+
+        using var response = await _admin.PostAsync("/api/integrity/issues/999999/delete-file");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task DeleteFile_WhileAJobHoldsTheLock_Is409JobRunning_AndKeepsTheFile()
+    {
+        await Start();
+        var id = await OrphanIssueId("stray.txt");
+        using var held = Service<JobLock>().TryAcquire("test");
+
+        using var response = await _admin.PostAsync($"/api/integrity/issues/{id}/delete-file");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("JobRunning"));
+        Assert.That(File.Exists(Path.Combine(_factory.Root, "roms", "stray.txt")), Is.True);
     }
 }

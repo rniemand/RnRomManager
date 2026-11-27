@@ -1,4 +1,5 @@
 using RnRomManager.Api.Auth;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
@@ -9,7 +10,7 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Api.Endpoints;
 
 /// <summary>
-/// <c>POST /api/jobs/integrity</c>, <c>GET /api/integrity/status</c> and <c>/issues</c>, and (S4) <c>GET</c>/<c>POST
+/// <c>POST /api/jobs/integrity</c>, <c>GET /api/integrity/status</c> and <c>/issues</c>, <c>POST /api/integrity/issues/{id}/delete-file</c> (IN3), and (S4) <c>GET</c>/<c>POST
 /// /api/jobs/storage-migration</c>, Admin only (spec §23, §12).
 /// </summary>
 public static class IntegrityEndpoints
@@ -83,6 +84,22 @@ public static class IntegrityEndpoints
             }));
         });
 
+        // IN3: deletes an open orphan's file and resolves its issue.
+        integrityGroup.MapPost("/issues/{id:long}/delete-file", async (long id, HttpContext ctx, OrphanFileDeleter deleter) =>
+            await deleter.DeleteAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted) switch
+            {
+                OrphanDeleteOutcome.Deleted => Results.NoContent(),
+                OrphanDeleteOutcome.NotFound => Problems.NotFound(ctx),
+                OrphanDeleteOutcome.JobRunning => JobStart.Running(ctx),
+                OrphanDeleteOutcome.NotOpenOrphan => Conflict(ctx, "NotOpenOrphan", "Only an open orphan file can be deleted"),
+                OrphanDeleteOutcome.NoLongerOrphan => Conflict(ctx, "NoLongerOrphan", "The file is now part of the library; run a check"),
+                OrphanDeleteOutcome.NotDeletable => Conflict(ctx, "NotDeletable", "The path isn't a plain file; remove it by hand"),
+                _ => Conflict(ctx, "DeleteFailed", "The file couldn't be deleted"),
+            });
+
         return api;
     }
+
+    private static IResult Conflict(HttpContext ctx, string code, string title) =>
+        Problems.Create(ctx, StatusCodes.Status409Conflict, code, title);
 }
