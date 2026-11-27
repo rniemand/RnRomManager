@@ -96,7 +96,12 @@ describe('GameHeader', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'View info.json' }));
 		await fireEvent.click(screen.getByRole('button', { name: 'Merge into…' }));
-		await fireEvent.click(screen.getByRole('button', { name: 'Quick edit' }));
+		const quickEdit = screen.getByRole('button', { name: 'Quick edit' });
+		// I1: the quick-edit pencil is an IconButton with the same look.
+		expect(quickEdit.className).toBe(
+			'btn btn-sm btn-link text-body-secondary p-0 ms-auto quick-edit'
+		);
+		await fireEvent.click(quickEdit);
 		await fireEvent.click(screen.getByRole('button', { name: 'Collections' }));
 
 		expect(oninfojson).toHaveBeenCalledOnce();

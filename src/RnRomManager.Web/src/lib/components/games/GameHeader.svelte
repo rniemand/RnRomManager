@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import type { AdminAction, CollectionRef, GameDetail, RomDetail } from '#lib/types/index.js';
 	import Button from '#lib/components/forms/Button.svelte';
+	import IconButton from '#lib/components/forms/IconButton.svelte';
 	import RatingControl from '#lib/components/forms/RatingControl.svelte';
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import GameTitle from '#lib/components/games/GameTitle.svelte';
@@ -153,13 +154,11 @@
 								<SystemBadge system={game.system} name={game.systemName} class="text-wrap" />
 								{#if auth.isAdmin}
 									<!-- Quick edit: opens the same Edit Metadata modal as the Manage menu. -->
-									<Button
-										variant="link"
-										size="sm"
-										class="text-body-secondary p-0 ms-auto quick-edit"
+									<IconButton
+										class="ms-auto quick-edit"
 										icon="edit"
-										aria-label="Quick edit"
-										{@attach fromAction(tooltip, () => 'Edit Metadata')}
+										label="Quick edit"
+										tooltip="Edit Metadata"
 										onclick={() => onaction({ kind: 'edit' })}
 									/>
 								{/if}
