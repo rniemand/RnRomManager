@@ -199,6 +199,17 @@ export function severityClass(severity: string): string {
 	return severityClasses[severity] ?? 'text-bg-secondary';
 }
 
+const issueStatusClasses: Record<string, string> = {
+	Open: 'text-bg-warning',
+	AutoRepaired: 'text-bg-info',
+	Resolved: 'text-bg-success'
+};
+
+/** IN4: the integrity issue Status badge. */
+export function issueStatusClass(status: string): string {
+	return issueStatusClasses[status] ?? 'text-bg-secondary';
+}
+
 /** Newest first, at most `limit` (merges the Integrity and MediaRetry histories). */
 export function latestJobs<T extends { startedAt: string }>(lists: T[][], limit: number): T[] {
 	return lists

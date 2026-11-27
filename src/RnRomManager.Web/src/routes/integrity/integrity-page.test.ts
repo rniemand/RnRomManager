@@ -4,6 +4,22 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs } from '#lib/stores/jobs.svelte.js';
 import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
+
+// Toggles `show` so a test can tell an open modal from a closed one.
+vi.mock('#lib/bootstrap.js', () => ({
+	Modal: class {
+		constructor(private element: Element) {}
+		show() {
+			this.element.classList.add('show');
+		}
+		hide() {
+			this.element.classList.remove('show');
+		}
+		dispose() {}
+	}
+}));
+vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 
 const { default: IntegrityPage } = await import('./+page.svelte');
 
@@ -28,6 +44,12 @@ describe('integrity page', () => {
 	beforeEach(() => {
 		resetClient();
 		jobs.current = null;
+		const store = new Map<string, string>();
+		vi.stubGlobal('localStorage', {
+			getItem: (k: string) => store.get(k) ?? null,
+			setItem: (k: string, v: string) => store.set(k, v)
+		});
+		toasts.items = [];
 		auth.set({
 			id: 1,
 			username: 'admin',
@@ -55,7 +77,7 @@ describe('integrity page', () => {
 			calls.push({ key, body: init?.body ? JSON.parse(init.body as string) : undefined });
 			const body =
 				fixed[key] ??
-				(url.startsWith('/api/integrity/issues') ? { ...empty, pageSize: 50 } : undefined);
+				(url.startsWith('/api/integrity/issues') ? { ...empty, pageSize: 10 } : undefined);
 			return Promise.resolve(
 				new Response(body === undefined ? null : JSON.stringify(body), {
 					status: body === undefined ? 204 : 200
@@ -97,7 +119,7 @@ describe('integrity page', () => {
 			jobsColumn.findIndex((t) => t.includes('Integrity Check (Quick)'))
 		);
 		expect(calls.map((c) => c.key)).toContain(
-			'GET /api/integrity/issues?page=1&pageSize=50&status=Open'
+			'GET /api/integrity/issues?page=1&pageSize=10&status=Open'
 		);
 	});
 
@@ -115,7 +137,7 @@ describe('integrity page', () => {
 			detectedAt: '2026-11-04T03:00:00Z',
 			lastSeenAt: '2026-11-04T03:00:00Z'
 		});
-		fixed['GET /api/integrity/issues?page=1&pageSize=50&status=Open'] = {
+		fixed['GET /api/integrity/issues?page=1&pageSize=10&status=Open'] = {
 			...empty,
 			total: 3,
 			items: [
@@ -137,6 +159,116 @@ describe('integrity page', () => {
 		expect(screen.getByRole('link', { name: 'gb/Z/Zelda.zip' }).getAttribute('href')).toBe(
 			'/games/g1'
 		);
+	});
+
+	describe('issue table (IN2, IN4, IN5)', () => {
+		const openList = 'GET /api/integrity/issues?page=1&pageSize=10&status=Open';
+		const issue = (id: number, type: string, status: string, zipPath: string) => ({
+			id,
+			type,
+			severity: 'Warn',
+			systemId: null,
+			zipPath,
+			gameId: null,
+			entryName: null,
+			details: null,
+			status,
+			detectedAt: '2026-11-04T03:00:00Z'
+		});
+		const rows = [
+			issue(1, 'OrphanFile', 'Open', 'stray.txt'),
+			issue(2, 'OrphanFile', 'Resolved', 'old.txt'),
+			issue(3, 'ZipUnreadable', 'AutoRepaired', 'gb/T/Broken.zip')
+		];
+		const modal = () =>
+			screen.getByText(/from the library folder\?/).closest('.modal') as HTMLElement;
+
+		it('Type and Status are badges; the table is small with py-1 cells', async () => {
+			fixed[openList] = { ...empty, total: 3, items: rows };
+			render(IntegrityPage);
+
+			const type = await screen.findByText('ZipUnreadable', { selector: 'span' });
+			expect(type.className).toBe('badge text-bg-light border');
+			expect(screen.getByText('Open', { selector: 'span' }).className).toBe(
+				'badge text-bg-warning'
+			);
+			expect(screen.getByText('AutoRepaired', { selector: 'span' }).className).toBe(
+				'badge text-bg-info'
+			);
+			expect(screen.getByText('Resolved', { selector: 'span' }).className).toBe(
+				'badge text-bg-success'
+			);
+			const table = type.closest('table')!;
+			expect(table.closest('.small')).toBeTruthy();
+			expect(
+				[...table.querySelectorAll('tbody td')].every((td) => td.classList.contains('py-1'))
+			).toBe(true);
+		});
+
+		it('only an open orphan gets a delete button, hidden while a job runs', async () => {
+			fixed[openList] = { ...empty, total: 3, items: rows };
+			render(IntegrityPage);
+
+			const del = await screen.findByRole('button', { name: 'Delete stray.txt' });
+			expect(screen.queryByRole('button', { name: 'Delete old.txt' })).toBeNull();
+			expect(screen.queryByRole('button', { name: 'Delete gb/T/Broken.zip' })).toBeNull();
+			expect(del.closest('table')!.querySelector('thead th:last-child')!.textContent).toBe(
+				'Actions'
+			);
+
+			jobs.current = {
+				id: 'j1',
+				type: 'Ingest',
+				mode: null,
+				status: 'Running',
+				current: 0,
+				total: 1,
+				currentItem: null,
+				startedAt: '2026-11-04T03:00:00Z'
+			} as never;
+			await vi.waitFor(() =>
+				expect(screen.queryByRole('button', { name: 'Delete stray.txt' })).toBeNull()
+			);
+		});
+
+		it('delete confirms, posts, toasts and reloads the list', async () => {
+			fixed[openList] = { ...empty, total: 3, items: rows };
+			render(IntegrityPage);
+			await fireEvent.click(await screen.findByRole('button', { name: 'Delete stray.txt' }));
+
+			expect(modal().classList.contains('show')).toBe(true);
+			expect(modal().querySelector('.modal-title')!.textContent).toBe('Delete orphan file');
+			expect(modal().textContent).toContain(
+				"Delete stray.txt from the library folder? This can't be undone."
+			);
+			const before = calls.filter((c) => c.key === openList).length;
+			await fireEvent.click(screen.getByRole('button', { name: 'Delete', hidden: true }));
+
+			await vi.waitFor(() =>
+				expect(calls.map((c) => c.key)).toContain('POST /api/integrity/issues/1/delete-file')
+			);
+			await vi.waitFor(() =>
+				expect(calls.filter((c) => c.key === openList).length).toBe(before + 1)
+			);
+			expect(toasts.items.at(-1)).toMatchObject({ kind: 'success', text: 'Deleted stray.txt.' });
+		});
+
+		it('the page-size selector defaults to 10, is remembered, and goes back to page 1', async () => {
+			fixed[openList] = { ...empty, total: 30, items: rows };
+			render(IntegrityPage);
+			await screen.findByText('stray.txt');
+			const size = screen.getByLabelText(/per page|Page size/i) as HTMLSelectElement;
+			expect(size.value).toBe('10');
+
+			await fireEvent.change(size, { target: { value: '50' } });
+
+			await vi.waitFor(() =>
+				expect(calls.map((c) => c.key)).toContain(
+					'GET /api/integrity/issues?page=1&pageSize=50&status=Open'
+				)
+			);
+			expect(localStorage.getItem('rnrm.pageSize.integrity-issues')).toBe('50');
+		});
 	});
 
 	it('Run deep starts an integrity job in Deep mode', async () => {
@@ -196,7 +328,7 @@ describe('integrity page', () => {
 
 		await vi.waitFor(() =>
 			expect(calls.map((c) => c.key)).toContain(
-				'GET /api/integrity/issues?page=1&pageSize=50&status=Open&type=HashMismatch'
+				'GET /api/integrity/issues?page=1&pageSize=10&status=Open&type=HashMismatch'
 			)
 		);
 	});

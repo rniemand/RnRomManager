@@ -5,13 +5,13 @@ export const defaultPageSize = 20;
 
 const key = (table: string) => `rnrm.pageSize.${table}`;
 
-/** The stored page size for `table`, or 20 when missing, invalid or storage is unavailable (T3). */
-export function readPageSize(table: string): number {
+/** The stored page size for `table`, or `fallback` (20) when missing, invalid or storage is unavailable (T3, IN5). */
+export function readPageSize(table: string, fallback: number = defaultPageSize): number {
 	try {
 		const size = Number(localStorage.getItem(key(table)));
-		return (pageSizes as readonly number[]).includes(size) ? size : defaultPageSize;
+		return (pageSizes as readonly number[]).includes(size) ? size : fallback;
 	} catch {
-		return defaultPageSize;
+		return fallback;
 	}
 }
 
