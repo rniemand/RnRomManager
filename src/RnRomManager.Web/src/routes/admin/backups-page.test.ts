@@ -16,6 +16,7 @@ vi.mock('#lib/bootstrap.js', () => ({
 	}
 }));
 vi.mock('#lib/modal.js', () => ({ releaseModal: () => {} }));
+vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 const goto = vi.fn(() => Promise.resolve());
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...(args as [])) }));
 
@@ -113,8 +114,25 @@ describe('admin backups page (B18)', () => {
 		);
 		expect(rows).toEqual(['rnrommanager-20261106-023000.zip', 'rnrommanager-20261105-023000.zip']);
 		expect(document.querySelector('tbody .file-size')!.textContent).toBe('4.0 KiB');
+		expect(document.querySelector('tbody .file-size')!.parentElement!.className).toBe(
+			'badge text-bg-light border'
+		);
 		const table = document.querySelector('table')!;
 		expect(table.className).toBe('table table-sm table-striped table-hover align-middle mb-0');
+		expect(table.querySelector('thead tr')!.className).toBe('');
+		// A2: Download (a link) then Restore, as icon buttons.
+		const download = screen.getByRole('link', {
+			name: 'Download rnrommanager-20261106-023000.zip'
+		});
+		expect(download.getAttribute('href')).toBe(
+			'/api/admin/backups/rnrommanager-20261106-023000.zip/download'
+		);
+		expect(download.hasAttribute('download')).toBe(true);
+		const actions = download.parentElement!;
+		expect(actions.className).toBe('d-flex gap-2 justify-content-end');
+		expect(actions.lastElementChild!.getAttribute('aria-label')).toBe(
+			'Restore rnrommanager-20261106-023000.zip'
+		);
 		expect(
 			screen.getByRole('link', { name: 'How to restore a backup' }).getAttribute('href')
 		).toContain('docs/deployment.md#backup-and-restore');

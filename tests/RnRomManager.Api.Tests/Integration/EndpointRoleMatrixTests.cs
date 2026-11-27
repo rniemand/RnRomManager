@@ -160,6 +160,7 @@ public partial class EndpointRoleMatrixTests
         ["PUT /api/admin/backups/settings"] = Role.Admin,
         ["POST /api/admin/backups"] = Role.Admin,
         ["POST /api/admin/backups/{fileName}/restore"] = Role.Admin,
+        ["GET /api/admin/backups/{fileName}/download"] = Role.Admin,
         ["GET /api/admin/logs"] = Role.Admin,
         ["GET /api/admin/logs/recent"] = Role.Admin,
         ["GET /api/admin/logs/stream"] = Role.Admin,

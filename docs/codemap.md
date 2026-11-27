@@ -24,6 +24,7 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 - `PUT /api/admin/backups/settings` Admin
 - `POST /api/admin/backups` Admin
 - `POST /api/admin/backups/{fileName}/restore` Admin
+- `GET /api/admin/backups/{fileName}/download` Admin
 - `GET /api/about`
 
 `src/RnRomManager.Api/Endpoints/AuditEndpoints.cs`:

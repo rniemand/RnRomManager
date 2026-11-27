@@ -19,7 +19,7 @@
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
 	/** One accordion panel open at a time; Automatic refresh starts open. */
-	let openPanel = $state<'schedule' | 'files' | null>('schedule');
+	let openPanel = $state<'schedule' | 'files' | null>('files');
 	let dats = $state<DatVersion[] | null>(null);
 	let error = $state<unknown>(null);
 	let busy = $state(false);
@@ -103,29 +103,6 @@
 
 <svelte:head><title>DATs · Admin · RnRomManager</title></svelte:head>
 
-<div class="mb-3" aria-live="polite">
-	{#if job}
-		<div class="card card-body">
-			<strong class="mb-2">{jobLabel(job.type)} running</strong>
-			<div
-				class="progress mb-1"
-				role="progressbar"
-				aria-label="Job progress"
-				aria-valuenow={percent(job.current, job.total)}
-				aria-valuemin="0"
-				aria-valuemax="100"
-			>
-				<div class="progress-bar" style="width: {percent(job.current, job.total)}%"></div>
-			</div>
-			<div class="small text-body-secondary text-break">
-				{job.current} / {job.total}{job.currentItem ? ` · ${job.currentItem}` : ''}
-			</div>
-		</div>
-	{:else}
-		<Button variant="primary" icon="retry" disabled={busy} onclick={refresh}>Refresh DATs</Button>
-	{/if}
-</div>
-
 <AccordionItem
 	id="dat-schedule-panel"
 	headingId="dat-schedule"
@@ -166,6 +143,29 @@
 	bind:open={() => openPanel === 'files', (v) => (openPanel = v ? 'files' : null)}
 >
 	{#snippet header()}DAT files{/snippet}
+	<!-- A1: the refresh (or its running job) heads the DAT files panel. -->
+	<div class="mb-3" aria-live="polite">
+		{#if job}
+			<div class="card card-body">
+				<strong class="mb-2">{jobLabel(job.type)} running</strong>
+				<div
+					class="progress mb-1"
+					role="progressbar"
+					aria-label="Job progress"
+					aria-valuenow={percent(job.current, job.total)}
+					aria-valuemin="0"
+					aria-valuemax="100"
+				>
+					<div class="progress-bar" style="width: {percent(job.current, job.total)}%"></div>
+				</div>
+				<div class="small text-body-secondary text-break">
+					{job.current} / {job.total}{job.currentItem ? ` · ${job.currentItem}` : ''}
+				</div>
+			</div>
+		{:else}
+			<Button variant="primary" icon="retry" disabled={busy} onclick={refresh}>Refresh DATs</Button>
+		{/if}
+	</div>
 	{#if error}
 		<ErrorAlert {error} onretry={load} />
 	{:else if !dats}

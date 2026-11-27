@@ -1,6 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using Dapper;
 using Microsoft.Extensions.DependencyInjection;
+using RnRomManager.Core.Audit;
+using RnRomManager.Core.Database;
 using NSubstitute;
 using RnRomManager.Core.Backups;
 using RnRomManager.TestData;
@@ -184,6 +187,58 @@ public class BackupEndpointsTests
 
         Assert.That((get.StatusCode, post.StatusCode), Is.EqualTo((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden)));
         Assert.That(Directory.GetFiles(Folder), Is.Empty);
+    }
+
+    // --- A3 download ---
+
+    [Test]
+    public async Task Download_StreamsTheZipAsAnAttachment_AndAudits()
+    {
+        await StartAsync();
+        const string name = "rnrommanager-20261127-120000.zip";
+        Directory.CreateDirectory(Folder);
+        await File.WriteAllBytesAsync(Path.Combine(Folder, name), [80, 75, 5, 6]);
+
+        using var response = await Admin.GetAsync($"/api/admin/backups/{name}/download");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        Assert.That(response.Content.Headers.ContentDisposition?.DispositionType, Is.EqualTo("attachment"));
+        Assert.That(response.Content.Headers.ContentDisposition?.FileName?.Trim('"'), Is.EqualTo(name));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(new byte[] { 80, 75, 5, 6 }));
+        await Factory.Services.GetRequiredService<AuditWriter>().FlushAsync();
+        await using var db = Factory.Services.GetRequiredService<IDbConnectionFactory>().Create();
+        Assert.That(await db.QueryAsync<string>("SELECT details FROM audit_events WHERE action = 'BackupDownloaded'"),
+            Is.EqualTo(new[] { name }));
+    }
+
+    [TestCase("notes.txt")]
+    [TestCase("rnrommanager-2026.zip")]
+    [TestCase("..%2Frnrommanager-20261127-120000.zip")]
+    public async Task Download_ABadName_Is400(string fileName)
+    {
+        await StartAsync();
+
+        using var response = await Admin.GetAsync($"/api/admin/backups/{fileName}/download");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("fileName")[0].GetString(),
+            Is.EqualTo("Choose a backup from the list."));
+    }
+
+    [Test]
+    public async Task Download_AMissingBackup_Is404_AndAUserIs403()
+    {
+        await StartAsync();
+        const string url = "/api/admin/backups/rnrommanager-20261127-120000.zip/download";
+        using var user = await AuthClient.CreateAsync(Factory);
+        await TestUsers.CreateAsync(Factory, "plain");
+        (await user.LoginAsync("plain", TestUsers.Password)).Dispose();
+
+        using var missing = await Admin.GetAsync(url);
+        using var forbidden = await user.GetAsync(url);
+
+        Assert.That((missing.StatusCode, forbidden.StatusCode), Is.EqualTo((HttpStatusCode.NotFound, HttpStatusCode.Forbidden)));
     }
 
     // --- B27 live restore ---
