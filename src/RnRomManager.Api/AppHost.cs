@@ -306,6 +306,7 @@ public static class AppHost
         services.AddSystemHandler<WonderSwanColorHandler>();
         services.AddSystemHandler<SuperGrafxHandler>();
         services.AddSystemHandler<PocketChallengeV2Handler>();
+        services.AddSystemHandler<SegaPicoHandler>();
     }
 
     // spec §11: hashed SvelteKit assets are immutable; everything else (index.html, theme.js) must revalidate.

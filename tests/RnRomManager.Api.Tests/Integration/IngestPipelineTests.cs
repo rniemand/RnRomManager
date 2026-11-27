@@ -203,7 +203,7 @@ public class IngestPipelineTests
             [IngestSeeder.NeoGeoPocketDat] = [new FixtureGame("Dual Mode (Japan)", "Dual Mode (Japan).ngp", DualMode)],
             [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)], [IngestSeeder.WonderSwanDat] = [new FixtureGame("Mono Flag (Japan)", "Mono Flag (Japan).ws", MonoFlag)], [IngestSeeder.WonderSwanColorDat] = [new FixtureGame("Swan Lagoon (Japan)", "Swan Lagoon (Japan).wsc", SwanLagoon)],
             [IngestSeeder.SuperGrafxDat] = [new FixtureGame("Twin Vdp (Japan)", "Twin Vdp (Japan).sgx", Sgx)],
-            [IngestSeeder.PocketChallengeV2Dat] = [new FixtureGame("Quiz Ladder (Japan)", "Quiz Ladder (Japan).pc2", Challenge)],
+            [IngestSeeder.PocketChallengeV2Dat] = [new FixtureGame("Quiz Ladder (Japan)", "Quiz Ladder (Japan).pc2", Challenge)], [IngestSeeder.PicoDat] = [],
             [IngestSeeder.ThreeDsDat] =
             [
                 new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),

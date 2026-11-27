@@ -220,6 +220,15 @@
 	background-color: var(--bs-pc2) !important;
 }
 
+/* Sega Pico system colour (Sega Pico P8): pale lime, same in both themes; black on it is AA (~15:1). */
+:root {
+	--bs-pico: #c0eb75;
+}
+.text-bg-pico {
+	color: #000 !important;
+	background-color: var(--bs-pico) !important;
+}
+
 /* Nintendo Switch system colour (N3): near-black, same in both themes; white on it is AA (~13:1). */
 :root {
 	--bs-switch: #2d2d2d;

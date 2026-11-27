@@ -66,6 +66,10 @@ describe('systemColour', () => {
 		expect(systemColour('pc2')).toEqual({ name: 'pc2', foreground: '#000' });
 	});
 
+	it('gives Sega Pico pale lime with black text (Sega Pico P8)', () => {
+		expect(systemColour('pico')).toEqual({ name: 'pico', foreground: '#000' });
+	});
+
 	it('gives 3DO its own olive with black text (3DO B2)', () => {
 		expect(systemColour('3do')).toEqual({ name: '3do', foreground: '#000' });
 	});
