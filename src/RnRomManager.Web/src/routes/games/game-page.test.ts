@@ -898,14 +898,17 @@ describe('game detail page', () => {
 			const article = await screen.findByRole('article', { name: 'Tetris 1.gb' });
 
 			const body = details('Tetris 1.gb');
-			expect(body.className).toBe('card-body small d-flex flex-column gap-3');
+			// Collapsed: no d-flex, whose display !important would beat the hidden attribute.
+			expect(body.className).toBe('card-body small flex-column gap-3');
 			const footer = article.querySelector<HTMLElement>(':scope > .card-footer')!;
-			expect(footer.className).toBe('card-footer bg-body-tertiary d-flex align-items-center gap-2');
+			expect(footer.className).toBe('card-footer bg-body-tertiary align-items-center gap-2');
 			expect(footer.previousElementSibling).toBe(body);
 			// Hidden with the body while the card is closed.
 			expect(footer.hidden).toBe(true);
 			await fireEvent.click(chevron('Tetris 1.gb'));
 			expect(footer.hidden).toBe(false);
+			expect(footer.className).toBe('card-footer bg-body-tertiary d-flex align-items-center gap-2');
+			expect(body.className).toBe('card-body small d-flex flex-column gap-3');
 
 			const header = within(footer).getByRole('button', { name: 'Header details for Tetris 1.gb' });
 			expect(header.className).toBe('btn btn-sm btn-link text-body-secondary p-0');

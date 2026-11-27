@@ -39,6 +39,18 @@
 	class={[toneClass[tone], 'p-0', className].filter(Boolean).join(' ')}
 	{icon}
 	aria-label={label}
+	data-icon-button
 	{@attach fromAction(tooltipAction, () => tooltip ?? label)}
 	{...rest}
 />
+
+<style>
+	/* WCAG 2.5.8: a 24px target even though the icon is smaller (axe target-size). */
+	:global([data-icon-button]) {
+		min-width: 1.5rem;
+		min-height: 1.5rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+</style>

@@ -279,7 +279,7 @@
 			</div>
 			<!-- R2: the body's blocks are spaced by the wrapper's gap, not their own margins. -->
 			<div
-				class="card-body small d-flex flex-column gap-3"
+				class="card-body small {open ? 'd-flex ' : ''}flex-column gap-3"
 				id="release-{rom.id}-details"
 				hidden={!open}
 			>
@@ -374,7 +374,10 @@
 			</div>
 			{#if rom.header || auth.isAdmin}
 				<!-- R2, B9: the action row; Header details left, the Admin actions right. -->
-				<div class="card-footer bg-body-tertiary d-flex align-items-center gap-2" hidden={!open}>
+				<div
+					class="card-footer bg-body-tertiary {open ? 'd-flex ' : ''}align-items-center gap-2"
+					hidden={!open}
+				>
 					{#if rom.header}
 						<IconButton
 							icon="info"
