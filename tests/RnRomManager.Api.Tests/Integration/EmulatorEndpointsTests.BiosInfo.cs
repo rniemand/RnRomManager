@@ -7,11 +7,22 @@ namespace RnRomManager.Api.Tests.Integration;
 /// <summary><c>GET /api/admin/bios</c>: the BIOS info tab's checks against the temp <c>Paths:Bios</c> folder.</summary>
 public partial class EmulatorEndpointsTests
 {
-    private async Task<JsonElement> BiosInfoAsync()
+    private async Task<AuthClient> BiosAdminAsync()
     {
-        using var admin = await AuthClient.CreateAsync(_factory);
+        var admin = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "bios-admin", TestUsers.AllRoles);
         (await admin.LoginAsync("bios-admin", TestUsers.Password)).Dispose();
+        return admin;
+    }
+
+    private async Task<JsonElement> BiosInfoAsync()
+    {
+        using var admin = await BiosAdminAsync();
+        return await BiosInfoAsync(admin);
+    }
+
+    private static async Task<JsonElement> BiosInfoAsync(AuthClient admin)
+    {
         using var response = await admin.GetAsync("/api/admin/bios");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
@@ -55,8 +66,36 @@ public partial class EmulatorEndpointsTests
 
         Assert.That(Group(info, "PC-FX").GetProperty("ok").GetBoolean(), Is.False);
         Assert.That(Group(info, "Saturn").GetProperty("ok").GetBoolean(), Is.True, "optional and absent");
+        Assert.That(Group(info, "Commodore Amiga CD32").GetProperty("ok").GetBoolean(), Is.False);
+        Assert.That(Group(info, "Commodore Amiga CD32 (extended ROM)").GetProperty("ok").GetBoolean(), Is.True, "no Kickstart, so not needed");
+        Assert.That(Group(info, "Commodore CDTV").GetProperty("ok").GetBoolean(), Is.False);
 
         Assert.That(info.GetProperty("otherFiles").EnumerateArray().Select(f => f.GetProperty("name").GetString()),
             Is.EqualTo(new[] { "neogeo.zip" }));
+    }
+
+    [Test]
+    public async Task BiosInfo_amiga_cd_kickstarts()
+    {
+        (bool Kick, bool Ext) Cd32Ok(JsonElement info) =>
+            (Group(info, "Commodore Amiga CD32").GetProperty("ok").GetBoolean(), Group(info, "Commodore Amiga CD32 (extended ROM)").GetProperty("ok").GetBoolean());
+
+        using var admin = await BiosAdminAsync();
+        WriteBios("kick40060.CD32", new byte[512 * 1024]);
+        var info = await BiosInfoAsync(admin);
+        Assert.That(Cd32Ok(info), Is.EqualTo((true, false)), "a 512 KiB Kickstart needs its extended ROM");
+        Assert.That(Status(Group(info, "Commodore Amiga CD32 (extended ROM)"), "kick40060.CD32.ext"), Is.EqualTo("Missing"));
+
+        WriteBios("kick40060.CD32.ext", new byte[512 * 1024]);
+        Assert.That(Cd32Ok(await BiosInfoAsync(admin)), Is.EqualTo((true, true)));
+
+        WriteBios("kick40060.CD32", new byte[1024 * 1024]);
+        File.Delete(Path.Combine(BiosDir, "kick40060.CD32.ext"));
+        Assert.That(Cd32Ok(await BiosInfoAsync(admin)), Is.EqualTo((true, true)), "the 1 MiB combined ROM needs no extended ROM");
+
+        WriteBios("kick34005.A500", new byte[256 * 1024]);
+        WriteBios("kick34005.CDTV", new byte[128 * 1024]);
+        var cdtv = Group(await BiosInfoAsync(admin), "Commodore CDTV");
+        Assert.That((Status(cdtv, "kick34005.A500"), Status(cdtv, "kick34005.CDTV"), cdtv.GetProperty("ok").GetBoolean()), Is.EqualTo(("Valid", "WrongSize", false)));
     }
 }

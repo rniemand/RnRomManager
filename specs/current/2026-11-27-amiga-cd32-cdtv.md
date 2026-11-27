@@ -174,7 +174,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
     - Every existing case passes unchanged.
     - `ShapeProblem`'s doc comment gains "CD32 A5: Amiga CD32 and CDTV take a cue, TOC, CloneCD or MDS set, or a single `.iso`, `.chd` or `.nrg`."
   - Done when: `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~LibraryEndpointsTests|FullyQualifiedName~PlayDiscCopyTests"` passes.
-- [ ] **5. BIOS Info** (A11): the three catalog groups and the CD32 extended-ROM rule in `BiosInfo.Check`.
+- [x] **5. BIOS Info** (A11): the three catalog groups and the CD32 extended-ROM rule in `BiosInfo.Check`.
   - Files: `BiosInfo.cs`, `tests/RnRomManager.Api.Tests/Integration/EmulatorEndpointsTests.BiosInfo.cs`.
   - Tests (`EmulatorEndpointsTests.BiosInfo`):
     - `BiosInfo_reports_valid_wrong_size_missing_and_other_files` adds: `Group(info, "Commodore Amiga CD32")` `ok` false (absent); `"Commodore Amiga CD32 (extended ROM)"` `ok` true (no Kickstart, so not needed); `"Commodore CDTV"` `ok` false.
