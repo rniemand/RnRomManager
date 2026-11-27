@@ -40,7 +40,7 @@ public static class PlayDisc
     /// <summary>The inclusive cap on the combined opened lengths a launch may stream.</summary>
     public const long MaxBytes = 2L * 1024 * 1024 * 1024;
 
-    private static readonly HashSet<string> SupportedSystems = new(StringComparer.Ordinal)
+    public static readonly IReadOnlySet<string> SupportedSystems = new HashSet<string>(StringComparer.Ordinal)
     {
         SystemId, PspSystemId, SaturnSystemId, SegaCdSystemId, ThreeDoSystemId, TurboGrafxCdSystemId, PcfxSystemId,
     };
