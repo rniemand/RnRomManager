@@ -23,6 +23,10 @@ describe('navCounts (D6)', () => {
 					{ system: 'gb', files: [{ name: 'a.gb' }, { name: 'b.gb' }] },
 					{ system: 'nes', files: [{ name: 'c.nes' }] }
 				]
+			},
+			'/api/ingest/duplicates': {
+				status: 200,
+				body: [{ system: 'gb', files: [{ name: 'a.gb' }, { name: 'b.gb' }] }]
 			}
 		};
 		vi.stubGlobal('fetch', (url: string) => {
@@ -40,17 +44,17 @@ describe('navCounts (D6)', () => {
 		auth.set(null);
 	});
 
-	it('starts with both counts null', () => {
-		expect([navCounts.review, navCounts.deleted]).toEqual([null, null]);
+	it('starts with every count null', () => {
+		expect([navCounts.review, navCounts.deleted, navCounts.duplicates]).toEqual([null, null, null]);
 	});
 
-	it('refresh loads the review total and the sum of removed files', async () => {
+	it('refresh loads the review total and the sum of removed and duplicate files', async () => {
 		auth.set(admin);
 
 		await refreshCounts();
 
-		expect(calls.sort()).toEqual(['/api/ingest/removed', reviewUrl]);
-		expect([navCounts.review, navCounts.deleted]).toEqual([7, 3]);
+		expect(calls.sort()).toEqual(['/api/ingest/duplicates', '/api/ingest/removed', reviewUrl]);
+		expect([navCounts.review, navCounts.deleted, navCounts.duplicates]).toEqual([7, 3, 2]);
 	});
 
 	it.each([
@@ -62,7 +66,7 @@ describe('navCounts (D6)', () => {
 		await refreshCounts();
 
 		expect(calls).toEqual([]);
-		expect([navCounts.review, navCounts.deleted]).toEqual([null, null]);
+		expect([navCounts.review, navCounts.deleted, navCounts.duplicates]).toEqual([null, null, null]);
 	});
 
 	it('a failed call keeps the last value of that count only', async () => {
@@ -73,15 +77,15 @@ describe('navCounts (D6)', () => {
 
 		await refreshCounts();
 
-		expect([navCounts.review, navCounts.deleted]).toEqual([2, 3]);
+		expect([navCounts.review, navCounts.deleted, navCounts.duplicates]).toEqual([2, 3, 2]);
 	});
 
-	it('reset clears both', async () => {
+	it('reset clears every count', async () => {
 		auth.set(admin);
 		await refreshCounts();
 
 		navCounts.reset();
 
-		expect([navCounts.review, navCounts.deleted]).toEqual([null, null]);
+		expect([navCounts.review, navCounts.deleted, navCounts.duplicates]).toEqual([null, null, null]);
 	});
 });
