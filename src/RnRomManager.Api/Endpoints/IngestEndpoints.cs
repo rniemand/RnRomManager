@@ -9,7 +9,7 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
 
-/// <summary><c>POST /api/jobs/ingest</c>, <c>GET /api/ingest/pending</c>, <c>GET /api/ingest/failed</c>, <c>GET /api/ingest/removed</c>, <c>POST /api/ingest/delete</c> and <c>POST /api/ingest/restore</c>, Admin only (spec §23, §7.1).</summary>
+/// <summary><c>POST /api/jobs/ingest</c>, <c>GET /api/ingest/pending</c>, <c>GET /api/ingest/failed</c>, <c>GET /api/ingest/removed</c>, <c>GET /api/ingest/duplicates</c>, <c>POST /api/ingest/delete</c> and <c>POST /api/ingest/restore</c>, Admin only (spec §23, §7.1).</summary>
 public static class IngestEndpoints
 {
     public static RouteGroupBuilder MapIngestEndpoints(this RouteGroupBuilder api)
@@ -60,6 +60,13 @@ public static class IngestEndpoints
 
         // Deleted ROMs (D2): only systems with files in their _removed/ folder.
         api.MapGet("/ingest/removed", (IngestFileScanner scanner) => Results.Ok(scanner.ScanRemoved().Select(s => new
+        {
+            system = s.SystemId,
+            files = s.Files.Select(f => new { name = f.Name, sizeBytes = f.SizeBytes, modifiedAt = f.ModifiedAtUtc }),
+        }))).RequireAuthorization(AuthSetup.AdminOnly);
+
+        // DU4: only systems with files in their _duplicates/ folder.
+        api.MapGet("/ingest/duplicates", (IngestFileScanner scanner) => Results.Ok(scanner.ScanDuplicates().Select(s => new
         {
             system = s.SystemId,
             files = s.Files.Select(f => new { name = f.Name, sizeBytes = f.SizeBytes, modifiedAt = f.ModifiedAtUtc }),

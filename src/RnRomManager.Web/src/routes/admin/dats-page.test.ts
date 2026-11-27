@@ -110,15 +110,15 @@ describe('DATs tab: automatic refresh (B28)', () => {
 		expect(input.classList.contains('is-invalid')).toBe(true);
 	});
 
-	it('Automatic refresh and DAT files are accordion panels, one open at a time, Automatic refresh open (B28)', async () => {
+	it('Automatic refresh and DAT files are accordion panels, one open at a time, DAT files open (B28, A1)', async () => {
 		render(DatsPage);
 		await time();
 
 		const schedule = screen.getByRole('button', { name: 'Automatic refresh' });
 		const files = screen.getByRole('button', { name: 'DAT files' });
 		expect([schedule, files].map((b) => b.getAttribute('aria-expanded'))).toEqual([
-			'true',
-			'false'
+			'false',
+			'true'
 		]);
 		const heading = screen.getByRole('heading', { level: 2, name: 'Automatic refresh' });
 		expect(heading.id).toBe('dat-schedule');
@@ -127,15 +127,24 @@ describe('DATs tab: automatic refresh (B28)', () => {
 		expect(form.className).toBe('');
 		expect(screen.getByRole('heading', { level: 2, name: 'DAT files' }).id).toBe('dat-files');
 
-		await fireEvent.click(files);
-		expect(files.getAttribute('aria-expanded')).toBe('true');
-		expect(schedule.getAttribute('aria-expanded')).toBe('false');
-		await fireEvent.click(files);
+		await fireEvent.click(schedule);
+		expect(schedule.getAttribute('aria-expanded')).toBe('true');
+		expect(files.getAttribute('aria-expanded')).toBe('false');
+		await fireEvent.click(schedule);
 		expect([schedule, files].map((b) => b.getAttribute('aria-expanded'))).toEqual([
 			'false',
 			'false'
 		]);
-		expect(screen.getByRole('button', { name: /Refresh DATs/ }).closest('.accordion')).toBeNull();
+	});
+
+	it('Refresh DATs heads the DAT files panel, before the list (A1)', async () => {
+		render(DatsPage);
+		const refresh = await screen.findByRole('button', { name: /Refresh DATs/ });
+
+		const panel = refresh.closest('#dat-files-panel')!;
+		expect(panel).not.toBeNull();
+		const live = refresh.closest('[aria-live="polite"]')!;
+		expect(live.parentElement!.firstElementChild).toBe(live);
 	});
 
 	it('each DAT row links to its download, name encoded (B29)', async () => {

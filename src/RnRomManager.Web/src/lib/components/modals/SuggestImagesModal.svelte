@@ -18,9 +18,11 @@
 		onchanged: (detail: GameDetail) => void;
 		/** Any failure the dialog doesn't show itself. */
 		onfailed: (e: unknown) => void;
+		/** IM4: the type each opening starts on. */
+		initialType?: 'BoxArt' | 'Snap';
 	}
 
-	let { open = $bindable(), gameId, onchanged, onfailed }: Props = $props();
+	let { open = $bindable(), gameId, onchanged, onfailed, initialType = 'BoxArt' }: Props = $props();
 
 	let suggestType = $state<'BoxArt' | 'Snap'>('BoxArt');
 	let suggestions = $state<ImageSuggestion[] | null>(null);
@@ -54,11 +56,11 @@
 		}
 	}
 
-	// Opening starts on box art and loads; S12: closing aborts the load and makes any late answer stale.
+	// Opening starts on initialType and loads; S12: closing aborts the load and makes any late answer stale.
 	$effect(() => {
 		if (open) {
 			untrack(() => {
-				suggestType = 'BoxArt';
+				suggestType = initialType;
 				void loadSuggestions();
 			});
 			return;

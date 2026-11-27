@@ -3,7 +3,7 @@ import type { Page, RemovedSystem } from '#lib/types/index.js';
 import { auth } from './auth.svelte';
 
 /**
- * D6: the navbar's admin counts: pending Review items and Deleted ROMs. The layout refreshes them on every
+ * D6: the navbar's admin counts: pending Review items, Deleted ROMs and Duplicates (DU2). The layout refreshes them on every
  * navigation and job end; the Review and Deleted ROMs pages call `refreshCounts()` after changing them in place.
  */
 class NavCounts {
@@ -11,6 +11,8 @@ class NavCounts {
 	review = $state<number | null>(null);
 	/** Files in every `_removed/` folder; null until loaded. */
 	deleted = $state<number | null>(null);
+	/** DU2: files in every `_duplicates/` folder; null until loaded. */
+	duplicates = $state<number | null>(null);
 
 	/** A failed call keeps that count's last value (the badges are hints). */
 	async refresh(): Promise<void> {
@@ -24,6 +26,10 @@ class NavCounts {
 			api
 				.get<RemovedSystem[]>('/api/ingest/removed')
 				.then((systems) => (this.deleted = systems.reduce((sum, s) => sum + s.files.length, 0)))
+				.catch(() => {}),
+			api
+				.get<RemovedSystem[]>('/api/ingest/duplicates')
+				.then((systems) => (this.duplicates = systems.reduce((sum, s) => sum + s.files.length, 0)))
 				.catch(() => {})
 		]);
 	}
@@ -31,6 +37,7 @@ class NavCounts {
 	reset(): void {
 		this.review = null;
 		this.deleted = null;
+		this.duplicates = null;
 	}
 }
 

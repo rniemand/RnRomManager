@@ -28,4 +28,7 @@ internal sealed class ListRow
     public IReadOnlyList<string> Publishers { get; init; } = [];
     public IReadOnlyList<string> Genres { get; init; } = [];
     public string? AddOns { get; init; }
+
+    /// <summary>GS2: the file a hash query matched; null without a hash query.</summary>
+    public string? HashMatchFileName { get; init; }
 }

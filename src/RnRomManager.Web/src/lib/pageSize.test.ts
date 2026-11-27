@@ -37,6 +37,20 @@ describe('pageSize', () => {
 		expect(() => writePageSize('review', 50)).not.toThrow();
 	});
 
+	it('a fallback replaces 20 when nothing valid is stored (IN5)', () => {
+		expect(readPageSize('integrity-issues', 10)).toBe(10);
+		localStorage.setItem('rnrm.pageSize.integrity-issues', 'abc');
+		expect(readPageSize('integrity-issues', 10)).toBe(10);
+		writePageSize('integrity-issues', 50);
+		expect(readPageSize('integrity-issues', 10)).toBe(50);
+		vi.stubGlobal('localStorage', {
+			getItem: () => {
+				throw new Error('denied');
+			}
+		});
+		expect(readPageSize('integrity-issues', 10)).toBe(10);
+	});
+
 	it('pageCount rounds up and is at least 1', () => {
 		expect([pageCount(0, 20), pageCount(20, 20), pageCount(21, 20), pageCount(45, 20)]).toEqual([
 			1, 1, 2, 3

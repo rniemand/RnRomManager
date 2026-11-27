@@ -169,10 +169,15 @@ describe('game page collections (B25)', () => {
 		answers['POST /api/collections/c3/games'] = [{ status: 200, body: { added: 1 } }];
 		await openModal();
 
+		// G3: the header button counts the collections and follows the modal's edits.
+		const header = () => screen.getByRole('button', { name: /^Collections/ });
+		expect(header().textContent?.trim()).toBe('Collections2 collections');
 		await fireEvent.click(box('Retro'));
 		await vi.waitFor(() =>
 			expect(badges().map(([name]) => name)).toEqual(['Favourites', 'Puzzle', 'Retro'])
 		);
+		expect(header().textContent?.trim()).toBe('Collections3 collections');
+		expect(header().className).toBe('btn btn-sm btn-primary');
 		const add = calls.find((c) => c.key === 'POST /api/collections/c3/games')!;
 		expect(JSON.parse(add.body!)).toEqual({ gameIds: ['g1'] });
 

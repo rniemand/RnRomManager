@@ -559,8 +559,8 @@ public class ReportEndpointsTests
         Assert.That((await Groups("?match=title")).Single().GetProperty("igdbId").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
 
-    [TestCase("{\"system\":\"gb\",\"gamesKey\":\"" + Key + "\"}", "Give baseTitle or igdbId, not both.")]
-    [TestCase("{\"system\":\"gb\",\"baseTitle\":null,\"igdbId\":null,\"gamesKey\":\"" + Key + "\"}", "Give baseTitle or igdbId, not both.")]
+    [TestCase("{\"system\":\"gb\",\"gamesKey\":\"" + Key + "\"}", "Give baseTitle, igdbId or hash.")]
+    [TestCase("{\"system\":\"gb\",\"baseTitle\":null,\"igdbId\":null,\"gamesKey\":\"" + Key + "\"}", "Give baseTitle, igdbId or hash.")]
     [TestCase("{\"system\":\"gb\",\"baseTitle\":\"Quest\",\"igdbId\":42,\"gamesKey\":\"" + Key + "\"}", "Give baseTitle or igdbId, not both.")]
     [TestCase("{\"system\":\"gb\",\"igdbId\":0,\"gamesKey\":\"" + Key + "\"}", "Must be a positive whole number.")]
     [TestCase("{\"system\":\"gb\",\"igdbId\":1.5,\"gamesKey\":\"" + Key + "\"}", "Must be a positive whole number.")]
@@ -575,6 +575,55 @@ public class ReportEndpointsTests
         Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("igdbId")[0].GetString(), Is.EqualTo(message));
     }
 
+    [TestCase("{\"system\":\"gb\",\"hash\":\"sha1:" + Sha1 + "\",\"baseTitle\":\"Quest\",\"gamesKey\":\"" + Key + "\"}", "Give hash alone, without baseTitle or igdbId.")]
+    [TestCase("{\"system\":\"gb\",\"hash\":\"md5:" + Md5 + "\",\"igdbId\":42,\"gamesKey\":\"" + Key + "\"}", "Give hash alone, without baseTitle or igdbId.")]
+    [TestCase("{\"system\":\"gb\",\"hash\":\"sha1:" + Md5 + "\",\"gamesKey\":\"" + Key + "\"}", "Must be sha1:<40 hex> or md5:<32 hex>.")]
+    [TestCase("{\"system\":\"gb\",\"hash\":\"SHA1:" + Sha1 + "\",\"gamesKey\":\"" + Key + "\"}", "Must be sha1:<40 hex> or md5:<32 hex>.")]
+    [TestCase("{\"system\":\"gb\",\"hash\":\"" + Sha1 + "\",\"gamesKey\":\"" + Key + "\"}", "Must be sha1:<40 hex> or md5:<32 hex>.")]
+    public async Task Dismiss_Hash_Errors(string json, string message)
+    {
+        using var editor = await Editor();
+
+        using var response = await editor.PostAsync("/api/reports/duplicates/dismiss", JsonDocument.Parse(json).RootElement);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("hash")[0].GetString(), Is.EqualTo(message));
+    }
+
+    [Test]
+    public async Task Duplicates_ByHash_GroupASharedReleaseMd5_AndDismissWithHash()
+    {
+        using var editor = await Editor();
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        await Sql("UPDATE roms SET md5 = @md5 WHERE game_id IN @ids", new { md5 = Md5, ids = new[] { alpha, bravo } });
+        await SetBaseTitle("Shared", alpha, bravo);
+
+        var group = (await Groups("?match=hash")).Single();
+        Assert.That((group.GetProperty("hashKind").GetString(), group.GetProperty("hash").GetString()), Is.EqualTo(("md5", Md5)));
+        Assert.That(group.GetProperty("baseTitle").GetString(), Is.EqualTo("Alpha (World).gb"), "the smallest matching file name");
+        Assert.That(GameIds(group), Is.EquivalentTo(new[] { alpha, bravo }));
+        Assert.That((await Groups()).Single().GetProperty("hashKind").ValueKind, Is.EqualTo(JsonValueKind.Null), "title groups carry no hash");
+        Assert.That(await Groups("?match=hash&system=gbc"), Is.Empty);
+
+        using var dismissed = await editor.PostAsync("/api/reports/duplicates/dismiss",
+            new { system = "gb", gamesKey = group.GetProperty("gamesKey").GetString(), hash = "md5:" + Md5 });
+        Assert.That(dismissed.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await Groups("?match=hash"), Is.Empty);
+        Assert.That(await Groups(), Has.Count.EqualTo(1), "only the hash group is dismissed");
+    }
+
+    [Test]
+    public async Task Duplicates_UnknownMatch_Is400()
+    {
+        using var response = await _user.GetAsync("/api/reports/duplicates?match=x");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("match")[0].GetString(),
+            Is.EqualTo("Must be title, igdb or hash."));
+    }
+
+    private const string Sha1 = "0123456789abcdef0123456789abcdef01234567";
+    private const string Md5 = "0123456789abcdef0123456789abcdef";
     private const string Key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string UpperKey = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
 

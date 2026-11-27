@@ -8,7 +8,7 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>D2: hard-deletes pending files, failed files (with their <c>.error.txt</c>) and removed files (D4) under the global job lock.</summary>
+/// <summary>D2: hard-deletes pending files, failed files (with their <c>.error.txt</c>) and removed files (D4) and duplicates (DU4) under the global job lock.</summary>
 public sealed class IngestFileDeleter(
     JobLock jobLock,
     IIngestReviewRepository reviews,
@@ -21,6 +21,7 @@ public sealed class IngestFileDeleter(
     public const string Pending = "pending";
     public const string Failed = "failed";
     public const string Removed = "removed";
+    public const string Duplicates = "duplicates";
     public const int MaxFiles = 500;
 
     /// <returns>Field errors under <c>files</c>; empty when the request is valid.</returns>
@@ -46,8 +47,8 @@ public sealed class IngestFileDeleter(
     {
         if (file?.System is not { } system || systems.ById(system) is null)
             return $"unknown system '{file?.System}'.";
-        if (file.Folder is not (Pending or Failed or Removed))
-            return $"folder must be '{Pending}', '{Failed}' or '{Removed}'.";
+        if (file.Folder is not (Pending or Failed or Removed or Duplicates))
+            return $"folder must be '{Pending}', '{Failed}', '{Removed}' or '{Duplicates}'.";
         if (file.Name is not { Length: > 0 } name || name is "." or ".." || name.Contains('/') || name.Contains('\\')
             || IngestFileScanner.IsIgnored(name)
             || (file.Folder == Failed && name.EndsWith(IngestFileScanner.ErrorSuffix, StringComparison.OrdinalIgnoreCase)))
@@ -69,6 +70,7 @@ public sealed class IngestFileDeleter(
         {
             Failed => Path.Combine(file.System!, StorageFolders.FailedFolder, file.Name!),
             Removed => Path.Combine(file.System!, StorageFolders.RemovedFolder, file.Name!),
+            Duplicates => Path.Combine(file.System!, StorageFolders.DuplicatesFolder, file.Name!),
             _ => Path.Combine(file.System!, file.Name!),
         });
 

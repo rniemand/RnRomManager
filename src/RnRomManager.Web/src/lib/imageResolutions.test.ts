@@ -3,8 +3,10 @@ import {
 	imageResolutionApiUrl,
 	imageResolutionSearch,
 	parseImageResolutionFilter,
-	parseLimit
+	parseLimit,
+	splitImages
 } from './imageResolutions';
+import type { ImageInfo } from '#lib/types/index.js';
 
 const parse = (query: string) => parseImageResolutionFilter(new URLSearchParams(query));
 
@@ -63,5 +65,27 @@ describe('image resolutions filter', () => {
 		).toBe(
 			'/api/reports/image-resolutions?page=2&pageSize=50&system=gb&type=TitleScreen&maxHeight=64'
 		);
+	});
+});
+
+describe('splitImages (IM2)', () => {
+	const img = (id: number, type: ImageInfo['type'], isCover = false) =>
+		({ id, type, isCover }) as ImageInfo;
+
+	it('puts box art and the cover (any type) in Covers, cover first; the rest in Screenshots', () => {
+		const images = [
+			img(1, 'BoxArt'),
+			img(2, 'Snap'),
+			img(3, 'TitleScreen', true),
+			img(4, 'BoxArt'),
+			img(5, 'Other')
+		];
+		const { covers, screenshots } = splitImages(images);
+		expect(covers.map((i) => i.id)).toEqual([3, 1, 4]);
+		expect(screenshots.map((i) => i.id)).toEqual([2, 5]);
+	});
+
+	it('returns empty lists for no images', () => {
+		expect(splitImages([])).toEqual({ covers: [], screenshots: [] });
 	});
 });

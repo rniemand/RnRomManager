@@ -4,6 +4,7 @@
 		{ href: '/ingestion', label: 'Ingestion', icon: 'ingest' },
 		{ href: '/review', label: 'Review', icon: 'review' },
 		{ href: '/deleted', label: 'Deleted ROMs', icon: 'deleted' },
+		{ href: '/duplicates', label: 'Duplicates', icon: 'report-duplicates' },
 		{ href: '/integrity', label: 'Integrity', icon: 'integrity' }
 	] as const;
 </script>
@@ -34,6 +35,11 @@
 			{#if tab.id === '/deleted' && navCounts.deleted}
 				<span class="badge rounded-pill text-bg-secondary">
 					{formatCount(navCounts.deleted)}<span class="visually-hidden">&#32;deleted</span>
+				</span>
+			{/if}
+			{#if tab.id === '/duplicates' && navCounts.duplicates}
+				<span class="badge rounded-pill text-bg-warning">
+					{formatCount(navCounts.duplicates)}<span class="visually-hidden">&#32;duplicates</span>
 				</span>
 			{/if}
 		{/snippet}

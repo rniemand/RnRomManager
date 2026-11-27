@@ -1,6 +1,9 @@
 <script lang="ts">
 	import Select from '#lib/components/forms/Select.svelte';
 	import Button from '#lib/components/forms/Button.svelte';
+	import IconButton from '#lib/components/forms/IconButton.svelte';
+	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
+	import Pagination from '#lib/components/common/Pagination.svelte';
 	import DataTable from '#lib/components/common/DataTable.svelte';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import { onMount } from 'svelte';
@@ -19,6 +22,7 @@
 	import {
 		formatSummary,
 		isCancellable,
+		issueStatusClass,
 		issueStatuses,
 		issueTypes,
 		jobLabel,
@@ -30,8 +34,11 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 
-	const pageSize = 50;
+	/** IN5: the issues page size, remembered per browser; 10 until changed. */
+	const sizeKey = 'integrity-issues';
+	let pageSize = $state(readPageSize(sizeKey, 10));
 
 	let status = $state<IntegrityStatus | null>(null);
 	let history = $state<Job[]>([]);
@@ -51,7 +58,11 @@
 	let openPanel = $state<'issues' | 'history' | null>('issues');
 
 	const job = $derived(jobs.current);
-	const pages = $derived(issues ? Math.max(1, Math.ceil(issues.total / pageSize)) : 1);
+	const pages = $derived(issues ? pageCount(issues.total, pageSize) : 1);
+	/** IN2: the open orphan waiting for its delete confirmation. */
+	let deleting = $state<IntegrityIssue | null>(null);
+	let deleteOpen = $state(false);
+	let deleteBusy = $state(false);
 
 	async function load(): Promise<void> {
 		error = null;
@@ -130,6 +141,35 @@
 	}
 
 	const filterChanged = () => (issuePage = 1);
+
+	function setPageSize(size: number): void {
+		pageSize = size;
+		writePageSize(sizeKey, size);
+		issuePage = 1;
+	}
+
+	function askDelete(issue: IntegrityIssue): void {
+		deleting = issue;
+		deleteOpen = true;
+	}
+
+	/** IN2: deletes the orphan's file; the list reloads whatever happened. */
+	async function deleteOrphan(): Promise<void> {
+		const issue = deleting;
+		if (!issue) return;
+		deleteBusy = true;
+		try {
+			await api.post(`/api/integrity/issues/${issue.id}/delete-file`);
+			toasts.show(`Deleted ${issue.zipPath}.`, 'success');
+		} catch (e) {
+			if (!toasts.jobRunning(e))
+				toasts.show(isApiError(e) ? e.title : "The file couldn't be deleted.", 'danger');
+		} finally {
+			deleteBusy = false;
+			deleteOpen = false;
+			reloadIssues++;
+		}
+	}
 </script>
 
 <svelte:head><title>Integrity · RnRomManager</title></svelte:head>
@@ -272,7 +312,7 @@
 		{:else if issues.items.length === 0}
 			<EmptyState message="No issues." />
 		{:else}
-			<DataTable items={issues.items} key={(issue) => issue.id} class="mb-2">
+			<DataTable items={issues.items} key={(issue) => issue.id} class="mb-2 small">
 				{#snippet head()}
 					<tr>
 						<th scope="col">Severity</th>
@@ -281,14 +321,23 @@
 						<th scope="col">Details</th>
 						<th scope="col">Status</th>
 						<th scope="col">Detected</th>
+						<th scope="col"><span class="visually-hidden">Actions</span></th>
 					</tr>
 				{/snippet}
 				{#snippet row(issue)}
 					<tr>
-						<td><span class="badge {severityClass(issue.severity)}">{issue.severity}</span></td>
-						<td>{issue.type}</td>
-						<td class="text-break">
-							{#if issue.gameId}
+						<td class="py-1"
+							><span class="badge {severityClass(issue.severity)}">{issue.severity}</span></td
+						>
+						<td class="py-1"><span class="badge text-bg-light border">{issue.type}</span></td>
+						<td class="py-1 text-break">
+							{#if issue.gameId && (issue.type === 'DuplicateGameId' || issue.type === 'DuplicateSha1')}
+								<!-- IN1: the path names the skipped ZIP, not the linked game's. -->
+								{issue.zipPath ?? '—'}<a
+									class="ms-2"
+									href={resolve('/games/[id]', { id: issue.gameId })}>Open game</a
+								>
+							{:else if issue.gameId}
 								<a href={resolve('/games/[id]', { id: issue.gameId })}>{issue.zipPath ?? 'Game'}</a>
 							{:else}
 								{issue.zipPath ?? '—'}
@@ -297,34 +346,33 @@
 									› {issue.entryName}</span
 								>{/if}
 						</td>
-						<td class="small text-break">{issue.details ?? ''}</td>
-						<td>{issue.status}</td>
-						<td class="text-nowrap">{formatDateTime(issue.detectedAt)}</td>
+						<td class="py-1 small text-break">{issue.details ?? ''}</td>
+						<td class="py-1"
+							><span class="badge {issueStatusClass(issue.status)}">{issue.status}</span></td
+						>
+						<td class="py-1 text-nowrap">{formatDateTime(issue.detectedAt)}</td>
+						<td class="py-1 text-end">
+							{#if issue.type === 'OrphanFile' && issue.status === 'Open' && !job}
+								<IconButton
+									icon="delete"
+									tone="danger"
+									label="Delete {issue.zipPath}"
+									tooltip="Delete file"
+									onclick={() => askDelete(issue)}
+								/>
+							{/if}
+						</td>
 					</tr>
 				{/snippet}
 			</DataTable>
-			{#if pages > 1}
-				<nav
-					class="d-flex justify-content-center align-items-center gap-3"
-					aria-label="Issue pages"
-				>
-					<Button
-						variant="secondary"
-						outline
-						size="sm"
-						disabled={issuePage <= 1}
-						onclick={() => issuePage--}>Previous</Button
-					>
-					<span>Page {issuePage} of {pages}</span>
-					<Button
-						variant="secondary"
-						outline
-						size="sm"
-						disabled={issuePage >= pages}
-						onclick={() => issuePage++}>Next</Button
-					>
-				</nav>
-			{/if}
+			<Pagination
+				page={issuePage}
+				{pages}
+				onpage={(p) => (issuePage = p)}
+				{pageSize}
+				onpagesize={setPageSize}
+				label="Issue pages"
+			/>
 		{/if}
 	</AccordionItem>
 	<AccordionItem
@@ -360,4 +408,13 @@
 			</DataTable>
 		{/if}
 	</AccordionItem>
+	<ConfirmModal
+		bind:open={deleteOpen}
+		title="Delete orphan file"
+		message="Delete {deleting?.zipPath ?? ''} from the library folder? This can't be undone."
+		confirmLabel="Delete"
+		confirmClass="btn-danger"
+		busy={deleteBusy}
+		onconfirm={deleteOrphan}
+	/>
 </AdminOnly>

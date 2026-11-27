@@ -13,16 +13,18 @@
 	import type { GameDetail } from '#lib/types/index.js';
 
 	interface Props {
-		/** Opening starts on URL, Box art, with no errors. */
+		/** Opening starts on URL, initialType, with no errors. */
 		open: boolean;
 		gameId: string;
 		/** After an upload: the fresh detail. */
 		onchanged: (detail: GameDetail) => void;
 		/** Any failure the dialog doesn't show itself. */
 		onfailed: (e: unknown) => void;
+		/** IM4: the type each opening starts on. */
+		initialType?: 'BoxArt' | 'Snap';
 	}
 
-	let { open = $bindable(), gameId, onchanged, onfailed }: Props = $props();
+	let { open = $bindable(), gameId, onchanged, onfailed, initialType = 'BoxArt' }: Props = $props();
 
 	/** Same limit as the API (I1a); checked here so a big file isn't sent at all. */
 	const maxUploadBytes = 8 * 1024 * 1024;
@@ -54,7 +56,7 @@
 			dropNote = undefined;
 			dragging = false;
 			imageUrl = '';
-			uploadType = 'BoxArt';
+			uploadType = initialType;
 			if (fileInput) fileInput.value = '';
 		});
 	});
@@ -124,7 +126,7 @@
 			onchanged(await api.post<GameDetail>(base, form));
 			toasts.show(`${file.name} uploaded.`, 'success');
 			if (fileInput) fileInput.value = '';
-			uploadType = 'BoxArt';
+			uploadType = initialType;
 			open = false;
 		} catch (e) {
 			if (isApiError(e, 'ValidationFailed')) {

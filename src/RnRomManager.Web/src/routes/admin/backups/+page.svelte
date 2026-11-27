@@ -4,6 +4,7 @@
 	import TextInput from '#lib/components/forms/TextInput.svelte';
 	import FormField from '#lib/components/forms/FormField.svelte';
 	import Button from '#lib/components/forms/Button.svelte';
+	import IconButton from '#lib/components/forms/IconButton.svelte';
 	import RestoreBackupModal from '#lib/components/modals/RestoreBackupModal.svelte';
 	import { onMount } from 'svelte';
 	import { api, resetClient } from '#lib/api/client.js';
@@ -254,7 +255,7 @@
 				<table class="table table-sm table-striped table-hover align-middle mb-0">
 					<caption class="visually-hidden">Backups, newest first</caption>
 					<thead class="table-dark">
-						<tr class="small text-uppercase text-body-secondary">
+						<tr>
 							<th scope="col">File</th>
 							<th scope="col">Created</th>
 							<th scope="col" class="text-end">Size</th>
@@ -266,16 +267,30 @@
 							<tr>
 								<td class="text-break font-monospace small">{backup.fileName}</td>
 								<td class="text-nowrap">{formatDateTime(backup.createdAt)}</td>
-								<td class="text-end"><FileSize bytes={backup.sizeBytes} /></td>
-								<td class="text-end">
-									<Button
-										variant="danger"
-										outline
-										size="sm"
-										icon="restore"
-										aria-label="Restore {backup.fileName}"
-										onclick={() => askRestore(backup)}>Restore</Button
-									>
+								<td class="text-end text-nowrap"
+									><span class="badge text-bg-light border"
+										><FileSize bytes={backup.sizeBytes} /></span
+									></td
+								>
+								<td>
+									<!-- A2: a download link, then the restore. -->
+									<div class="d-flex gap-2 justify-content-end">
+										<IconButton
+											icon="download"
+											tone="primary"
+											label="Download {backup.fileName}"
+											tooltip="Download"
+											href="/api/admin/backups/{encodeURIComponent(backup.fileName)}/download"
+											download
+										/>
+										<IconButton
+											icon="restore"
+											tone="danger"
+											label="Restore {backup.fileName}"
+											tooltip="Restore"
+											onclick={() => askRestore(backup)}
+										/>
+									</div>
 								</td>
 							</tr>
 						{/each}

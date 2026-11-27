@@ -12,6 +12,22 @@ export function playableRom(game: GameDetail, save: SaveItem): RomDetail | null 
 	return save.kind === 'battery' && (core === 'desmume' || core === 'opera') ? null : rom;
 }
 
+/**
+ * S2: the saves per release that has any, in `game.roms` order, then one group (`rom: null`) for saves whose release
+ * is gone; each group keeps the server's order.
+ */
+export function groupSaves(
+	game: GameDetail,
+	items: SaveItem[]
+): { rom: RomDetail | null; saves: SaveItem[] }[] {
+	const groups: { rom: RomDetail | null; saves: SaveItem[] }[] = game.roms
+		.map((rom) => ({ rom, saves: items.filter((s) => s.romId === rom.id) }))
+		.filter((g) => g.saves.length);
+	const removed = items.filter((s) => !game.roms.some((r) => r.id === s.romId));
+	if (removed.length) groups.push({ rom: null, saves: removed });
+	return groups;
+}
+
 /** B8: the server's limits, mirrored for the client checks. */
 export const maxSaveBytes = 256 * 1024 * 1024;
 export const maxNameLength = 100;

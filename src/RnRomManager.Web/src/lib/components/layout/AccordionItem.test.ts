@@ -29,6 +29,18 @@ describe('AccordionItem', () => {
 		expect(screen.getByRole('heading', { level: 2, name: 'Pending files (3)' })).toBeTruthy();
 	});
 
+	it('headingLevel 3 renders an h3 header (S2a)', () => {
+		const { container } = render(AccordionItem, {
+			id: 'saves-rom-1',
+			headingId: 'saves-rom-1-heading',
+			headingLevel: 3,
+			header,
+			children
+		});
+		expect(container.querySelector('h3.accordion-header#saves-rom-1-heading')).not.toBeNull();
+		expect(container.querySelector('h2')).toBeNull();
+	});
+
 	it('is closed by default: collapsed button, aria-expanded false, no show', () => {
 		const { container } = renderItem();
 		const button = screen.getByRole('button', { name: 'Pending files (3)' });

@@ -101,4 +101,58 @@ public class DuplicateQueryTests
         await _reports.DismissDuplicateAsync(DuplicateMatch.Title, "gb", "Quest", key, null, When.UtcDateTime, default);
         Assert.That((await _reports.ListDuplicatesAsync(DuplicateMatch.Title, null, 1, 25, default)).Total, Is.Zero);
     }
-}
+
+    /// <summary>D2: adds a set file to each game's release with the given name and hashes.</summary>
+    private async Task AddSetFile(
+        Guid gameId,
+        string fileName,
+        string sha1,
+        string md5)
+    {
+        await using var connection = _factory.Create();
+        await connection.ExecuteAsync("""
+            INSERT INTO rom_files (rom_id, game_id, ordinal, file_name, external_file_name, original_file_name, size_bytes, crc32, md5, sha1)
+            SELECT r.id, r.game_id, 1, @fileName, @fileName, @fileName, 10, '00000000', @md5, @sha1 FROM roms r WHERE r.game_id = @gameId
+            """, new { gameId, fileName, sha1, md5 });
+    }
+
+    [Test]
+    public async Task HashGroups_SharedSetFileSha1_ListedOnce_SmallestName_PerSystem()
+    {
+        var sha1 = new string('c', 40);
+        var md5 = new string('d', 32);
+        var a = await Add("Wipeout");
+        var b = await Add("Wipeout XL");
+        var other = await Add("Wipeout GBC", system: "gbc");
+        await AddSetFile(a, "Track 03.bin", sha1, md5);
+        await AddSetFile(b, "Track 02.bin", sha1, md5);
+        await AddSetFile(other, "Track 01.bin", sha1, md5);
+
+        var page = await _reports.ListDuplicatesAsync(DuplicateMatch.Hash, null, 1, 25, default);
+
+        // One identical file: the SHA1 group only, not an MD5 group too; the GBC game alone isn't a group.
+        var group = page.Items.Single();
+        Assert.That((group.SystemId, group.BaseTitle, group.HashKind, group.Hash), Is.EqualTo(("gb", "Track 02.bin", "sha1", sha1)));
+        Assert.That(group.GamesKey, Is.EqualTo(DuplicateGroups.GamesKey([a, b])));
+        Assert.That((await _reports.ListDuplicatesAsync(DuplicateMatch.Hash, "gbc", 1, 25, default)).Items, Is.Empty);
+        Assert.That((await _reports.ListDuplicatesAsync(DuplicateMatch.Title, null, 1, 25, default)).Items.Select(g => g.HashKind), Is.All.Null);
+    }
+
+    [Test]
+    public async Task HashGroups_Md5Group_OnlyWhenTheSha1sDiffer_AndDismissalHidesOnlyThatGroup()
+    {
+        var md5 = new string('e', 32);
+        var a = await Add("Alpha");
+        var b = await Add("Bravo");
+        await using (var connection = _factory.Create())
+            await connection.ExecuteAsync("UPDATE roms SET md5 = @md5", new { md5 });
+        await AddSetFile(a, "Track 02.bin", new string('f', 40), new string('1', 32));
+        await AddSetFile(b, "Track 02.bin", new string('f', 40), new string('1', 32));
+
+        var groups = (await _reports.ListDuplicatesAsync(DuplicateMatch.Hash, null, 1, 25, default)).Items;
+        Assert.That(groups.Select(g => (g.BaseTitle, g.HashKind)), Is.EqualTo(new[] { ("Alpha.gb", "md5"), ("Track 02.bin", "sha1") }));
+
+        await _reports.DismissDuplicateAsync(DuplicateMatch.Hash, "gb", "md5:" + md5, groups[0].GamesKey, null, DateTime.UtcNow, default);
+        Assert.That((await _reports.ListDuplicatesAsync(DuplicateMatch.Hash, null, 1, 25, default)).Items.Select(g => g.HashKind),
+            Is.EqualTo(new[] { "sha1" }));
+    }}

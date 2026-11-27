@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json.Nodes;
+using Dapper;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -452,7 +453,7 @@ public partial class IntegrityJobTests
     {
         var twin = await Write("gb/T/Tetris.zip", "Tetris");
         await Write("gb/T/Tetris (2).zip", "Tetris", gameId: twin.GameId, seed: 50);
-        await Write("gb/A/Alpha.zip", "Alpha", seed: 7);
+        var alpha = await Write("gb/A/Alpha.zip", "Alpha", seed: 7);
         await Write("gb/B/Beta.zip", "Beta", seed: 7);
 
         await Run();
@@ -460,10 +461,28 @@ public partial class IntegrityJobTests
         var open = await _issues.ListAllOpenAsync(default);
         Assert.That(open.Where(i => i.Type == DuplicateGameId).Select(i => i.ZipPath), Is.EquivalentTo(new[] { "gb/T/Tetris.zip", "gb/T/Tetris (2).zip" }));
         Assert.That(open.Single(i => i.Type == DuplicateGameId && i.ZipPath == "gb/T/Tetris.zip").Details, Does.Contain("updatedAt"));
+        Assert.That(open.Where(i => i.Type == DuplicateGameId).Select(i => i.GameId), Is.All.EqualTo(twin.GameId), "IN1: the duplicated id");
         var sha1 = open.Single(i => i.Type == DuplicateSha1);
         Assert.That((sha1.ZipPath, sha1.Severity), Is.EqualTo(("gb/B/Beta.zip", IssueSeverity.Warn)));
+        Assert.That(sha1.GameId, Is.EqualTo(alpha.GameId), "IN1: the game that owns the SHA1");
         var rows = (await _games.ListAllAsync(default)).Select(g => g.ZipPath).ToList();
         Assert.That(rows, Is.EquivalentTo(new[] { "gb/A/Alpha.zip" }), "no rows for the duplicates");
+    }
+
+    [Test]
+    public async Task OpenDuplicateIssue_GainsItsGameId_OnTheNextRun()
+    {
+        var twin = await Write("gb/T/Tetris.zip", "Tetris");
+        await Write("gb/T/Tetris (2).zip", "Tetris", gameId: twin.GameId, seed: 50);
+        await Run();
+        await using (var connection = _factory.Create())
+            await connection.ExecuteAsync("UPDATE integrity_issues SET game_id = NULL");
+
+        await Run();
+
+        var open = (await _issues.ListAllOpenAsync(default)).Where(i => i.Type == DuplicateGameId).ToList();
+        Assert.That(open, Has.Count.EqualTo(2));
+        Assert.That(open.Select(i => i.GameId), Is.All.EqualTo(twin.GameId));
     }
 
     [Test]

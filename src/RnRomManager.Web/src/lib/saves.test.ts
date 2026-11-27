@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { GameDetail, SaveItem } from '#lib/types/index.js';
-import { descriptionError, fileError, maxSaveBytes, nameError, playableRom } from './saves';
+import {
+	descriptionError,
+	fileError,
+	groupSaves,
+	maxSaveBytes,
+	nameError,
+	playableRom
+} from './saves';
 
 describe('field rules (B8)', () => {
 	it('a name is trimmed, 1–100 characters, without control characters', () => {
@@ -58,5 +65,24 @@ describe('playableRom (S2, B16, B18)', () => {
 		expect(playableRom(game('desmume'), save(2, 'battery'))).toBeNull();
 		expect(playableRom(game('opera'), save(1, 'battery'))).toBeNull();
 		expect(playableRom(game('desmume'), save(2))?.id).toBe(2);
+	});
+});
+
+describe('groupSaves (S2)', () => {
+	const g = { roms: [{ id: 1 }, { id: 2 }, { id: 3 }] } as unknown as GameDetail;
+	const s = (id: string, romId: number | null) => ({ id, romId }) as unknown as SaveItem;
+
+	it('groups by release in game.roms order, skips releases without saves, removed last', () => {
+		const groups = groupSaves(g, [s('a', 3), s('b', null), s('c', 1), s('d', 3), s('e', 99)]);
+		expect(groups.map((x) => [x.rom?.id ?? null, x.saves.map((v) => v.id)])).toEqual([
+			[1, ['c']],
+			[3, ['a', 'd']],
+			[null, ['b', 'e']]
+		]);
+	});
+
+	it('no saves, no groups; no removed group without orphans', () => {
+		expect(groupSaves(g, [])).toEqual([]);
+		expect(groupSaves(g, [s('a', 2)]).map((x) => x.rom?.id)).toEqual([2]);
 	});
 });

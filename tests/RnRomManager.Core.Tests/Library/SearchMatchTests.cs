@@ -48,4 +48,13 @@ public class SearchMatchTests
         Assert.That(Find(["tetris", "star"], addOns: addOns), Is.Null, "title still wins");
         Assert.That(Find(["0100"], addOns: addOns), Is.Null, "a word only in a stripped tag");
     }
+    [Test]
+    public void HashMatch_AfterTheTitleAndBeforeDevelopers()
+    {
+        const string hash = "0123456789abcdef0123456789abcdef01234567";
+        Assert.That(SearchMatch.Find([hash], "Tetris", "Tetris", ["0123456789abcdef0123456789abcdef01234567 Inc"], [], [], [], ("sha1", "Tetris.gb")),
+            Is.EqualTo(new SearchMatch("sha1", "Tetris.gb")));
+        Assert.That(SearchMatch.Find(["tetris"], "Tetris", "Tetris", [], [], [], [], ("md5", "Tetris.gb")), Is.Null, "a title match wins");
+        Assert.That(Find(["nintendo"], developers: ["Nintendo"]), Is.EqualTo(new SearchMatch("developer", "Nintendo")), "no hash: as before");
+    }
 }

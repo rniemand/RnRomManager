@@ -33,6 +33,10 @@ public class IngestFileScanner(IOptions<PathsOptions> paths, ISystemRegistry sys
     public IReadOnlyList<(string SystemId, IReadOnlyList<FailedFile> Files)> ScanRemoved() =>
         systems.All.Select(h => (h.Id, ScanFailedSystem(h.Id, StorageFolders.RemovedFolder))).Where(s => s.Item2.Count > 0).ToList();
 
+    /// <summary>DU4: as <see cref="ScanRemoved"/>, for each system's <c>_duplicates/</c> folder.</summary>
+    public IReadOnlyList<(string SystemId, IReadOnlyList<FailedFile> Files)> ScanDuplicates() =>
+        systems.All.Select(h => (h.Id, ScanFailedSystem(h.Id, StorageFolders.DuplicatesFolder))).Where(s => s.Item2.Count > 0).ToList();
+
     public const string ErrorSuffix = ".error.txt";
 
     private bool IsExternal(string systemId) => systems.ById(systemId) is { EmbedRomsInZip: false };

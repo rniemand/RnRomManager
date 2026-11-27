@@ -7,4 +7,6 @@ internal sealed class GroupRow
     public string GamesKey { get; init; } = "";
     public string GameIds { get; init; } = "";
     public int? IgdbId { get; init; }
+    public string? HashKind { get; init; }
+    public string? Hash { get; init; }
 }

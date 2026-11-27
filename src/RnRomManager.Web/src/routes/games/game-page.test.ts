@@ -397,7 +397,8 @@ describe('game detail page', () => {
 		render(GamePage);
 
 		const all = await screen.findByRole('button', { name: 'Play all discs of Tetris (World).m3u' });
-		expect(all.textContent?.trim()).toBe('All discs');
+		expect(all.textContent?.trim()).toBe('');
+		expect(all.querySelector('i.bi-collection-play')).toBeTruthy();
 		expect(all.previousElementSibling?.getAttribute('aria-label')).toBe('Play Tetris 1.gb');
 		expect(tooltips.find((t) => t.node === all)?.text).toBe('Play all discs in one session');
 		expect(screen.getAllByRole('button', { name: /^Play all discs/ })).toHaveLength(1);
@@ -429,7 +430,7 @@ describe('game detail page', () => {
 		const all = await screen.findByRole('button', {
 			name: 'Play all disks of Twin Disk (1990)(Synth).m3u'
 		});
-		expect(all.textContent?.trim()).toBe('All disks');
+		expect(all.querySelector('i.bi-collection-play')).toBeTruthy();
 		expect(tooltips.find((t) => t.node === all)?.text).toBe('Play all disks in one session');
 		expect(screen.queryByRole('button', { name: /^Play all discs/ })).toBeNull();
 
@@ -450,7 +451,7 @@ describe('game detail page', () => {
 		render(GamePage);
 
 		const all = await screen.findByRole('button', { name: 'Play all disks of Pixel Quest.m3u' });
-		expect(all.textContent?.trim()).toBe('All disks');
+		expect(all.querySelector('i.bi-collection-play')).toBeTruthy();
 
 		await fireEvent.click(all);
 		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
@@ -655,7 +656,7 @@ describe('game detail page', () => {
 			['USA', 'Europe']
 		);
 		await fireEvent.click(screen.getByRole('button', { name: 'Show details for Tetris 1.gb' }));
-		await fireEvent.click(screen.getByRole('button', { name: 'Header details' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Header details for Tetris 1.gb' }));
 		const caption = screen.getByText('Header of Tetris 1.gb');
 		const modal = caption.closest('.modal')!;
 		expect(modal.querySelector('.modal-title')?.textContent).toBe('Header — Tetris 1.gb');
@@ -889,28 +890,49 @@ describe('game detail page', () => {
 			]);
 		});
 
-		it('the action row holds Header details; the files toggle sits below it (B20)', async () => {
+		it('the footer action row holds Header details; the body blocks sit in one gap-3 wrapper (R2, B20)', async () => {
 			const detail = game([1]);
 			detail.roms[0].files = setFiles;
 			answers.push({ status: 200, body: detail });
 			render(GamePage);
-			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+			const article = await screen.findByRole('article', { name: 'Tetris 1.gb' });
 
-			const actions = details('Tetris 1.gb').querySelector('.card + .d-flex')!;
-			expect(actions.className).toBe('d-flex flex-wrap gap-2 mt-2');
-			const header = within(actions as HTMLElement).getByRole('button', {
-				name: 'Header details',
-				hidden: true
-			});
-			expect(header.className).toBe('btn btn-sm btn-outline-secondary');
+			const body = details('Tetris 1.gb');
+			// Collapsed: no d-flex, whose display !important would beat the hidden attribute.
+			expect(body.className).toBe('card-body small flex-column gap-3');
+			const footer = article.querySelector<HTMLElement>(':scope > .card-footer')!;
+			expect(footer.className).toBe('card-footer bg-body-tertiary align-items-center gap-2');
+			expect(footer.previousElementSibling).toBe(body);
+			// Hidden with the body while the card is closed.
+			expect(footer.hidden).toBe(true);
+			await fireEvent.click(chevron('Tetris 1.gb'));
+			expect(footer.hidden).toBe(false);
+			expect(footer.className).toBe('card-footer bg-body-tertiary d-flex align-items-center gap-2');
+			expect(body.className).toBe('card-body small d-flex flex-column gap-3');
+
+			const header = within(footer).getByRole('button', { name: 'Header details for Tetris 1.gb' });
+			expect(header.className).toBe('btn btn-sm btn-link text-body-secondary p-0');
 			expect(header.querySelector('.bi-info-circle')).toBeTruthy();
-			const files = within(details('Tetris 1.gb')).getByRole('button', {
-				name: /files$/,
-				hidden: true
-			});
-			expect(
-				actions.compareDocumentPosition(files) & Node.DOCUMENT_POSITION_FOLLOWING
-			).toBeTruthy();
+			// The N files toggle and its card are one block; it stays a text button.
+			const files = within(body).getByRole('button', { name: /files$/ });
+			expect(files.parentElement!.parentElement).toBe(body);
+			expect(files.nextElementSibling!.className).toBe('card mt-2');
+			expect(files.className).not.toContain('mt-2');
+			// R1: every other action in the card is icon-only.
+			const texts = [...article.querySelectorAll('button, a.btn')]
+				.map((b) => b.textContent!.trim())
+				.filter(Boolean);
+			expect(texts).toEqual([`${setFiles.length + 1} files`]);
+		});
+
+		it('no footer for a Site user on a release without a header', async () => {
+			auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
+			const detail = game([1]);
+			detail.roms[0].header = null as unknown as (typeof detail.roms)[0]['header'];
+			answers.push({ status: 200, body: detail });
+			render(GamePage);
+			const article = await screen.findByRole('article', { name: 'Tetris 1.gb' });
+			expect(article.querySelector('.card-footer')).toBeNull();
 		});
 
 		it('no Header details without a header', async () => {
@@ -918,11 +940,11 @@ describe('game detail page', () => {
 			detail.roms[0].header = null as unknown as (typeof detail.roms)[0]['header'];
 			answers.push({ status: 200, body: detail });
 			render(GamePage);
-			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+			const article = await screen.findByRole('article', { name: 'Tetris 1.gb' });
 
 			expect(
-				within(details('Tetris 1.gb')).queryByRole('button', {
-					name: 'Header details',
+				within(article).queryByRole('button', {
+					name: /^Header details/,
 					hidden: true
 				})
 			).toBeNull();
@@ -934,7 +956,7 @@ describe('game detail page', () => {
 			await screen.findByRole('article', { name: 'Tetris 1.gb' });
 
 			await fireEvent.click(chevron('Tetris 1.gb'));
-			await fireEvent.click(screen.getByRole('button', { name: 'Header details' }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Header details for Tetris 1.gb' }));
 
 			const table = screen.getByText('Header of Tetris 1.gb').closest('table')!;
 			expect(table.className).toBe('table table-sm table-striped table-hover mb-0');
@@ -950,8 +972,20 @@ describe('game detail page', () => {
 		});
 
 		it.each([
-			[true, 'btn-warning', 'bi-sticky-fill', 'View note', 'Note for Tetris 1.gb'],
-			[false, 'btn-outline-secondary', 'bi-sticky', 'Add note', 'Add note for Tetris 1.gb']
+			[
+				true,
+				'btn-link text-warning-emphasis p-0',
+				'bi-sticky-fill',
+				'View note',
+				'Note for Tetris 1.gb'
+			],
+			[
+				false,
+				'btn-link text-body-secondary p-0',
+				'bi-sticky',
+				'Add note',
+				'Add note for Tetris 1.gb'
+			]
 		])(
 			'hasNote %s: note button %s, icon %s, tooltip %s (R4)',
 			async (hasNote, cls, icon, tip, name) => {
@@ -1162,7 +1196,7 @@ describe('game detail page', () => {
 		expect(tree().queryByRole('button', { name: 'a' })).toBeNull();
 	});
 
-	it('the table lists sub-folders then files with sizes and download links; breadcrumb and footer (Z4)', async () => {
+	it("the table lists the folder's files with sizes and download links; breadcrumb and footer (Z4, ZC1)", async () => {
 		navigateTo('/games/g1?tab=zip');
 		zipAnswers.push({
 			status: 200,
@@ -1174,20 +1208,12 @@ describe('game detail page', () => {
 
 		const table = screen.getByRole('table', { name: 'Contents of roms' });
 		const rows = within(table).getAllByRole('row').slice(1);
+		// ZC1: only this folder's files; sub-folders are in the tree and breadcrumb.
 		expect(rows.map((r) => r.querySelector('td')!.textContent!.trim())).toEqual([
-			'a b',
 			'Tetris (World).gb'
 		]);
-		// B12: a folder row leaves its other cells empty; sizes are badges.
-		expect([...rows[0].querySelectorAll('td')].map((td) => td.textContent!.trim())).toEqual([
-			'a b',
-			'',
-			'',
-			'',
-			''
-		]);
-		expect(rows[1].querySelectorAll('.badge.text-bg-light.border .file-size')).toHaveLength(2);
-		expect([...rows[1].querySelectorAll('.file-size')].map((s) => s.textContent)).toEqual([
+		expect(rows[0].querySelectorAll('.badge.text-bg-light.border .file-size')).toHaveLength(2);
+		expect([...rows[0].querySelectorAll('.file-size')].map((s) => s.textContent)).toEqual([
 			'2.0 KiB',
 			'1.0 KiB'
 		]);
@@ -1198,7 +1224,7 @@ describe('game detail page', () => {
 		expect(link.hasAttribute('download')).toBe(true);
 		expect(screen.getByText(/^3 files · 6\.0 KiB \(3\.0 KiB compressed\)$/)).toBeTruthy();
 
-		await fireEvent.click(within(rows[0]).getByRole('button', { name: 'a b' }));
+		await fireEvent.click((await folders()).getByRole('button', { name: 'a b' }));
 		expect(selectedFolder()).toBe('a b');
 		const crumbs = within(screen.getByRole('navigation', { name: 'Folder path' }));
 		expect(crumbs.getAllByRole('button').map((b) => b.textContent)).toEqual([
@@ -1208,6 +1234,32 @@ describe('game detail page', () => {
 		]);
 		await fireEvent.click(crumbs.getByRole('button', { name: 'Tetris.zip' }));
 		expect(selectedFolder()).toBe('Tetris.zip');
+	});
+
+	it('the root info.json opens the info.json viewer; a nested one is plain text (ZC3)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		zipAnswers.push({ status: 200, body: listing(['info.json', 'roms/info.json']) });
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const table = await screen.findByRole('table', { name: 'Contents of Tetris.zip' });
+		const view = within(table).getByRole('button', { name: 'View info.json' });
+		expect(view.className).toBe('btn btn-sm btn-link p-0 text-start');
+		// Opening the InfoJsonModal fetches the ZIP's info.json.
+		const pageFetch = globalThis.fetch;
+		const seen: string[] = [];
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			if (!url.endsWith('/info-json')) return pageFetch(url, init);
+			seen.push(url);
+			return Promise.resolve(new Response('{}', { status: 200 }));
+		});
+		await fireEvent.click(view);
+		await vi.waitFor(() => expect(seen).toEqual(['/api/games/g1/info-json']));
+
+		await fireEvent.click((await folders()).getByRole('button', { name: 'roms' }));
+		const nested = screen.getByRole('table', { name: 'Contents of roms' });
+		expect(within(nested).queryByRole('button', { name: 'View info.json' })).toBeNull();
+		expect(within(nested).getByText('info.json').tagName).toBe('TD');
 	});
 
 	it('an empty folder says so; a single file is "1 file" (Z4)', async () => {
@@ -1849,10 +1901,12 @@ describe('game detail page', () => {
 		expect(toggle.classList).toContain('dropdown-toggle');
 		const items = [...toggle.parentElement!.querySelectorAll('.dropdown-item')];
 		expect(items.map((i) => i.textContent?.trim())).toEqual([
-			'Tetris 3.gb — 32.0 KiB',
-			'Tetris 1.gb — 32.0 KiB',
-			'Tetris 2.gb — 1.0 KiB'
+			'Tetris 3.gb32.0 KiB',
+			'Tetris 1.gb32.0 KiB',
+			'Tetris 2.gb1.0 KiB'
 		]);
+		// G2: the size is a badge after the name.
+		expect(items[2].querySelector('.badge.text-bg-light.border.ms-2')!.textContent).toBe('1.0 KiB');
 		await fireEvent.click(items[2]);
 
 		await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/api/games/g1/roms/2/download'));

@@ -67,7 +67,10 @@
 		publisher: 'Publisher',
 		genre: 'Genre',
 		dlc: 'DLC',
-		update: 'Update'
+		update: 'Update',
+		// GS2: a hash match names the matching file.
+		sha1: 'SHA1',
+		md5: 'MD5'
 	} as const;
 	/** DLC B13: a DLC or update match opens that tab of the game page. */
 	const matchTab = (entry: Entry): 'dlc' | 'updates' | undefined => {

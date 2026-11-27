@@ -4,7 +4,7 @@ namespace RnRomManager.Core.Library;
 
 /// <summary>
 /// Why a list item matched a search when its title didn't (S3, DLC B10): <c>developer</c>, <c>publisher</c>, <c>genre</c>,
-/// <c>dlc</c> or <c>update</c>.
+/// <c>dlc</c>, <c>update</c>, or <c>sha1</c>/<c>md5</c> with the matching file name (GS2).
 /// </summary>
 public sealed record SearchMatch(string Field, string Value)
 {
@@ -12,6 +12,7 @@ public sealed record SearchMatch(string Field, string Value)
     private const CompareOptions Options = CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace;
 
     /// <param name="addOns">The game's DLC and update names, in the order they are tried (DLC first).</param>
+    /// <param name="hashMatch">GS2: the hash column and file name a hash query matched, tried after the titles.</param>
     /// <returns>
     /// null without words or when any word is in a title; else the first developer, publisher, genre, then add-on value
     /// that contains a word.
@@ -23,10 +24,13 @@ public sealed record SearchMatch(string Field, string Value)
         IReadOnlyList<string> developers,
         IReadOnlyList<string> publishers,
         IReadOnlyList<string> genres,
-        IReadOnlyList<AddOnName> addOns)
+        IReadOnlyList<AddOnName> addOns,
+        (string Field, string FileName)? hashMatch = null)
     {
         if (words.Count == 0 || words.Any(w => Contains(title, w) || Contains(displayTitle, w)))
             return null;
+        if (hashMatch is { } hash)
+            return new SearchMatch(hash.Field, hash.FileName);
         foreach (var (field, values) in new[] { ("developer", developers), ("publisher", publishers), ("genre", genres) })
             if (values.FirstOrDefault(v => words.Any(w => Contains(v, w))) is { } value)
                 return new SearchMatch(field, value);

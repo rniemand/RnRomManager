@@ -57,6 +57,13 @@ public sealed class IntegrityIssueRepository(IDbConnectionFactory connections) :
             args, page, pageSize, cancellationToken);
     }
 
+    public async Task<IntegrityIssue?> GetAsync(long id, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.QuerySingleOrDefaultAsync<IntegrityIssue>(new CommandDefinition(
+            $"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken));
+    }
+
     public async Task<IReadOnlyList<IntegrityIssue>> ListAllOpenAsync(CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();

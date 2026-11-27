@@ -18,7 +18,7 @@ export interface GameListItem {
 	favourite: boolean;
 	/** With `q`: the metadata value that matched when no word was in a title (S3); null otherwise. */
 	matchedOn: {
-		field: 'developer' | 'publisher' | 'genre' | 'dlc' | 'update';
+		field: 'developer' | 'publisher' | 'genre' | 'dlc' | 'update' | 'sha1' | 'md5';
 		value: string;
 	} | null;
 	/** Roms flagged `Update` (C1). */

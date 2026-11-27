@@ -39,6 +39,11 @@ export const icons: Record<string, string> = {
 	'report-size': 'bi bi-pie-chart',
 	'report-missing-images': 'bi bi-image-alt',
 	'report-duplicates': 'bi bi-files',
+	// Duplicate SHAs D1.
+	'report-duplicate-shas': 'bi bi-fingerprint',
+	// Release cards R1, Images IM6.
+	'play-all': 'bi bi-collection-play',
+	cover: 'bi bi-image',
 	'report-multiple-releases': 'bi bi-layers',
 	'report-hacks': 'bi bi-bandaid',
 	'report-image-resolutions': 'bi bi-aspect-ratio',

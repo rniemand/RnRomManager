@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+	coverSearchQuery,
 	gameSearchQuery,
 	googleImagesUrl,
 	googleSearchUrl,
-	reviewSearchQuery
+	reviewSearchQuery,
+	screenshotSearchQuery
 } from './googleSearch';
 
 const item = (originalFileName: string, title?: unknown) => ({
@@ -55,5 +57,13 @@ describe('gameSearchQuery', () => {
 		expect(gameSearchQuery({ displayTitle: 'Quest, The', systemName: 'Game Boy' })).toBe(
 			'"Quest, The" Game Boy'
 		);
+	});
+});
+
+describe('section queries (IM4)', () => {
+	const game = { displayTitle: 'Tetris', systemName: 'Game Boy' };
+	it('adds box art or screenshot to the game query', () => {
+		expect(coverSearchQuery(game)).toBe('"Tetris" Game Boy box art');
+		expect(screenshotSearchQuery(game)).toBe('"Tetris" Game Boy screenshot');
 	});
 });

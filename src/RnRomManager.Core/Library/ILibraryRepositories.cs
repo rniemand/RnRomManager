@@ -17,6 +17,9 @@ public interface IGameRepository
     /// <param name="zipPaths">Relative to <c>Paths:Roms</c>, <c>/</c> separators; the spellings are returned unchanged.</param>
     Task<IReadOnlyList<ZipPathEquivalenceGroup>> ListZipPathEquivalenceAsync(IReadOnlyList<string> zipPaths, CancellationToken cancellationToken);
 
+    /// <summary>IN3: whether a <c>games</c> row's <c>zip_path</c> equals this one under the column's collation.</summary>
+    Task<bool> ZipPathExistsAsync(string zipPath, CancellationToken cancellationToken);
+
     /// <summary>Every <c>games</c> row (integrity: the state before its DB repair, §12.1).</summary>
     Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken);
 

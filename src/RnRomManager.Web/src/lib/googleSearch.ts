@@ -34,3 +34,11 @@ export function reviewSearchQuery(
 export function gameSearchQuery(game: { displayTitle: string; systemName: string }): string {
 	return `"${game.displayTitle}" ${game.systemName}`;
 }
+
+/** IM4: the Covers section's Google Images query. */
+export const coverSearchQuery = (game: { displayTitle: string; systemName: string }): string =>
+	`${gameSearchQuery(game)} box art`;
+
+/** IM4: the Screenshots section's Google Images query. */
+export const screenshotSearchQuery = (game: { displayTitle: string; systemName: string }): string =>
+	`${gameSearchQuery(game)} screenshot`;

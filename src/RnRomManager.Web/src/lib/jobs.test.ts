@@ -8,6 +8,7 @@ import {
 	outcomeClass,
 	outcomes,
 	percent,
+	issueStatusClass,
 	severityClass,
 	splitSummary,
 	statusClass,
@@ -89,6 +90,15 @@ describe('integrity helpers', () => {
 		expect(latestJobs([a, b], 2).map((j) => j.startedAt)).toEqual([
 			'2026-11-03T00:00:00Z',
 			'2026-11-02T00:00:00Z'
+		]);
+	});
+
+	it('issue status badges (IN4)', () => {
+		expect(['Open', 'AutoRepaired', 'Resolved', 'Other'].map(issueStatusClass)).toEqual([
+			'text-bg-warning',
+			'text-bg-info',
+			'text-bg-success',
+			'text-bg-secondary'
 		]);
 	});
 

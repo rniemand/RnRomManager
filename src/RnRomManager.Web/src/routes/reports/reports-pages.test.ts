@@ -31,6 +31,7 @@ const { default: ReportsLayout } = await import('./+layout.svelte');
 const { default: MissingImages } = await import('./missing-images/+page.svelte');
 const { default: LibrarySize } = await import('./library-size/+page.svelte');
 const { default: Duplicates } = await import('./duplicates/+page.svelte');
+const { default: DuplicateShas } = await import('./duplicate-shas/+page.svelte');
 const { default: MultipleReleases } = await import('./multiple-releases/+page.svelte');
 const { default: Hacks } = await import('./hacks/+page.svelte');
 const { default: NewlyAdded } = await import('./newly-added/+page.svelte');
@@ -465,6 +466,76 @@ describe('reports pages', () => {
 			await fireEvent.change(matchBy(), { target: { value: 'title' } });
 
 			expect(await screen.findByText('No duplicate games found.')).toBeTruthy();
+		});
+	});
+
+	describe('Duplicate SHAs (D1–D5)', () => {
+		const list = 'GET /api/reports/duplicates?match=hash&page=1&pageSize=25';
+		const sha1 = '0123456789abcdef0123456789abcdef01234567';
+		const game = (id: string, displayTitle: string) => ({
+			id,
+			displayTitle,
+			romCount: 1,
+			zipSizeBytes: 2048,
+			createdAt: '2026-11-01T00:00:00Z'
+		});
+		const group = (hash: string, hashKind: 'sha1' | 'md5') => ({
+			system: 'gb',
+			systemName: 'Game Boy',
+			baseTitle: 'Track 02.bin',
+			gamesKey: 'k'.repeat(64),
+			igdbId: null,
+			hashKind,
+			hash,
+			games: [game('g1', 'Quest'), game('g2', 'Quest DX')]
+		});
+		const page = (...items: unknown[]) => ({ items, page: 1, pageSize: 25, total: items.length });
+		const signIn = () =>
+			auth.set({ id: 1, username: 'u', roles: ['admin'], mustChangePassword: false });
+
+		it('has no Match by filter and shows the hash badge with a copy button (D2)', async () => {
+			signIn();
+			answers[list] = { status: 200, body: page(group(sha1, 'sha1')) };
+			render(DuplicateShas);
+
+			await screen.findByRole('heading', { name: 'Track 02.bin' });
+			expect(screen.queryByLabelText('Match by')).toBeNull();
+			const badge = screen.getByText(`SHA1 ${sha1.slice(0, 12)}…`);
+			expect(badge.className).toBe('badge text-bg-light border font-monospace');
+			expect(badge.getAttribute('title')).toBe(sha1);
+			expect(screen.getByRole('button', { name: 'Copy SHA1' })).toBeTruthy();
+		});
+
+		it('keys groups by hash so two groups of the same games both render (D5)', async () => {
+			const md5 = 'fedcba9876543210fedcba9876543210';
+			answers[list] = { status: 200, body: page(group(sha1, 'sha1'), group(md5, 'md5')) };
+			render(DuplicateShas);
+
+			expect(await screen.findAllByRole('heading', { name: 'Track 02.bin' })).toHaveLength(2);
+			expect(document.getElementById(`group-${'k'.repeat(64)}-${md5}`)).toBeTruthy();
+			expect(screen.getByText(`MD5 ${md5.slice(0, 12)}…`)).toBeTruthy();
+		});
+
+		it('dismisses with the kind-prefixed hash (D4)', async () => {
+			signIn();
+			answers[list] = { status: 200, body: page(group(sha1, 'sha1')) };
+			render(DuplicateShas);
+			await screen.findByRole('link', { name: 'Quest DX' });
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+			await vi.waitFor(() =>
+				expect(bodies['POST /api/reports/duplicates/dismiss']).toEqual([
+					{ system: 'gb', gamesKey: 'k'.repeat(64), hash: `sha1:${sha1}` }
+				])
+			);
+		});
+
+		it('shows the empty state', async () => {
+			answers[list] = { status: 200, body: page() };
+			render(DuplicateShas);
+
+			expect(await screen.findByText('No games share a file hash.')).toBeTruthy();
 		});
 	});
 
@@ -1257,6 +1328,7 @@ describe('reports pages', () => {
 				['Library Size', 'bi bi-pie-chart'],
 				['Missing Images', 'bi bi-image-alt'],
 				['Duplicates', 'bi bi-files'],
+				['Duplicate SHAs', 'bi bi-fingerprint'],
 				['Multiple Releases', 'bi bi-layers'],
 				['Games With Hacks', 'bi bi-bandaid'],
 				['Image Resolutions', 'bi bi-aspect-ratio'],
@@ -1700,6 +1772,7 @@ describe('reports pages', () => {
 			['Library Size', 'bi bi-pie-chart'],
 			['Missing Images', 'bi bi-image-alt'],
 			['Duplicates', 'bi bi-files'],
+			['Duplicate SHAs', 'bi bi-fingerprint'],
 			['Multiple Releases', 'bi bi-layers'],
 			['Games With Hacks', 'bi bi-bandaid'],
 			['Image Resolutions', 'bi bi-aspect-ratio']

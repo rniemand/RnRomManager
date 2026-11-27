@@ -27,7 +27,11 @@ const { default: SaveFileModal } = await import('./SaveFileModal.svelte');
 const game = { id: 'g1', roms: [{ id: 5, fileName: 'a.gb' }] } as unknown as GameDetail;
 const save = { id: 9, name: 'Boss', description: 'before the boss' } as unknown as SaveItem;
 
-function setup(mode: 'add' | 'edit' | 'replace' | 'delete', item: SaveItem | null) {
+function setup(
+	mode: 'add' | 'edit' | 'replace' | 'delete',
+	item: SaveItem | null,
+	extra: { initialRomId?: number | null; initialFile?: File | null } = {}
+) {
 	const state = $state({ open: false });
 	const onsaved = vi.fn();
 	render(SaveFileModal, {
@@ -35,6 +39,7 @@ function setup(mode: 'add' | 'edit' | 'replace' | 'delete', item: SaveItem | nul
 		game,
 		save: item,
 		onsaved,
+		...extra,
 		get open() {
 			return state.open;
 		},
@@ -88,5 +93,49 @@ describe('SaveFileModal', () => {
 		expect(screen.getByLabelText('File').className).toBe('form-control is-invalid');
 		await fireEvent.click(screen.getByRole('button', { name: 'Cancel', hidden: true }));
 		expect(state.open).toBe(false);
+	});
+	it('initialRomId and initialFile preset add: release fixed, file in the input, name from the file (S4)', async () => {
+		const files: unknown[] = [];
+		vi.stubGlobal(
+			'DataTransfer',
+			class {
+				private list: File[] = [];
+				items = { add: (f: File) => void this.list.push(f) };
+				get files() {
+					return this.list;
+				}
+			}
+		);
+		const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')!;
+		Object.defineProperty(HTMLInputElement.prototype, 'files', {
+			configurable: true,
+			get: () => files,
+			set: (v: File[]) => files.splice(0, files.length, ...v)
+		});
+		try {
+			const long = `${'n'.repeat(120)}.sav`;
+			const file = new File(['x'], long);
+			setup('add', null, { initialRomId: 5, initialFile: file });
+			const release = screen.getByLabelText('Release') as HTMLSelectElement;
+			expect(release.disabled).toBe(true);
+			expect(release.value).toBe('5');
+			expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('n'.repeat(100));
+			expect(files).toEqual([file]);
+			await fireEvent.click(screen.getByRole('button', { name: 'Add save', hidden: true }));
+			await waitFor(() =>
+				expect(savesApi.add).toHaveBeenCalledWith(
+					'g1',
+					expect.objectContaining({ romId: 5, file, fileName: long })
+				)
+			);
+		} finally {
+			Object.defineProperty(HTMLInputElement.prototype, 'files', descriptor);
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it('without presets the Release select is enabled', () => {
+		setup('add', null);
+		expect((screen.getByLabelText('Release') as HTMLSelectElement).disabled).toBe(false);
 	});
 });

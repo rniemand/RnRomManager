@@ -33,6 +33,17 @@ public class IntegrityIssueRepositoryTests
         }, default);
 
     [Test]
+    public async Task GetAsync_ReturnsTheIssue_OrNull()
+    {
+        var id = await InsertAsync(OrphanFile, "gb/stray.bin");
+
+        var issue = await _issues.GetAsync(id, default);
+
+        Assert.That((issue?.Id, issue?.Type, issue?.ZipPath, issue?.Status), Is.EqualTo(((long?)id, OrphanFile, "gb/stray.bin", IntegrityIssue.Open)));
+        Assert.That(await _issues.GetAsync(id + 1000, default), Is.Null);
+    }
+
+    [Test]
     public async Task ResolveOpen_ResolvesOnlyThatZipsOpenIssueOfThatType_WithoutAnEntry_G4()
     {
         var target = await InsertAsync(DefaultBoxArt, "ext/S/Space Game.zip");

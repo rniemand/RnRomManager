@@ -24,6 +24,12 @@ public static class AuditActions
     public const string IngestFileDeleted = "IngestFileDeleted";
     public const string RemovedRestored = "RemovedRestored";
 
+    /// <summary>IN3: an Admin deleted the file an open OrphanFile issue named.</summary>
+    public const string OrphanFileDeleted = "OrphanFileDeleted";
+
+    /// <summary>A3: an Admin downloaded a database backup; details = the file name.</summary>
+    public const string BackupDownloaded = "BackupDownloaded";
+
     /// <summary>Collections discovery B5: a publisher's shared logo override was added or replaced.</summary>
     public const string PublisherLogoReplaced = "PublisherLogoReplaced";
 
@@ -88,6 +94,6 @@ public static class AuditActions
         IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, DeveloperLogoReplaced, DeveloperLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
         SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized, RomsEmbedded, RomStorageChanged, ZipCompressionChanged,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,
-        PasswordChanged, SignedIn, SignInFailed, LockedOut, GamePlayed, ReleaseEdited,
+        PasswordChanged, SignedIn, SignInFailed, LockedOut, GamePlayed, ReleaseEdited, OrphanFileDeleted, BackupDownloaded,
     ];
 }

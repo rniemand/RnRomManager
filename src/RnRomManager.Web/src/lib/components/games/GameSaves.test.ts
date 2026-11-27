@@ -13,6 +13,7 @@ vi.mock('#lib/bootstrap.js', () => ({
 	}
 }));
 vi.mock('#lib/modal.js', () => ({ releaseModal: () => {} }));
+vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 
 const { default: GameSaves } = await import('./GameSaves.svelte');
 
@@ -74,7 +75,7 @@ async function choose(file: File): Promise<void> {
 }
 
 describe('GameSaves', () => {
-	it('lists each save with its description, kind, release, size and who updated it', async () => {
+	it('groups saves into a panel per release, then Release removed; no Release column (S2, S3)', async () => {
 		listed([
 			save({ description: 'line 1\nline 2' }),
 			save({
@@ -87,25 +88,49 @@ describe('GameSaves', () => {
 		]);
 		render(GameSaves, { game });
 
-		const rows = await screen.findAllByRole('row');
-		const first = within(rows[1]);
-		expect(first.getByText('Before boss')).toBeTruthy();
-		expect(first.getByText(/line 1/)).toBeTruthy();
-		expect(first.getByText('State')).toBeTruthy();
-		expect(first.getByText('Tetris (World).gb')).toBeTruthy();
-		expect(first.getByText('bob')).toBeTruthy();
-		const orphan = within(rows[2]);
+		const world = await screen.findByRole('heading', { level: 3, name: /^Tetris \(World\)\.gb/ });
+		expect(world.id).toBe('saves-rom-1-heading');
+		expect(world.textContent!.replace(/\s+/g, ' ').trim()).toBe('Tetris (World).gb 1');
+		expect(world.querySelector('.badge.text-bg-secondary.rounded-pill')).toBeTruthy();
+		const removed = screen.getByRole('heading', { level: 3, name: /^Release removed/ });
+		expect(removed.id).toBe('saves-removed-heading');
+		// Panels start open; Japan has no saves, so no panel.
+		expect(document.getElementById('saves-rom-1')!.classList).toContain('show');
+		expect(document.getElementById('saves-removed')!.classList).toContain('show');
+		expect(screen.queryByRole('heading', { level: 3, name: /Japan/ })).toBeNull();
+		expect(screen.queryByRole('columnheader', { name: 'Release' })).toBeNull();
+
+		const panel = within(document.getElementById('saves-rom-1')!);
+		expect(panel.getByText('Before boss')).toBeTruthy();
+		expect(panel.getByText(/line 1/)).toBeTruthy();
+		expect(panel.getByText('State')).toBeTruthy();
+		expect(panel.getByText('bob')).toBeTruthy();
+		expect(panel.getByText('2.0 KiB').closest('.badge')!.className).toBe(
+			'badge text-bg-light border'
+		);
+		const orphan = within(document.getElementById('saves-removed')!);
 		expect(orphan.getByText('Battery')).toBeTruthy();
-		expect(orphan.getByText('Release removed').closest('td')!.getAttribute('title')).toBe(
-			'Gone (World).gb'
-		);
-		expect(first.getByRole('link', { name: 'Download Before boss' }).getAttribute('href')).toBe(
-			`/api/games/g1/saves/${'a'.repeat(32)}/download`
-		);
+		const download = panel.getByRole('link', { name: 'Download Before boss' });
+		expect(download.getAttribute('href')).toBe(`/api/games/g1/saves/${'a'.repeat(32)}/download`);
+		expect(download.className).toBe('btn btn-sm btn-link text-body-secondary p-0');
 		for (const action of ['Edit', 'Replace', 'Delete'])
-			expect(first.getByRole('button', { name: `${action} Before boss` })).toBeTruthy();
+			expect(panel.getByRole('button', { name: `${action} Before boss` })).toBeTruthy();
+		expect(panel.getByRole('button', { name: 'Delete Before boss' }).className).toContain(
+			'text-danger-emphasis'
+		);
 	});
 
+	it('orders panels as game.roms and each opens and closes on its own (S2)', async () => {
+		listed([save({ romId: 2, name: 'J' }), save({ id: 'b'.repeat(32), name: 'W', romId: 1 })]);
+		render(GameSaves, { game });
+
+		await screen.findByText('J');
+		const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.id);
+		expect(headings).toEqual(['saves-rom-1-heading', 'saves-rom-2-heading']);
+		await fireEvent.click(screen.getByRole('button', { name: /^Tetris \(World\)\.gb/ }));
+		expect(document.getElementById('saves-rom-1')!.classList).not.toContain('show');
+		expect(document.getElementById('saves-rom-2')!.classList).toContain('show');
+	});
 	it('shows no Owner column to a Site user (S8)', async () => {
 		listed([save(), save({ id: 'b'.repeat(32), name: 'Old', uploadedBy: null })]);
 		render(GameSaves, { game });
@@ -129,27 +154,126 @@ describe('GameSaves', () => {
 		render(GameSaves, { game });
 
 		const empty = await screen.findByText('No saves yet');
-		expect(empty.closest('.card-body')!.parentElement!.classList).toContain('card');
+		expect(empty.closest('section')!.getAttribute('aria-labelledby')).toBe('saves-heading');
+		expect(document.querySelector('.accordion')).toBeNull();
 	});
 
-	it('is one card: Saves heading and Add save in its header, the table its direct child (B11)', async () => {
+	it('has a heading row with Saves and Add save, then the panels; no card (S2a)', async () => {
 		listed([save()]);
 		render(GameSaves, { game });
 
 		const table = (await screen.findByRole('table')) as HTMLElement;
-		const card = screen
-			.getByRole('heading', { level: 2, name: 'Saves' })
-			.closest('.card-header')!.parentElement!;
-		expect(card.tagName).toBe('SECTION');
-		expect(card.className).toBe('card');
-		expect(card.getAttribute('aria-labelledby')).toBe('saves-heading');
+		const heading = screen.getByRole('heading', { level: 2, name: 'Saves' });
+		expect(heading.className).toBe('h5 mb-0 me-auto');
+		const row = heading.parentElement!;
+		expect(row.className).toBe('d-flex align-items-center gap-2 mb-3');
+		const section = row.parentElement!;
+		expect(section.tagName).toBe('SECTION');
+		expect(section.className).toBe('');
+		expect(section.getAttribute('aria-labelledby')).toBe('saves-heading');
 		const add = screen.getByRole('button', { name: 'Add save' });
-		expect(add.parentElement!.classList).toContain('card-header');
+		expect(add.parentElement).toBe(row);
 		expect(add.className).toBe('btn btn-sm btn-primary');
 		expect(table.parentElement!.className).toBe('table-responsive');
-		expect(table.parentElement!.parentElement).toBe(card);
+		expect(table.parentElement!.parentElement!.className).toBe('accordion-body p-0');
+		expect(document.querySelector('.card')).toBeNull();
 	});
 
+	describe('drop on a release panel (S4)', () => {
+		class FakeDataTransfer {
+			private list: File[] = [];
+			items = { add: (f: File) => void this.list.push(f) };
+			get files() {
+				return this.list;
+			}
+		}
+		const drop = (target: HTMLElement, files: File[]) =>
+			fireEvent.drop(target, {
+				dataTransfer: { types: ['Files'], files } as unknown as DataTransfer
+			});
+		/** jsdom only takes a real FileList on `files`; capture what the modal puts there. */
+		let picked: unknown;
+		const filesDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')!;
+		beforeEach(() => {
+			picked = undefined;
+			vi.stubGlobal('DataTransfer', FakeDataTransfer);
+			Object.defineProperty(HTMLInputElement.prototype, 'files', {
+				configurable: true,
+				get: () => picked,
+				set: (v) => (picked = v)
+			});
+		});
+		afterEach(() => Object.defineProperty(HTMLInputElement.prototype, 'files', filesDescriptor));
+		const zoneOf = (headingName: RegExp) =>
+			screen.getByRole('heading', { level: 3, name: headingName }).closest('.accordion')!
+				.parentElement!;
+
+		it('one file opens Add save fixed to that release, with the file and its name', async () => {
+			listed([save({ romId: 2, name: 'J' })]);
+			render(GameSaves, { game });
+			await screen.findByText('J');
+			expect(screen.getByText('Drop a save file here to add it to this release')).toBeTruthy();
+
+			const file = new File(['x'], 'Tetris (Japan).state.sav', { type: '' });
+			// Dropped on the closed panel's header still counts.
+			await fireEvent.click(screen.getByRole('button', { name: /^Tetris \(Japan\)\.gb/ }));
+			await drop(zoneOf(/^Tetris \(Japan\)\.gb/), [file]);
+
+			await vi.waitFor(() =>
+				expect(document.querySelector('.modal-title')!.textContent).toBe('Add save')
+			);
+			const release = modal().getByLabelText('Release') as HTMLSelectElement;
+			expect(release.value).toBe('2');
+			expect(release.disabled).toBe(true);
+			expect((modal().getByLabelText('Name') as HTMLInputElement).value).toBe(
+				'Tetris (Japan).state'
+			);
+			expect(picked).toEqual([file]);
+
+			answers['POST /api/games/g1/saves'] = [{ status: 201, body: save() }];
+			await fireEvent.click(modal().getByRole('button', { name: 'Add save', hidden: true }));
+			await vi.waitFor(() => expect(writes()).toHaveLength(1));
+			const form = writes()[0].body as FormData;
+			expect(form.get('romId')).toBe('2');
+			expect((form.get('file') as File).name).toBe('Tetris (Japan).state.sav');
+		});
+
+		it('two files toast and open nothing; Release removed has no drop zone', async () => {
+			listed([save(), save({ id: 'b'.repeat(32), name: 'Old', romId: null })]);
+			render(GameSaves, { game });
+			await screen.findByText('Old');
+
+			await drop(zoneOf(/^Tetris \(World\)\.gb/), [
+				new File(['a'], 'a.sav'),
+				new File(['b'], 'b.sav')
+			]);
+			expect(toasts.items.map((t) => [t.text, t.kind])).toEqual([
+				['Drop one save file at a time.', 'warning']
+			]);
+			expect(document.querySelector('.modal-title')!.textContent).toBe('');
+			expect(screen.getAllByText('Drop a save file here to add it to this release')).toHaveLength(
+				1
+			);
+		});
+
+		it('the Add save button opens an unpreset modal after a drop', async () => {
+			listed([save({ romId: 2, name: 'J' })]);
+			render(GameSaves, { game });
+			await screen.findByText('J');
+			await drop(zoneOf(/^Tetris \(Japan\)\.gb/), [new File(['x'], 'x.sav')]);
+			await vi.waitFor(() =>
+				expect((modal().getByLabelText('Release') as HTMLSelectElement).disabled).toBe(true)
+			);
+
+			await fireEvent.click(modal().getByRole('button', { name: 'Cancel', hidden: true }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Add save' }));
+			await vi.waitFor(() =>
+				expect((modal().getByLabelText('Release') as HTMLSelectElement).disabled).toBe(false)
+			);
+			expect((modal().getByLabelText('Release') as HTMLSelectElement).value).toBe('1');
+			expect((modal().getByLabelText('Name') as HTMLInputElement).value).toBe('');
+		});
+	});
 	it('adds a save with the text fields before the file, then reloads the list', async () => {
 		listed([]);
 		answers['POST /api/games/g1/saves'] = [{ status: 201, body: save() }];

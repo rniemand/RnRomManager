@@ -118,6 +118,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/ingest/failed"] = Role.Admin,
         ["POST /api/ingest/delete"] = Role.Admin,
         ["GET /api/ingest/removed"] = Role.Admin,
+        ["GET /api/ingest/duplicates"] = Role.Admin,
         ["POST /api/ingest/restore"] = Role.Admin,
         ["POST /api/jobs/ingest"] = Role.Admin,
         ["POST /api/jobs/integrity"] = Role.Admin,
@@ -143,6 +144,7 @@ public partial class EndpointRoleMatrixTests
 
         ["GET /api/integrity/status"] = Role.Admin,
         ["GET /api/integrity/issues"] = Role.Admin,
+        ["POST /api/integrity/issues/{id:long}/delete-file"] = Role.Admin,
 
         ["GET /api/admin/dats"] = Role.Admin,
         ["GET /api/admin/dats/{datName}/download"] = Role.Admin,
@@ -158,6 +160,7 @@ public partial class EndpointRoleMatrixTests
         ["PUT /api/admin/backups/settings"] = Role.Admin,
         ["POST /api/admin/backups"] = Role.Admin,
         ["POST /api/admin/backups/{fileName}/restore"] = Role.Admin,
+        ["GET /api/admin/backups/{fileName}/download"] = Role.Admin,
         ["GET /api/admin/logs"] = Role.Admin,
         ["GET /api/admin/logs/recent"] = Role.Admin,
         ["GET /api/admin/logs/stream"] = Role.Admin,

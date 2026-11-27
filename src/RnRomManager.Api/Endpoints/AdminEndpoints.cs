@@ -198,6 +198,26 @@ public static class AdminEndpoints
             }
         });
 
+        // A3: streams one backup as a download; the same name check as a restore.
+        admin.MapGet("/backups/{fileName}/download", (string fileName, HttpContext ctx, IOptions<PathsOptions> paths, IAuditLog audit) =>
+        {
+            if (!BackupCheck.IsBareName(fileName) || BackupNames.Parse(fileName) is null)
+                return Problems.Validation(ctx, "fileName", "Choose a backup from the list.");
+            FileStream stream;
+            try
+            {
+                // Share Delete so retention can still remove the file while it streams.
+                stream = new FileStream(Path.Combine(paths.Value.Backups, fileName), FileMode.Open, FileAccess.Read,
+                    FileShare.Read | FileShare.Delete);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return Problems.NotFound(ctx);
+            }
+            audit.Record(new AuditEvent(AuditActions.BackupDownloaded, AuditActor.From(ctx.User), Details: fileName));
+            return Results.File(stream, "application/zip", fileDownloadName: fileName);
+        });
+
         api.MapGet("/about", () => Results.Ok(new { version = StartupRunner.Version, licenses = LicenseInfo.All }));
 
         return api;
