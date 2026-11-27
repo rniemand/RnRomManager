@@ -34,6 +34,7 @@ describe('jobs page (ROM Zip Config B18)', () => {
 	let calls: { url: string; method: string }[];
 	let running: typeof current | null;
 	let total: number;
+	let listStatus: string;
 
 	beforeEach(() => {
 		resetClient();
@@ -42,6 +43,7 @@ describe('jobs page (ROM Zip Config B18)', () => {
 		calls = [];
 		running = null;
 		total = 1;
+		listStatus = 'Completed';
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			calls.push({ url, method: init?.method ?? 'GET' });
 			if (url === '/api/jobs/current')
@@ -51,7 +53,9 @@ describe('jobs page (ROM Zip Config B18)', () => {
 			if (url.endsWith('/cancel')) return Promise.resolve(new Response(null, { status: 202 }));
 			const page = Number(new URL(url, 'http://x').searchParams.get('page'));
 			return Promise.resolve(
-				new Response(JSON.stringify({ items: [job(`j${page}`)], page, pageSize: 25, total }))
+				new Response(
+					JSON.stringify({ items: [job(`j${page}`, listStatus)], page, pageSize: 25, total })
+				)
 			);
 		});
 	});
@@ -76,6 +80,24 @@ describe('jobs page (ROM Zip Config B18)', () => {
 		expect(row.textContent).toContain('Completed');
 		expect(row.querySelector('a')!.getAttribute('href')).toBe('/jobs/j1');
 		expect(calls.map((c) => c.url)).toContain('/api/jobs?page=1&pageSize=25');
+	});
+
+	it('Recent jobs shows the Running time after Ended (JB1)', async () => {
+		render(JobsPage);
+
+		const row = (await screen.findByText('Moving ROMs')).closest('tr')!;
+		const table = row.closest('table')!;
+		const headers = [...table.querySelectorAll('thead th')].map((h) => h.textContent?.trim());
+		expect(headers.slice(3, 6)).toEqual(['Started', 'Ended', 'Running time']);
+		expect(row.querySelectorAll('td')[5].textContent!.trim()).toBe('5m');
+	});
+
+	it('Running time is a dash while the job has not ended (JB1)', async () => {
+		listStatus = 'Running';
+		render(JobsPage);
+
+		const row = (await screen.findAllByText('Moving ROMs')).at(-1)!.closest('tr')!;
+		expect(row.querySelectorAll('td')[5].textContent!.trim()).toBe('—');
 	});
 
 	it('shows the running job with its progress, and Cancel posts the cancel', async () => {
