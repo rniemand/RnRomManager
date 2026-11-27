@@ -37,7 +37,7 @@ Some existing systems' browser cores can open homebrew and alternative file type
 - **N3** No hashing change: a UNIF file is hashed whole. The No-Intro NES DAT lists no UNIF entries (checked 2026-11-27), so a UNIF file always goes to Review as `NoDatMatch`, with suggestions from the `NAME` title and the file name. Size limits are unchanged (4,112 bytes to 64 MiB + 528 bytes).
 
 ### Cartridge aliases
-- **G1** `GameBoyHandler.RomExtensions` becomes `[".gb", ".dmg", ".sgb"]`. A `.sgb` is a Game Boy ROM with Super Game Boy enhancements. The cartridge header classifies it as usual. A CGB-flagged one is classified `gbc` and renamed to `.gbc` at ingest (`IngestFileMoves.RenameToClassifiedExtension`, because `gbc` doesn't list `.sgb`). A matched file takes the DAT's name (`.gb`). An unmatched one is stored as `.gb` (`[0]`) through Review. So a `.sgb` is never stored as `.sgb`, and gambatte (`gb|gbc|dmg`) never receives one.
+- **G1** `GameBoyHandler.RomExtensions` becomes `[".gb", ".dmg", ".sgb"]`. A `.sgb` is a Game Boy ROM with Super Game Boy enhancements. The cartridge header classifies it as usual. An unmatched loose CGB-flagged one is classified `gbc` and renamed to `.gbc` at ingest (`IngestFileMoves.RenameToClassifiedExtension`, because `gbc` doesn't list `.sgb`); an unmatched archive entry is classified `gbc` and stored as `.gbc` (`[0]`) through Review. A matched file takes the DAT's name (`.gb`). An unmatched one is stored as `.gb` (`[0]`) through Review. So a `.sgb` is never stored as `.sgb`, and gambatte (`gb|gbc|dmg`) never receives one.
 - **S1** `MasterSystemHandler.RomExtensions` gains `.bms` at the end. A `.bms` is a TecToy (Brazil) Master System ROM: Genesis Plus GX's `loadrom.c` treats `.bms` exactly like `.sms`. It is stored as the DAT's `.sms`, or as `.sms` (`[0]`) through Review, so smsplus never receives a `.bms`.
 - **S2** `MegaDriveHandler.RomExtensions` becomes `[".md", ".bin", ".gen", ".smd", ".68k", ".sgd", ".mdx"]`.
   - `.68k` and `.sgd` are Mega Drive ROMs under other names. Genesis Plus GX loads them as Mega Drive, with the same 512-byte-header detection. They follow `.gen`: matched → DAT name, unmatched → `.md`. `NormalizeForHashing` already detects SMD interleaving by content, so a copier `.sgd` is deinterleaved like a `.smd`.
@@ -81,13 +81,25 @@ Some existing systems' browser cores can open homebrew and alternative file type
 - **T2** Every handler test that asserts `RomExtensions` with `Is.EqualTo` is updated to the new list, and each new `KeepsExtension` override gets a `[TestCase]` test.
 - **D1** Docs (doc rule):
   - README systems table: the Formats column of `nes`, `gb`, `sms`, `md`, `lynx`, `psx`, `psp`, `c64`, `pet`, `vic20` and `c128` (`SupportedSystemsTableTests`).
-  - `docs/features.md`: the ingest paragraph (line 228). In the NES sentence, drop `UNIF` from what "aren't supported", and add that `.unf`/`.unif` are accepted, always go to Review and keep their extension. Add `.sgb` to the Game Boy types, `.bms` to Master System, `.68k`/`.sgd`/`.mdx` to Mega Drive (`.mdx` keeps its extension and never matches), `.o` to Lynx, `.exe` to PlayStation, `.elf`/`.prx` to PSP, and `.g41`/`.g4z` to the C64/PET/VIC-20 sentences and the gzipped-image list (`.g41` to C128).
-  - `docs/features.md`: the PlayStation Play bullet (line 160) and the `play-disc` API bullet (line 457). Add PlayStation `.exe` and PSP `.elf`/`.prx` to the single-file types.
+  - `docs/features.md`: the ingest bullet that starts "Drop `.gb`/`.dmg`/`.gbc` files" (line 229). In the NES sentence, drop `UNIF` from what "aren't supported", and add that `.unf`/`.unif` are accepted, always go to Review and keep their extension. Add `.sgb` to the Game Boy types, `.bms` to Master System, `.68k`/`.sgd`/`.mdx` to Mega Drive (`.mdx` keeps its extension and never matches), `.o` to Lynx, `.exe` to PlayStation, `.elf`/`.prx` to PSP, and `.g41`/`.g4z` to the C64/PET/VIC-20 sentences and the gzipped-image list (`.g41` to C128). In the `InvalidHeader` sentence, "for NES it checks the `NES` + EOF magic" becomes "for NES it checks the `NES` + EOF magic, or `UNIF` for a UNIF file".
+  - `docs/features.md`: the PlayStation Play bullet (line 160): after "or `.cbn` (PCSX ReARMed's compressed BIN, sent unchanged)" add "or a `.exe` (a PS-X EXE, sent unchanged)". The `play-disc` API bullet (line 459): "(PlayStation also `.img`, `.pbp`, `.cbn` and `.exe`; PSP: only a single `.iso`, `.cso`, `.pbp`, `.chd`, `.elf` or `.prx`; …)".
   - `docs/features.md`: the PSP Play bullet (line 161). Both type lists become `.iso`, `.cso`, `.pbp`, `.chd`, `.elf` or `.prx`.
-  - `docs/features.md`: the disc "No match" bullet (line 271). Add `.exe`, `.elf` and `.prx` to the lone files that can be resolved.
+  - `docs/features.md`: the disc "No match" bullet (line 273). Add `.exe`, `.elf` and `.prx` to the lone files that can be resolved.
   - `README.md` line 15: "PSP opens a `.iso`, `.cso`, `.pbp`, `.chd`, `.elf` or `.prx`".
-  - `docs/zip-format.md`: the `nes/`, `md/`, `psx/`, `psp/`, `c64/`, `pet/`, `vic20/` and `c128/` lines.
-  - `docs/deployment.md`: line 89, the `ingest/nes/`, `ingest/gb/`, `ingest/sms/`, `ingest/md/`, `ingest/lynx/`, `ingest/psx/`, `ingest/psp/`, `ingest/c64/`, `ingest/pet/`, `ingest/vic20/` and `ingest/c128/` entries.
+  - `docs/zip-format.md`:
+    - `nes/` line: "(headered .nes, header included; an unmatched UNIF .unf/.unif keeps its extension)".
+    - `md/` line: "(.md, or .bin for the one lock-on entry, as the DAT names it; an unmatched .mdx keeps its extension)".
+    - `psx/` line: `.bin/.iso/.chd/.img/.pbp/.cbn/.exe`. `psp/` line: `.iso, .cso, .pbp, .chd, .elf, .prx`.
+    - `c64/`, `c128/` and `pet/` lines: `.g41` after `.g64`. `vic20/` line: `.g41` appended (it lists no `.g64`).
+    - The Nintendo Entertainment System `header` paragraph (line 227) gains: "A UNIF file's `header` is `headerValid` (true), `format` (`UNIF`), `board` (the `MAPR` chunk, or null) and `romSizeBytes`; its title is the `NAME` chunk. Only the first 1 MiB is read."
+    - `gb/`, `sms/` and `lynx/` are unchanged (those types are never stored under their own extension).
+  - `docs/deployment.md` line 89:
+    - `ingest/nes/`: "(NES: headered `.nes`, or UNIF `.unf`/`.unif`)".
+    - `ingest/sms/`: "`.sms`, `.sg`, `.bin`, `.rom` or `.bms`".
+    - `ingest/md/`: "`.md`, `.bin`, `.gen`, `.smd`, `.68k`, `.sgd` or `.mdx`, interleaved `.smd` deinterleaved".
+    - `ingest/psx/`: "or `.bin`/`.iso`/`.chd`/`.img`/`.pbp`/`.exe`". `ingest/psp/`: "`.iso`, `.cso`, `.pbp`, `.chd`, `.elf` or `.prx`".
+    - `ingest/c64/`: `.g41` after `.g64`, and `.g4z` after `.g6z`. `ingest/c128/`: `.g41` after `.g64`. `ingest/pet/` and `ingest/vic20/`: `.g4z` after `.g6z` (neither lists `.g64`).
+    - `ingest/gb/` lists no types and there is no `ingest/lynx/` entry: unchanged.
   - `docs/development.md`: the PSP page bullet (line 133). The fetched types become `.iso`, `.cso`, `.pbp`, `.chd`, `.elf` or `.prx`.
 
 No UI, API-shape, permission, setting, job, migration or backup change. Existing libraries are unaffected: only files dropped from now on can use the new types.
@@ -113,13 +125,15 @@ No UI, API-shape, permission, setting, job, migration or backup change. Existing
 - **Merge conflicts with sibling specs:**
   - `sg1000-sc3000-system` changes `MasterSystemHandler.RomExtensions` (S1) and the README `sms` row.
   - `amiga-disk-formats` edits the same `NotIngested` block.
+  - `sega-pico-support` and `sg1000-sc3000-system` edit the `picodrive` `OtherSystem` row (T1 adds `.68k`/`.sgd` to it).
+  - `amiga-cd32-cdtv` edits `PlayDisc.ShapeProblem` and adds cases to `PlayDisc_AStandaloneChd_StreamsUnchanged` (P1, step 3).
   - Whichever lands second regenerates those lines from both specs' rules, and `docs/codemap.md` is regenerated, never merged by hand.
 - **Boot not verified:** PSP `.elf`/`.prx` homebrew that loads assets from its own folder won't find them, because only the one file is sent. Some UNIF boards may be unsupported by fceumm. Both are in the library either way, and the Play button shows as for other types.
 
 ## Steps
 - [ ] **1. NES UNIF**: N1–N3, the `fceumm` part of T1, D1 for `nes`. Files: `NesHandler.cs`, `NesHeaderReader.cs`, `BrowserCoreExtensionsTests.cs`, `README.md`, `docs/features.md`, `docs/zip-format.md`, `docs/deployment.md`. Tests: `NesHeaderReaderTests` (new cases: a synthetic UNIF file with `NAME` and `MAPR` chunks reads `format`, `board`, title and `IsPlausible` true; one without chunks has null title and board; a chunk length past the end, and a length of `0xFFFFFFFF`, stop the walk without throwing; a repeated `NAME` keeps the first; a 31-byte `UNIF` file falls back to the iNES path), `NesHandlerTests` (extension list; `KeepsExtension` `[TestCase]`s `.unf`, `.UNIF` true and `.nes` false), `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`. Done when: those pass, and no iNES test changes.
 - [ ] **2. Cartridge aliases**: G1, S1–S3, L1, their T1 parts (`Exceptions`, `ProblemsAreNamed`, the `OtherSystem` moves and the `.cdf` reason), D1 for `gb`/`sms`/`md`/`lynx`. Files: `GameBoyHandler.cs`, `MasterSystemHandler.cs`, `MegaDriveHandler.cs`, `AtariLynxHandler.cs`, `BrowserCoreExtensionsTests.cs`, README and the docs above. Tests: `GameBoyHandlerTests`, `MasterSystemHandlerTests`, `MegaDriveHandlerTests` (list; `KeepsExtension` `[TestCase]`s `.mdx`, `.MDX` true and `.68k`, `.md` false), `AtariLynxHandlerTests`, `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`. Done when: those pass.
-- [ ] **3. PlayStation and PSP executables**: P1–P3, their T1 parts, D1 for `psx`/`psp` (features.md lines 160, 161, 271 and 457, README line 15 and `development.md`). Files: `PlayStationHandler.cs`, `PlayStationPortableHandler.cs`, `PlayDisc.cs`, `params.js`, `BrowserCoreExtensionsTests.cs`, README and docs. Tests:
+- [ ] **3. PlayStation and PSP executables**: P1–P3, their T1 parts, D1 for `psx`/`psp` (features.md lines 160, 161, 273 and 459, README line 15 and `development.md`). Files: `PlayStationHandler.cs`, `PlayStationPortableHandler.cs`, `PlayDisc.cs`, `params.js`, `BrowserCoreExtensionsTests.cs`, README and docs. Tests:
   - `PlayStationHandlerTests` and `PlayStationPortableHandlerTests` (lists).
   - `LibraryEndpointsTests.PlayDisc.cs`:
     - `[TestCase("psx", "Chd Solo (USA).exe")]` and `[TestCase("psx", "Chd Solo (USA).EXE")]` on `PlayDisc_AStandaloneChd_StreamsUnchanged`.
@@ -144,6 +158,7 @@ No Playwright change: no UI changes.
 - 2026-11-27 7800 `.cdf`? → Dropped. It's a text descriptor naming other files, not a ROM (code)
 - 2026-11-27 PSX `.exe` and the generic single-file error text? → Accepted for `psx` only, text unchanged (code)
 - 2026-11-27 Review round 1: added the PSP/disc doc lines (features.md 161 and 271, README 15) and the handler doc comments; tests for `.EXE`, a Saturn `.exe` being refused and the PSP title; IsDismissible tests psx only; UNIF reads only the first 1 MiB, the first chunk wins, lengths are compared as long; round 2: Step 3 names every doc line (reviewer)
+- 2026-11-27 Deep review: features.md line numbers (229, 273, 459) and the NES `InvalidHeader` sentence; zip-format.md NES `header` paragraph and exact line edits; deployment.md has no `ingest/lynx/` entry and `ingest/gb/` lists no types; sibling-spec conflicts with `sega-pico-support`, `sg1000-sc3000-system` and `amiga-cd32-cdtv` (code)
 - 2026-11-27 `.g41`/`.g4z` scope → C64/PET/VIC-20 both, C128 `.g41` only, Plus/4 none, following those systems' existing `.g64`/gzip scope (code)
 
 ## Kickoff prompt
