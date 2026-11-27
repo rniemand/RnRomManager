@@ -97,7 +97,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.Sg1000Dat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Stylus Quest (USA)", "Stylus Quest (USA).nds", StylusQuest) { ReleaseYear = 2006 }],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
@@ -631,7 +631,7 @@ public class ReviewEndpointsTests
         Assert.That(problem.GetProperty("errors").EnumerateObject().Select(p => p.Name), Is.EqualTo(new[] { "update" }));
     }
 
-    [TestCase("system=sg1000", "system")]
+    [TestCase("system=vectrex", "system")]
     [TestCase("reason=Failed", "reason")]
     public async Task ListFilter_InvalidValue_Is400WithFieldError(string query, string field)
     {
@@ -1148,7 +1148,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.Sg1000Dat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
@@ -1194,7 +1194,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.Sg1000Dat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [

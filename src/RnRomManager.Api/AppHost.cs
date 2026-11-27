@@ -275,6 +275,7 @@ public static class AppHost
         services.AddSystemHandler<ColecoVisionHandler>();
         services.AddSystemHandler<GameGearHandler>();
         services.AddSystemHandler<MasterSystemHandler>();
+        services.AddSystemHandler<Sg1000Handler>();
         services.AddSystemHandler<MegaDriveHandler>();
         services.AddSystemHandler<Sega32xHandler>();
         services.AddSystemHandler<TurboGrafx16Handler>();

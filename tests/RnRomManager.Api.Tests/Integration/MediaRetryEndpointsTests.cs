@@ -90,7 +90,7 @@ public class MediaRetryEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.Sg1000Dat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris), new FixtureGame("Zelda (USA)", "Zelda (USA).gb", Zelda)],
         }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);

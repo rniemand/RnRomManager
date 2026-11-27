@@ -204,7 +204,7 @@ public class IngestPipelineTests
             // PC-FX X4: the real DAT names a data track too.
             [IngestSeeder.PcfxDat] = [new FixtureGame("Disc Fox (Japan)", "Disc Fox (Japan) (Track 2).bin", FoxData)], [IngestSeeder.Cd32Dat] = [new FixtureGame("Disc Chick (Europe)", "Disc Chick (Europe) (Track 01).bin", ChickData)], [IngestSeeder.CdtvDat] = [],
             [IngestSeeder.NeoGeoPocketDat] = [new FixtureGame("Dual Mode (Japan)", "Dual Mode (Japan).ngp", DualMode)],
-            [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)], [IngestSeeder.WonderSwanDat] = [new FixtureGame("Mono Flag (Japan)", "Mono Flag (Japan).ws", MonoFlag)], [IngestSeeder.WonderSwanColorDat] = [new FixtureGame("Swan Lagoon (Japan)", "Swan Lagoon (Japan).wsc", SwanLagoon)],
+            [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)], [IngestSeeder.WonderSwanDat] = [new FixtureGame("Mono Flag (Japan)", "Mono Flag (Japan).ws", MonoFlag)], [IngestSeeder.WonderSwanColorDat] = [new FixtureGame("Swan Lagoon (Japan)", "Swan Lagoon (Japan).wsc", SwanLagoon)], [IngestSeeder.Sg1000Dat] = [],
             [IngestSeeder.SuperGrafxDat] = [new FixtureGame("Twin Vdp (Japan)", "Twin Vdp (Japan).sgx", Sgx)],
             [IngestSeeder.PocketChallengeV2Dat] = [new FixtureGame("Quiz Ladder (Japan)", "Quiz Ladder (Japan).pc2", Challenge)], [IngestSeeder.PicoDat] = [new FixtureGame("Pen Pals (Japan)", "Pen Pals (Japan).md", Pals)],
             [IngestSeeder.ThreeDsDat] =

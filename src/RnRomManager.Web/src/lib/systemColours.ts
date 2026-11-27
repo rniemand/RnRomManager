@@ -16,6 +16,7 @@ export const systemColours: Record<string, SystemColour> = {
 	coleco: { name: 'coleco', foreground: '#fff' },
 	gg: { name: 'gg', foreground: '#fff' },
 	sms: { name: 'sms', foreground: '#fff' },
+	sg1000: { name: 'sg1000', foreground: '#fff' },
 	md: { name: 'md', foreground: '#fff' },
 	s32x: { name: 's32x', foreground: '#000' },
 	tg16: { name: 'tg16', foreground: '#fff' },

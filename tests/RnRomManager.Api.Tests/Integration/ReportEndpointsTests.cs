@@ -75,7 +75,7 @@ public class ReportEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.Sg1000Dat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [
@@ -416,7 +416,7 @@ public class ReportEndpointsTests
         var empty = await GetJson("/api/reports/library-size");
         Assert.That((empty.GetProperty("totalBytes").GetInt64(), empty.GetProperty("systems").GetArrayLength()), Is.EqualTo((0L, 0)));
 
-        using var unknown = await _user.GetAsync("/api/reports/library-size/sg1000");
+        using var unknown = await _user.GetAsync("/api/reports/library-size/vectrex");
         Assert.That((unknown.StatusCode, await AuthClient.CodeAsync(unknown)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
     }
 
@@ -514,7 +514,7 @@ public class ReportEndpointsTests
     }
 
     [TestCase("{\"baseTitle\":\"Quest\",\"gamesKey\":\"" + Key + "\"}", "system")]
-    [TestCase("{\"system\":\"sg1000\",\"baseTitle\":\"Quest\",\"gamesKey\":\"" + Key + "\"}", "system")]
+    [TestCase("{\"system\":\"vectrex\",\"baseTitle\":\"Quest\",\"gamesKey\":\"" + Key + "\"}", "system")]
     [TestCase("{\"system\":\"gb\",\"baseTitle\":\"\",\"gamesKey\":\"" + Key + "\"}", "baseTitle")]
     [TestCase("{\"system\":\"gb\",\"baseTitle\":\"Quest\",\"gamesKey\":\"ABC\"}", "gamesKey")]
     [TestCase("{\"system\":\"gb\",\"baseTitle\":\"Quest\",\"gamesKey\":\"" + UpperKey + "\"}", "gamesKey")]
@@ -654,7 +654,7 @@ public class ReportEndpointsTests
         Assert.That(invalid.GetProperty("merged").EnumerateArray().Select(m => m.GetGuid()), Is.EqualTo(new[] { charlie }));
     }
 
-    [TestCase("system=sg1000", "system")]
+    [TestCase("system=vectrex", "system")]
     [TestCase("pageSize=201", "pageSize")]
     [TestCase("match=name", "match")]
     public async Task Duplicates_InvalidQuery_Is400(string query, string field)
@@ -665,7 +665,7 @@ public class ReportEndpointsTests
         Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty(field, out _), Is.True);
     }
 
-    [TestCase("system=sg1000", "system")]
+    [TestCase("system=vectrex", "system")]
     [TestCase("pageSize=201", "pageSize")]
     [TestCase("page=0", "page")]
     public async Task MissingImages_InvalidQuery_Is400(string query, string field)
@@ -921,7 +921,7 @@ public class ReportEndpointsTests
             Is.EqualTo((JsonValueKind.Null, true)));
     }
 
-    [TestCase("system=sg1000", "system", "Choose a registered system.")]
+    [TestCase("system=vectrex", "system", "Choose a registered system.")]
     [TestCase("missing=title", "missing", "Must be any, year, developer or publisher.")]
     [TestCase("sort=releases", "sort", "Must be name, system or year.")]
     [TestCase("dir=up", "dir", "Must be asc or desc.")]
@@ -1001,7 +1001,7 @@ public class ReportEndpointsTests
         Assert.That(notOnItems.EnumerateArray().Select(i => i.GetProperty("id").GetGuid()), Is.EqualTo(new[] { bravo }));
     }
 
-    [TestCase("system=sg1000", "system", "Choose a registered system.")]
+    [TestCase("system=vectrex", "system", "Choose a registered system.")]
     [TestCase("status=linked", "status", "Must be missing or not-on-igdb.")]
     [TestCase("sort=releases", "sort", "Must be name, system or year.")]
     [TestCase("dir=up", "dir", "Must be asc or desc.")]

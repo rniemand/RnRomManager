@@ -95,7 +95,11 @@ describe('systemColour', () => {
 		expect(systemColour('a7800')).toEqual({ name: 'a7800', foreground: '#000' });
 	});
 
+	it('gives SG-1000 dark grey with white text', () => {
+		expect(systemColour('sg1000')).toEqual({ name: 'sg1000', foreground: '#fff' });
+	});
+
 	it('keeps an unknown system neutral', () => {
-		expect(systemColour('sg1000')).toBe(fallbackColour);
+		expect(systemColour('vectrex')).toBe(fallbackColour);
 	});
 });

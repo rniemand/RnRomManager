@@ -80,7 +80,7 @@ public class IngestEndpointsTests
         [IngestSeeder.C64Dat] = [],
         [IngestSeeder.PetDat] = [],
         [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-        [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
+        [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.Sg1000Dat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
         [IngestSeeder.NintendoDsDat] = [],
         ["Nintendo - Game Boy"] = [],
         ["Nintendo - Game Boy Color"] = [],
@@ -224,7 +224,7 @@ public class IngestEndpointsTests
             files = new object[]
             {
                 new { system = "gb", name = "chosen.gb" }, new { system = "gb", name = "chosen.gb" },
-                new { system = "gb", name = "missing.gb" }, new { system = "sg1000", name = "other.gb" },
+                new { system = "gb", name = "missing.gb" }, new { system = "vectrex", name = "other.gb" },
             },
         });
 
@@ -287,7 +287,7 @@ public class IngestEndpointsTests
         using var response = await _admin.GetAsync("/api/ingest/pending");
         var systems = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "fds", "snes", "satellaview", "sufami", "vb", "a2600", "a5200", "a7800", "lynx", "jaguar", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn", "nds", "segacd", "3do", "c64", "pet", "vic20", "c128", "plus4", "amiga", "3ds", "tgcd", "dos", "ngp", "ngpc", "mame2003", "fbneo", "pcfx", "ws", "wsc", "sgx", "pc2", "pico", "cd32", "cdtv" }));
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "fds", "snes", "satellaview", "sufami", "vb", "a2600", "a5200", "a7800", "lynx", "jaguar", "coleco", "gg", "sms", "sg1000", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn", "nds", "segacd", "3do", "c64", "pet", "vic20", "c128", "plus4", "amiga", "3ds", "tgcd", "dos", "ngp", "ngpc", "mame2003", "fbneo", "pcfx", "ws", "wsc", "sgx", "pc2", "pico", "cd32", "cdtv" }));
         var gb = systems.Single(s => s.GetProperty("system").GetString() == "gb").GetProperty("files");
         Assert.That(gb.GetArrayLength(), Is.EqualTo(1));
         Assert.That(gb[0].GetProperty("name").GetString(), Is.EqualTo("Tetris.gb"));

@@ -71,6 +71,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg`, `.chd`, `.iso`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `yabause` |
 | Sega CD | `segacd` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `genesis_plus_gx` |
 | Sega Pico | `pico` | In ZIP | `.md`, `.bin`, `.pco` | No-Intro | `picodrive` |
+| SG-1000 / SC-3000 | `sg1000` | In ZIP | `.sg`, `.sc` | No-Intro | — |
 | Sufami Turbo | `sufami` | In ZIP | `.st` | No-Intro | `snes9x` |
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc`, `.swc`, `.fig` | No-Intro | `snes9x` |
 | TurboGrafx-16 / PC Engine | `tg16` | In ZIP | `.pce` | No-Intro | `mednafen_pce` |
