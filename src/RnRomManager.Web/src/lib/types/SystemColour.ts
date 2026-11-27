@@ -34,6 +34,7 @@ export interface SystemColour {
 		| 'ws'
 		| 'wsc'
 		| 'pc2'
+		| 'pico'
 		| 'switch'
 		| 'psx'
 		| 'psp'

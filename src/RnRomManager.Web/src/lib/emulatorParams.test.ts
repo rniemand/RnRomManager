@@ -538,9 +538,16 @@ describe('32X (B3)', () => {
 		expect(parsePlayParams(query({ core: 'picodrive' }), 'psp')).toBeNull();
 	});
 
-	it.each(['Star Relay (USA).32x', 'X.GG', 'X.md'])('uses the 32X controls for %s', (name) => {
+	it.each(['Star Relay (USA).32x', 'X.GG', 'X.bin'])('uses the 32X controls for %s', (name) => {
 		expect(controlSchemeFor('picodrive', name)).toBe('sega32x');
 	});
+
+	it.each(['Pen Pals (Japan).md', 'X.MD'])(
+		'uses the Mega Drive controls for the Pico release %s (Sega Pico P6)',
+		(name) => {
+			expect(controlSchemeFor('picodrive', name)).toBe('segaMD');
+		}
+	);
 
 	it('hides the core chooser for PicoDrive', () => {
 		expect(hidesCoreChooser('picodrive')).toBe(true);
@@ -559,7 +566,7 @@ describe('32X (B3)', () => {
 		[401, 'Your session has expired. Sign in again.'],
 		[
 			404,
-			'32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).'
+			'32X and Pico games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).'
 		],
 		[
 			409,

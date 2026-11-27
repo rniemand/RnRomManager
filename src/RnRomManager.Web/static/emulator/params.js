@@ -134,7 +134,8 @@ export function biosError(name, status) {
 /**
  * EmulatorJS 4.2.3 takes the controls from the core's group, `segaMS` for smsplus (no Start button). A `.gg` release
  * gets the Game Gear scheme instead. Genesis B5: Genesis Plus GX's first group is also `segaMS`, so it gets the Mega
- * Drive scheme explicitly. 32X B3: PicoDrive's first group is `segaMS` too, so it gets the 32X scheme. Saturn B6:
+ * Drive scheme explicitly. 32X B3: PicoDrive's first group is `segaMS` too, so it gets the 32X scheme. Sega Pico P6:
+ * a `.md` on PicoDrive is a Pico release and gets the Mega Drive scheme. Saturn B6:
  * Yabause gets `segaSaturn`, upstream's default too, set so it doesn't depend on the group order. Anything else keeps
  * the default (null).
  * @param {string} core
@@ -143,7 +144,7 @@ export function biosError(name, status) {
  */
 export function controlSchemeFor(core, name) {
 	if (core === 'genesis_plus_gx') return 'segaMD';
-	if (core === 'picodrive') return 'sega32x';
+	if (core === 'picodrive') return name.toLowerCase().endsWith('.md') ? 'segaMD' : 'sega32x';
 	if (core === 'yabause') return 'segaSaturn';
 	return core === 'smsplus' && name.toLowerCase().endsWith('.gg') ? 'segaGG' : null;
 }
@@ -162,7 +163,7 @@ const operatorCores = {
 		option: 'Emulator:GenesisCorePath'
 	},
 	picodrive: {
-		system: '32X games',
+		system: '32X and Pico games',
 		display: 'PicoDrive',
 		short: 'PicoDrive',
 		option: 'Emulator:PicodriveCorePath'

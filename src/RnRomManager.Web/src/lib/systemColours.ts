@@ -30,6 +30,7 @@ export const systemColours: Record<string, SystemColour> = {
 	ws: { name: 'ws', foreground: '#000' },
 	wsc: { name: 'wsc', foreground: '#000' },
 	pc2: { name: 'pc2', foreground: '#000' },
+	pico: { name: 'pico', foreground: '#000' },
 	switch: { name: 'switch', foreground: '#fff' },
 	psx: { name: 'psx', foreground: '#fff' },
 	psp: { name: 'psp', foreground: '#fff' },

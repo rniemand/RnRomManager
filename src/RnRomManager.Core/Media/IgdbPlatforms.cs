@@ -38,6 +38,7 @@ public static class IgdbPlatforms
         ["pc2"] = 57,
         ["pcfx"] = 274,
         ["pet"] = 90,
+        ["pico"] = 339,
         ["plus4"] = 94,
         ["psp"] = 38,
         ["psx"] = 7,

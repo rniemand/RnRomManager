@@ -41,6 +41,7 @@ roms/
   sms/                  Master System (.sms)
   md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it; an unmatched .mdx keeps its extension)
   s32x/                 32X (.32x, .bin)
+  pico/                 Sega Pico (.md, .bin, .pco)
   tg16/                 TurboGrafx-16 / PC Engine (.pce)
   sgx/                  PC Engine SuperGrafx (.sgx)
   switch/               Nintendo Switch (external: .nsp, .xci, .nsz, .xcz, .hdf files next to the ZIP)
@@ -172,7 +173,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `8` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `plus4`, `tgcd`, `pcfx`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`, `ws`, `wsc`, `sgx`, `pc2`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `plus4`, `tgcd`, `pcfx`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`, `ws`, `wsc`, `sgx`, `pc2`, `pico`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
@@ -255,6 +256,8 @@ Game Gear `header`, from the optional `TMR SEGA` header (looked for at 0x7FF0, 0
 Mega Drive / Genesis `header`, present only when the 16-byte field at 0x100 starts with `SEGA` (without it `header` is null). Text fields are ASCII with every byte outside 0x20–0x7E turned into a space, runs of spaces collapsed and trimmed (empty → null): `systemType` (0x100, 16 bytes), `copyright` (0x110, 16), `domesticTitle` (0x120, 48), `overseasTitle` (0x150, 48), `serial` (0x180, 14), `region` (0x1F0, 3); `checksum` is bytes 0x18E–0x18F, big-endian, 4 upper-case hex digits (stored, not verified).
 
 32X `header`: the same fields and rules as Mega Drive / Genesis (the `SEGA` header at 0x100, system type such as `SEGA 32X`); present only when that field starts with `SEGA`.
+
+Sega Pico `header`: the same fields and rules as 32X (system type such as `SEGA PICO`).
 
 TurboGrafx-16 `header`: always null (HuCards have no header).
 

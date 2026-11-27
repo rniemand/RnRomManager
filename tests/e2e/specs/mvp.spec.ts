@@ -1599,7 +1599,7 @@ test("Play: 32X explains its missing PicoDrive core", { tag: "@shard-b" }, async
     expect((await check).status()).toBe(404);
     checked = true;
     await expect(page.frameLocator("iframe").getByRole("status")).toHaveText(
-      "32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).",
+      "32X and Pico games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).",
     );
     await expect(
       page.frameLocator("iframe").getByText("Start Game"),

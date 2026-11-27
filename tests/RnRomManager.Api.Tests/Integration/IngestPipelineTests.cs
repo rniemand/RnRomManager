@@ -57,6 +57,7 @@ public class IngestPipelineTests
     private static readonly byte[] Harbor = GameGear(32768, 150, header: true);
     private static readonly byte[] Comet = new SyntheticMegaDriveRomBuilder { Seed = 160, Size = 65536 }.Build();
     private static readonly byte[] Relay = new SyntheticMegaDriveRomBuilder { Seed = 170, Size = 65536, SystemType = "SEGA 32X", OverseasTitle = "STAR RELAY" }.Build();
+    private static readonly byte[] Pals = new SyntheticMegaDriveRomBuilder { Seed = 1972, Size = 65536, SystemType = "SEGA PICO", OverseasTitle = "PEN PALS" }.Build();
     private static readonly byte[] Circuit = Atari(262144, 180);
     private static readonly SyntheticDiscBuilder WaveBowling = new()
         { Seed = 2041, Magic = NintendoDiscMagic.Wii, GameId = "RWBE01", Title = "WAVE BOWLING" };
@@ -203,7 +204,7 @@ public class IngestPipelineTests
             [IngestSeeder.NeoGeoPocketDat] = [new FixtureGame("Dual Mode (Japan)", "Dual Mode (Japan).ngp", DualMode)],
             [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)], [IngestSeeder.WonderSwanDat] = [new FixtureGame("Mono Flag (Japan)", "Mono Flag (Japan).ws", MonoFlag)], [IngestSeeder.WonderSwanColorDat] = [new FixtureGame("Swan Lagoon (Japan)", "Swan Lagoon (Japan).wsc", SwanLagoon)],
             [IngestSeeder.SuperGrafxDat] = [new FixtureGame("Twin Vdp (Japan)", "Twin Vdp (Japan).sgx", Sgx)],
-            [IngestSeeder.PocketChallengeV2Dat] = [new FixtureGame("Quiz Ladder (Japan)", "Quiz Ladder (Japan).pc2", Challenge)],
+            [IngestSeeder.PocketChallengeV2Dat] = [new FixtureGame("Quiz Ladder (Japan)", "Quiz Ladder (Japan).pc2", Challenge)], [IngestSeeder.PicoDat] = [new FixtureGame("Pen Pals (Japan)", "Pen Pals (Japan).md", Pals)],
             [IngestSeeder.ThreeDsDat] =
             [
                 new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),
@@ -1125,6 +1126,9 @@ public class IngestPipelineTests
     [TestCase("md", "relay.32x")]
     [TestCase("s32x", "comet.md")]
     [TestCase("s32x", "comet.gen")]
+    [TestCase("pico", "relay.32x")]
+    [TestCase("md", "pals.pco")]
+    [TestCase("s32x", "pals.pco")]
     public async Task SegaFile_InTheWrongFolderOrUnsupported_IsUnsupportedType(string folder, string name)
     {
         var result = await IngestAsync(Drop(folder, name, name.EndsWith(".sms") ? Harbor : Comet));
@@ -1148,6 +1152,8 @@ public class IngestPipelineTests
     [TestCase("md", "odd.md", 16777729, "TooLarge")]
     [TestCase("s32x", "odd.32x", 16383, "TooSmall")]
     [TestCase("s32x", "odd.32x", 4194305, "TooLarge")]
+    [TestCase("pico", "odd.md", 8191, "TooSmall")]
+    [TestCase("pico", "odd.md", 4194305, "TooLarge")]
     public async Task Sega_OutsideTheSizeLimits_Fails(
         string system,
         string name,
@@ -1223,6 +1229,29 @@ public class IngestPipelineTests
         Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
         var game = ReadZip(Path.Combine("s32x", "S", "Star Relay.zip"));
         Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("s32x", "Star Relay (USA).32x")));
+    }
+
+    [Test]
+    public async Task Pico_DatMatchedPco_IsStoredUnderPicoAsMd_WithItsHeader()
+    {
+        var result = await IngestAsync(Drop("pico", "pals.pco", Pals));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        var game = ReadZip(Path.Combine("pico", "P", "Pen Pals.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("pico", "Pen Pals (Japan).md")));
+        Assert.That(game.Roms.Single().Header!["systemType"]!.GetValue<string>(), Is.EqualTo("SEGA PICO"));
+    }
+
+    [Test]
+    public async Task Pico_UnmatchedHeadered_GoesToReview_WithTheHeaderTitle_AndManualIsStoredAsMd()
+    {
+        var item = await ReviewAsync("pico", "mystery.pco",
+            new SyntheticMegaDriveRomBuilder { Seed = 1973, Size = 65536, SystemType = "SEGA PICO", OverseasTitle = "PEN PALS" }.Build());
+        Assert.That(item.Suggestions, Does.Contain("Pen Pals"));
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Pen Pals Proto"));
+
+        Assert.That((rom.FileName, rom.OriginalFileName), Is.EqualTo(("Pen Pals Proto (World).md", "mystery.pco")));
     }
 
     [Test]
