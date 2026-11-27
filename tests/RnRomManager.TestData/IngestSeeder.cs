@@ -45,6 +45,8 @@ public static class IngestSeeder
     public const string ThreeDsDat = "Nintendo - Nintendo 3DS";
     public const string TurboGrafxCdDat = "NEC - PC Engine CD - TurboGrafx-CD";
     public const string PcfxDat = "NEC - PC-FX";
+    public const string Cd32Dat = "Commodore - CD32";
+    public const string CdtvDat = "Commodore - CDTV";
     public const string NeoGeoPocketDat = "SNK - Neo Geo Pocket";
     public const string NeoGeoPocketColorDat = "SNK - Neo Geo Pocket Color";
     public const string WonderSwanDat = "Bandai - WonderSwan";
@@ -53,9 +55,9 @@ public static class IngestSeeder
     public const string PocketChallengeV2Dat = "Benesse - Pocket Challenge V2";
     public const string PicoDat = "Sega - PICO";
 
-    /// <summary>The ten disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat; and Commodore PET's and Amiga's in <c>tosec/</c>.</summary>
+    /// <summary>The twelve disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat; and Commodore PET's and Amiga's in <c>tosec/</c>.</summary>
     public static IReadOnlyDictionary<string, FixtureDatLayout> RedumpLayouts { get; } =
-        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat, TurboGrafxCdDat, PcfxDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump)
+        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat, TurboGrafxCdDat, PcfxDat, Cd32Dat, CdtvDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump)
             .Append(new(PetDat, FixtureDatLayout.Tosec)).Append(new(AmigaDat, FixtureDatLayout.Tosec)).ToDictionary();
 
     /// <summary>Every DAT the fixture cache's preflight needs, empty, except <paramref name="dat"/>, which lists <paramref name="games"/>.</summary>
@@ -66,7 +68,7 @@ public static class IngestSeeder
             GbaDat, N64Dat, NesDat, SnesDat, Atari2600Dat, LynxDat, JaguarDat, VirtualBoyDat, Atari5200Dat, Atari7800Dat, ColecoVisionDat,
             GameGearDat, MasterSystemDat, MegaDriveDat, Sega32xDat, PicoDat, TurboGrafx16Dat, PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat,
             SegaCdDat, ThreeDoDat, C64Dat, PetDat, Vic20Dat, Plus4Dat, SatellaviewDat, SufamiTurboDat, FdsDat, AmigaDat, ThreeDsDat,
-            TurboGrafxCdDat, PcfxDat, NeoGeoPocketDat, NeoGeoPocketColorDat, WonderSwanDat, WonderSwanColorDat, SuperGrafxDat, PocketChallengeV2Dat, NintendoDsDat,
+            TurboGrafxCdDat, PcfxDat, Cd32Dat, CdtvDat, NeoGeoPocketDat, NeoGeoPocketColorDat, WonderSwanDat, WonderSwanColorDat, SuperGrafxDat, PocketChallengeV2Dat, NintendoDsDat,
         }.ToDictionary(n => n, IReadOnlyList<FixtureGame> (_) => []);
         dats[dat] = games;
         return dats;

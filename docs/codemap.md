@@ -270,6 +270,8 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 - AmigaHandler `amiga` — src/RnRomManager.Systems.Commodore/AmigaHandler.cs
 - C128Handler `c128` — src/RnRomManager.Systems.Commodore/C128Handler.cs
 - C64Handler `c64` — src/RnRomManager.Systems.Commodore/C64Handler.cs
+- Cd32Handler `cd32` — src/RnRomManager.Systems.Commodore/Cd32Handler.cs
+- CdtvHandler `cdtv` — src/RnRomManager.Systems.Commodore/CdtvHandler.cs
 - PetHandler `pet` — src/RnRomManager.Systems.Commodore/PetHandler.cs
 - Plus4Handler `plus4` — src/RnRomManager.Systems.Commodore/Plus4Handler.cs
 - Vic20Handler `vic20` — src/RnRomManager.Systems.Commodore/Vic20Handler.cs
@@ -373,7 +375,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `RnRomManager.Systems.Arcade.Tests`: FbneoHandlerTests, Mame2003HandlerTests
 - `RnRomManager.Systems.Atari.Tests`: A78HeaderTests, Atari2600HandlerTests, Atari5200HandlerTests, Atari7800HandlerTests, AtariJaguarHandlerTests, AtariLynxHandlerTests, LynxHeaderTests
 - `RnRomManager.Systems.Coleco.Tests`: ColecoVisionHandlerTests
-- `RnRomManager.Systems.Commodore.Tests`: AmigaHandlerTests, C128HandlerTests, C64HandlerTests, C64HeaderTests, PetHandlerTests, Plus4HandlerTests, Vic20HandlerTests
+- `RnRomManager.Systems.Commodore.Tests`: AmigaHandlerTests, C128HandlerTests, C64HandlerTests, C64HeaderTests, Cd32HandlerTests, CdtvHandlerTests, PetHandlerTests, Plus4HandlerTests, Vic20HandlerTests
 - `RnRomManager.Systems.Dos.Tests`: DosHandlerTests
 - `RnRomManager.Systems.GameBoy.Tests`: GameBoyAdvanceHeaderReaderTests, GameBoyHandlerTests, GameBoyHeaderReaderTests, SyntheticGbaRomBuilderTests, SyntheticRomBuilderTests
 - `RnRomManager.Systems.Microsoft.Tests`: Xbox360HandlerTests

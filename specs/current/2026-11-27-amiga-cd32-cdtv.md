@@ -129,7 +129,7 @@ There's no migration (`system_id` is a `VARCHAR`), no new config key and no new 
 ## Steps
 Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which need Docker. Playwright runs only in Finish and needs no change.
 
-- [ ] **1. CD32 and CDTV handlers** (A1, with `BrowserCore` null): the two handlers and their box art. `IngestSeeder.Cd32Dat`/`CdtvDat` are added to `RedumpLayouts` and `EmptyDats`, but the seeder doesn't write them yet. Not registered.
+- [x] **1. CD32 and CDTV handlers** (A1, with `BrowserCore` null): the two handlers and their box art. `IngestSeeder.Cd32Dat`/`CdtvDat` are added to `RedumpLayouts` and `EmptyDats`, but the seeder doesn't write them yet. Not registered.
   - Files: `Cd32Handler.cs`, `CdtvHandler.cs`, the four box-art files, `Resources/boxart/README.md`, `tests/RnRomManager.Systems.Commodore.Tests/Cd32HandlerTests.cs` and `CdtvHandlerTests.cs` (new), `IngestSeeder.cs`.
   - Tests: `Cd32HandlerTests` and `CdtvHandlerTests` (new), copying `PcfxHandlerTests`:
     - every A1 value;
