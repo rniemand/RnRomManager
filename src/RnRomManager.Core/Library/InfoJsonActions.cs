@@ -11,6 +11,12 @@ public sealed record InfoJsonActions
     /// </summary>
     public string? CoverImagePulled { get; init; }
 
+    /// <summary>
+    /// AC1: when Pull Cover Images last tried this game and IGDB had no usable cover, in the same format as
+    /// <see cref="CoverImagePulled"/>. Default pulls skip a game with either time.
+    /// </summary>
+    public string? CoverImageChecked { get; init; }
+
     /// <summary>A1: the value to write for <paramref name="time"/>, UTC truncated to whole seconds.</summary>
     public static string Format(DateTimeOffset time) =>
         new DateTimeOffset(time.UtcTicks - time.UtcTicks % TimeSpan.TicksPerSecond, TimeSpan.Zero).ToString("O", System.Globalization.CultureInfo.InvariantCulture);

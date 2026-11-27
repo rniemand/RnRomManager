@@ -104,17 +104,20 @@ public sealed class LibraryMirror : ILibraryMirror
                     }), transaction, cancellationToken: cancellationToken));
         }
 
-        // A4: game_actions has no FK, so the cover-pulled time is upserted here and the IGDB columns are never touched.
+        // A4, AC2: game_actions has no FK, so the cover-pulled and cover-checked times are upserted here and the IGDB
+        // columns are never touched.
         foreach (var entry in replace)
         {
             var pulled = InfoJsonActions.Parse(entry.Info.Actions?.CoverImagePulled)?.UtcDateTime;
-            await connection.ExecuteAsync(new CommandDefinition(pulled is null
-                    ? "UPDATE game_actions SET cover_image_pulled_at = NULL WHERE game_id = @Id"
+            var checkedAt = InfoJsonActions.Parse(entry.Info.Actions?.CoverImageChecked)?.UtcDateTime;
+            await connection.ExecuteAsync(new CommandDefinition(pulled is null && checkedAt is null
+                    ? "UPDATE game_actions SET cover_image_pulled_at = NULL, cover_image_checked_at = NULL WHERE game_id = @Id"
                     : """
-                      INSERT INTO game_actions (game_id, cover_image_pulled_at) VALUES (@Id, @Pulled)
-                      ON DUPLICATE KEY UPDATE cover_image_pulled_at = VALUES(cover_image_pulled_at)
+                      INSERT INTO game_actions (game_id, cover_image_pulled_at, cover_image_checked_at) VALUES (@Id, @Pulled, @Checked)
+                      ON DUPLICATE KEY UPDATE cover_image_pulled_at = VALUES(cover_image_pulled_at),
+                                              cover_image_checked_at = VALUES(cover_image_checked_at)
                       """,
-                new { Id = entry.Info.GameId, Pulled = pulled }, transaction, cancellationToken: cancellationToken));
+                new { Id = entry.Info.GameId, Pulled = pulled, Checked = checkedAt }, transaction, cancellationToken: cancellationToken));
         }
         var gone = delete.Except(rows.Select(r => r.Game.Id)).ToList();
         if (gone.Count > 0)

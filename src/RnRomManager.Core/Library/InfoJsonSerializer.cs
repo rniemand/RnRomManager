@@ -24,5 +24,5 @@ public static class InfoJsonSerializer
     /// <returns>UTF-8 bytes, no BOM.</returns>
     public static byte[] Serialize(InfoJsonGame game) =>
         // A1: an empty actions object is left out.
-        JsonSerializer.SerializeToUtf8Bytes(game.Actions is { CoverImagePulled: null } ? game with { Actions = null } : game, Options);
+        JsonSerializer.SerializeToUtf8Bytes(game.Actions is { CoverImagePulled: null, CoverImageChecked: null } ? game with { Actions = null } : game, Options);
 }

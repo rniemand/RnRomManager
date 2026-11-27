@@ -239,6 +239,34 @@ public partial class LibraryMirrorTests
         Assert.That(await ActionsAsync(game.GameId), Is.EqualTo(((DateTime?)null, (double?)null)), "cleared, row kept");
     }
 
+    private async Task<(DateTime? Pulled, DateTime? Checked)?> CoverTimesAsync(Guid gameId)
+    {
+        await using var connection = _factory.Create();
+        return await Dapper.SqlMapper.QuerySingleOrDefaultAsync<(DateTime?, DateTime?)?>(connection,
+            "SELECT cover_image_pulled_at, cover_image_checked_at FROM game_actions WHERE game_id = @gameId", new { gameId });
+    }
+
+    [Test]
+    public async Task Replace_UpsertsCoverChecked_AndClearsBothTimes()
+    {
+        var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
+        var checkedOnly = game with { Actions = new InfoJsonActions { CoverImageChecked = "2026-11-26T12:15:30+02:00" } };
+
+        await _mirror.ReplaceAsync(Entry(checkedOnly), CancellationToken.None);
+        Assert.That(await CoverTimesAsync(game.GameId), Is.EqualTo(((DateTime?)null, (DateTime?)new DateTime(2026, 11, 26, 10, 15, 30))), "checked only, as UTC");
+
+        var both = game with
+        {
+            Actions = new InfoJsonActions { CoverImagePulled = "2026-11-27T00:00:00Z", CoverImageChecked = "2026-11-26T10:15:30Z" },
+        };
+        await _mirror.ReplaceAsync(Entry(both), CancellationToken.None);
+        Assert.That(await CoverTimesAsync(game.GameId),
+            Is.EqualTo(((DateTime?)new DateTime(2026, 11, 27), (DateTime?)new DateTime(2026, 11, 26, 10, 15, 30))));
+
+        await _mirror.ReplaceAsync(Entry(game), CancellationToken.None);
+        Assert.That(await CoverTimesAsync(game.GameId), Is.EqualTo(((DateTime?)null, (DateTime?)null)), "both cleared, row kept");
+    }
+
     [Test]
     public async Task Replace_KeepsTheIgdbColumns()
     {

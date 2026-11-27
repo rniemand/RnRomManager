@@ -40,8 +40,11 @@ public interface IGameRepository
     /// <summary>R4: the game's <c>game_actions</c> row, or null when it has none.</summary>
     Task<GameActionsRow?> GetActionsAsync(Guid gameId, CancellationToken cancellationToken);
 
-    /// <summary>A5: <c>cover_image_pulled_at</c> (UTC) of every <c>game_actions</c> row that has one.</summary>
-    Task<IReadOnlyDictionary<Guid, DateTime>> ListCoverPulledAsync(CancellationToken cancellationToken);
+    /// <summary>
+    /// A5, AC3: <c>cover_image_pulled_at</c> and <c>cover_image_checked_at</c> (UTC) of every <c>game_actions</c> row that
+    /// has either.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, (DateTime? Pulled, DateTime? Checked)>> ListCoverActionsAsync(CancellationToken cancellationToken);
 
     /// <summary>T2: the Admin Actions tab's counts.</summary>
     Task<GameActionsSummary> GetActionsSummaryAsync(CancellationToken cancellationToken);

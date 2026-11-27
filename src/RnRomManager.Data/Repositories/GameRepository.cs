@@ -86,12 +86,16 @@ public sealed class GameRepository : IGameRepository
             """, new { gameId }, cancellationToken: cancellationToken));
     }
 
-    public async Task<IReadOnlyDictionary<Guid, DateTime>> ListCoverPulledAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<Guid, (DateTime? Pulled, DateTime? Checked)>> ListCoverActionsAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
-        return (await connection.QueryAsync<(Guid GameId, DateTime PulledAt)>(new CommandDefinition(
-                "SELECT game_id, cover_image_pulled_at FROM game_actions WHERE cover_image_pulled_at IS NOT NULL", cancellationToken: cancellationToken)))
-            .ToDictionary(r => r.GameId, r => DateTime.SpecifyKind(r.PulledAt, DateTimeKind.Utc));
+        return (await connection.QueryAsync<(Guid GameId, DateTime? PulledAt, DateTime? CheckedAt)>(new CommandDefinition("""
+                SELECT game_id, cover_image_pulled_at, cover_image_checked_at FROM game_actions
+                WHERE cover_image_pulled_at IS NOT NULL OR cover_image_checked_at IS NOT NULL
+                """, cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.GameId, r => (AsUtc(r.PulledAt), AsUtc(r.CheckedAt)));
+
+        static DateTime? AsUtc(DateTime? time) => time is { } t ? DateTime.SpecifyKind(t, DateTimeKind.Utc) : null;
     }
 
     public async Task<GameActionsSummary> GetActionsSummaryAsync(CancellationToken cancellationToken)

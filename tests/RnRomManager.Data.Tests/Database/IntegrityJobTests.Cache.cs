@@ -41,14 +41,15 @@ public partial class IntegrityJobTests
     {
         var game = await Write("gb/T/Tetris.zip", "Tetris", edit: g => g with { Actions = new InfoJsonActions { CoverImagePulled = InfoJsonActions.Format(When) } });
         await Run();
-        Assert.That((await _games.ListCoverPulledAsync(default)).Keys, Is.EqualTo(new[] { game.GameId }), "DB repair mirrors actions");
+        Assert.That((await _games.ListCoverActionsAsync(default)).Keys, Is.EqualTo(new[] { game.GameId }), "DB repair mirrors actions");
         await Sql("UPDATE game_actions SET cover_image_pulled_at = NULL");
 
         await Run(JobMode.Quick);
-        Assert.That(await _games.ListCoverPulledAsync(default), Is.Empty, "Quick doesn't open an unchanged ZIP");
+        Assert.That(await _games.ListCoverActionsAsync(default), Is.Empty, "Quick doesn't open an unchanged ZIP");
         var (jobId, _) = await Run(JobMode.Deep);
 
-        Assert.That(await _games.ListCoverPulledAsync(default), Is.EqualTo(new Dictionary<Guid, DateTime> { [game.GameId] = When.UtcDateTime }));
+        Assert.That(await _games.ListCoverActionsAsync(default),
+            Is.EqualTo(new Dictionary<Guid, (DateTime?, DateTime?)> { [game.GameId] = (When.UtcDateTime, null) }));
         Assert.That((await All()).Where(i => i.LastSeenJobId == jobId).Select(i => (i.Type, i.Status, i.GameId)),
             Is.EqualTo(new[] { (DbRowUpdated, IntegrityIssue.AutoRepaired, (Guid?)game.GameId) }));
     }
@@ -62,8 +63,23 @@ public partial class IntegrityJobTests
 
         await RunGame("gb/T/Tetris.zip");
 
-        Assert.That(await _games.ListCoverPulledAsync(default), Is.Empty);
+        Assert.That(await _games.ListCoverActionsAsync(default), Is.Empty);
         Assert.That((await All()).Count(i => i.Type == DbRowUpdated), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Deep_CoverCheckedMismatch_IsRemirrored_AsDbRowUpdated()
+    {
+        var game = await Write("gb/T/Tetris.zip", "Tetris", edit: g => g with { Actions = new InfoJsonActions { CoverImageChecked = InfoJsonActions.Format(When) } });
+        await Run();
+        await Sql("UPDATE game_actions SET cover_image_checked_at = '2026-02-03 04:05:06'");
+
+        var (jobId, _) = await Run(JobMode.Deep);
+
+        Assert.That(await _games.ListCoverActionsAsync(default),
+            Is.EqualTo(new Dictionary<Guid, (DateTime?, DateTime?)> { [game.GameId] = (null, When.UtcDateTime) }));
+        Assert.That((await All()).Where(i => i.LastSeenJobId == jobId).Select(i => (i.Type, i.Status, i.GameId)),
+            Is.EqualTo(new[] { (DbRowUpdated, IntegrityIssue.AutoRepaired, (Guid?)game.GameId) }));
     }
 
     [Test]
