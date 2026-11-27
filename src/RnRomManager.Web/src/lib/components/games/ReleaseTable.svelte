@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { fromAction } from 'svelte/attachments';
 	import { untrack } from 'svelte';
 	import type { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { api } from '#lib/api/client.js';
@@ -15,11 +14,11 @@
 	import type { AddResult } from '#lib/enums/index.js';
 	import Button from '#lib/components/forms/Button.svelte';
 	import CopyButton from '#lib/components/forms/CopyButton.svelte';
+	import IconButton from '#lib/components/forms/IconButton.svelte';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
 	import ReleaseDetails from '#lib/components/games/ReleaseDetails.svelte';
 	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
-	import Icon from '#lib/icons/Icon.svelte';
 	import {
 		canPlay,
 		opensInNewTab,
@@ -158,13 +157,11 @@
 <!-- Bundle Creator B1: adds one file to the working cart; shows a check once it's there. -->
 {#snippet bundleButton(entry: BundleEntry)}
 	{@const inCart = bundle.has(entry)}
-	<Button
+	<IconButton
 		icon={inCart ? 'cart-check' : 'cart-add'}
-		class="btn btn-sm {inCart ? 'btn-primary' : 'btn-outline-primary'}"
-		aria-label={inCart
-			? `${entry.fileName} is in the bundle`
-			: `Add ${entry.fileName} to the bundle`}
-		title={inCart ? 'In the bundle' : 'Add to bundle'}
+		tone={inCart ? 'primary' : 'default'}
+		label={inCart ? `${entry.fileName} is in the bundle` : `Add ${entry.fileName} to the bundle`}
+		tooltip={inCart ? 'In the bundle' : 'Add to bundle'}
 		onclick={() => addToBundle(entry)}
 	/>
 {/snippet}
@@ -228,82 +225,77 @@
 						{#each rom.regions as region (region)}
 							<span class="badge text-bg-secondary">{region}</span>
 						{/each}
-						<!-- R4: a filled button when the release has a note; Site users only view notes (U3). -->
-						{#if auth.isAdmin || rom.hasNote}<Button
+						<!-- R4: a warning-tinted icon when the release has a note; Site users only view notes (U3). -->
+						{#if auth.isAdmin || rom.hasNote}<IconButton
 								icon={rom.hasNote ? 'note-filled' : 'note'}
-								class="btn btn-sm {rom.hasNote ? 'btn-warning' : 'btn-outline-secondary'}"
-								aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
-								{@attach fromAction(tooltip, () => (rom.hasNote ? 'View note' : 'Add note'))}
+								tone={rom.hasNote ? 'warning' : 'default'}
+								label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
+								tooltip={rom.hasNote ? 'View note' : 'Add note'}
 								onclick={() => onnote(rom)}
 							/>{/if}
 						{#if canPlay(game, rom) && game.browserCore && opensInNewTab(game.browserCore)}
 							<!-- PSP B3: the isolated player runs in its own tab; a static page outside the SPA router. -->
-							<!-- eslint-disable svelte/no-navigation-without-resolve -->
-							<Button
-								variant="success"
-								outline
-								size="sm"
+							<IconButton
+								icon="play"
+								tone="success"
 								href={playUrl(game.id, rom, game.browserCore, usesPlayDisc(game.browserCore, rom))}
 								target="_blank"
 								rel="noopener"
-								aria-label="Play {rom.fileName} (opens in a new tab)"
+								label="Play {rom.fileName} (opens in a new tab)"
+								tooltip="Play in a new tab"
 								{...playLinkEvents(game.id, rom.id)}
-								><!-- eslint-enable svelte/no-navigation-without-resolve -->
-								<Icon name="play" /></Button
-							>
+							/>
 						{:else if canPlay(game, rom)}
-							<Button
-								variant="success"
-								outline
-								size="sm"
+							<IconButton
 								icon="play"
-								aria-label="Play {rom.fileName}"
+								tone="success"
+								label="Play {rom.fileName}"
+								tooltip="Play"
 								onclick={() => onplay(rom, null)}
 							/>
 							{#if rom.discSet}
 								{@const discSet = rom.discSet}
 								{@const media = setMedia(game.browserCore)}
 								<!-- Multi-disc M7 (Amiga F8: disks): every disc of the set in one session, from Disc 1's card. -->
-								<Button
-									variant="success"
-									outline
-									size="sm"
-									icon="play"
-									aria-label="Play all {media} of {discSet.name}"
-									{@attach fromAction(tooltip, () => `Play all ${media} in one session`)}
-									onclick={() => onplay(rom, discSet.name)}>All {media}</Button
-								>
+								<IconButton
+									icon="play-all"
+									tone="success"
+									label="Play all {media} of {discSet.name}"
+									tooltip="Play all {media} in one session"
+									onclick={() => onplay(rom, discSet.name)}
+								/>
 							{/if}
 						{/if}
-						<Button
-							variant="primary"
-							outline
-							size="sm"
+						<IconButton
 							icon="download"
-							aria-label="Download {rom.fileName}"
+							tone="primary"
+							label="Download {rom.fileName}"
+							tooltip="Download"
 							onclick={() => ondownload(rom.downloadUrl, rom)}
 						/>
 						{@render bundleButton(bundleEntry(game, rom))}
 					</div>
 				</div>
 			</div>
-			<div class="card-body small" id="release-{rom.id}-details" hidden={!open}>
+			<!-- R2: the body's blocks are spaced by the wrapper's gap, not their own margins. -->
+			<div
+				class="card-body small d-flex flex-column gap-3"
+				id="release-{rom.id}-details"
+				hidden={!open}
+			>
 				{#if rom.hasNote}
 					{@const note = notes.get(rom.fileName)}
 					<!-- B7: the note comes first; a non-interactive block (its Markdown links work) beside an Edit/View button. -->
-					<div class="border rounded p-2 mb-3" data-testid="release-note">
+					<div class="border rounded p-2" data-testid="release-note">
 						<div class="d-flex align-items-center gap-2 mb-2">
 							<h4 class="h6 mb-0">Release note</h4>
-							<Button
-								variant="secondary"
-								outline
-								size="sm"
+							<IconButton
 								class="ms-auto"
 								icon={auth.isAdmin ? 'edit' : 'note-filled'}
-								aria-label="{auth.isAdmin ? 'Edit' : 'View'} note for {rom.fileName}"
+								label="{auth.isAdmin ? 'Edit' : 'View'} note for {rom.fileName}"
+								tooltip={auth.isAdmin ? 'Edit note' : 'View note'}
 								onclick={() => onnote(rom, auth.isAdmin ? 'edit' : undefined)}
-								>{auth.isAdmin ? 'Edit note' : 'View note'}</Button
-							>
+							/>
 						</div>
 						{#if note && 'error' in note}
 							<ErrorAlert error={note.error} onretry={() => loadNote(rom)} />
@@ -318,116 +310,112 @@
 					</div>
 				{/if}
 				<ReleaseDetails {rom} />
-				{#if rom.header || auth.isAdmin}
-					<div class="d-flex flex-wrap gap-2 mt-2">
-						{#if rom.header}
-							<Button
-								variant="secondary"
-								outline
-								size="sm"
-								icon="info"
-								onclick={() => onheader(rom)}>Header details</Button
-							>
-						{/if}
-						{#if auth.isAdmin}
-							<!-- B9: Header details stays left; Move and Delete release sit right. -->
-							<div class="ms-auto d-flex flex-wrap gap-2">
-								<Button
-									variant="secondary"
-									outline
-									size="sm"
-									icon="edit"
-									aria-label="Edit release {rom.fileName}"
-									onclick={() => onedit(rom)}>Edit release</Button
-								>
-								{#if !rom.isPrimary}
-									<Button
-										variant="secondary"
-										outline
-										size="sm"
-										icon="star"
-										aria-label="Make primary {rom.fileName}"
-										onclick={() => onaction({ kind: 'primary', rom })}>Make primary</Button
-									>
-								{/if}
-								<Button
-									variant="secondary"
-									outline
-									size="sm"
-									icon="move"
-									aria-label="Move release {rom.fileName}"
-									onclick={() => onaction({ kind: 'move', rom })}>Move release</Button
-								>
-								<Button
-									variant="danger"
-									outline
-									size="sm"
-									icon="delete"
-									aria-label="Delete release {rom.fileName}"
-									onclick={() => onaction({ kind: 'deleteRom', rom })}>Delete release</Button
-								>
-							</div>
-						{/if}
-					</div>
-				{/if}
 				{#if rom.files?.length}
 					{@const filesOpen = openFiles.has(rom.fileName)}
 					<!-- B20: the main file and the set's other files (cue, tracks); N counts all of them. -->
-					<Button
-						variant="secondary"
-						outline
-						size="sm"
-						class="mt-2"
-						icon="chevron"
-						aria-expanded={filesOpen}
-						aria-controls="release-{rom.id}-files"
-						onclick={() =>
-							filesOpen ? openFiles.delete(rom.fileName) : openFiles.add(rom.fileName)}
-						>{rom.files.length + 1} files</Button
-					>
-					<div class="card mt-2" id="release-{rom.id}-files" hidden={!filesOpen}>
-						<div class="table-responsive">
-							<table class="table table-sm table-striped table-hover align-middle mb-0">
-								<caption class="visually-hidden">Files of {rom.fileName}</caption>
-								<thead class="table-dark">
-									<tr>
-										<th scope="col">File</th>
-										<th scope="col" class="text-end">Size</th>
-										<th scope="col">SHA1</th>
-										<th scope="col"><span class="visually-hidden">Actions</span></th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each [{ fileName: rom.fileName, sizeBytes: rom.sizeBytes, sha1: rom.sha1, downloadUrl: rom.downloadUrl }, ...rom.files] as file, index (file.fileName)}
+					<div>
+						<Button
+							variant="secondary"
+							outline
+							size="sm"
+							icon="chevron"
+							aria-expanded={filesOpen}
+							aria-controls="release-{rom.id}-files"
+							onclick={() =>
+								filesOpen ? openFiles.delete(rom.fileName) : openFiles.add(rom.fileName)}
+							>{rom.files.length + 1} files</Button
+						>
+						<div class="card mt-2" id="release-{rom.id}-files" hidden={!filesOpen}>
+							<div class="table-responsive">
+								<table class="table table-sm table-striped table-hover align-middle mb-0">
+									<caption class="visually-hidden">Files of {rom.fileName}</caption>
+									<thead class="table-dark">
 										<tr>
-											<td class="text-truncate file-name" title={file.fileName}>{file.fileName}</td>
-											<td class="text-end text-nowrap"><FileSize bytes={file.sizeBytes} /></td>
-											<td class="text-nowrap">
-												<span class="font-monospace">{file.sha1}</span>
-												<CopyButton value={file.sha1} label="SHA1 of {file.fileName}" />
-											</td>
-											<td class="text-end">
-												<Button
-													variant="primary"
-													outline
-													size="sm"
-													icon="download"
-													aria-label="Download {file.fileName}"
-													onclick={() => ondownload(file.downloadUrl, rom)}
-												/>
-												<!-- Row 0 is the main file; the rest are separately downloadable set files (B1). -->
-												{@render bundleButton(
-													bundleEntry(game, rom, index === 0 ? undefined : rom.files[index - 1])
-												)}
-											</td>
+											<th scope="col">File</th>
+											<th scope="col" class="text-end">Size</th>
+											<th scope="col">SHA1</th>
+											<th scope="col"><span class="visually-hidden">Actions</span></th>
 										</tr>
-									{/each}
-								</tbody>
-							</table>
+									</thead>
+									<tbody>
+										{#each [{ fileName: rom.fileName, sizeBytes: rom.sizeBytes, sha1: rom.sha1, downloadUrl: rom.downloadUrl }, ...rom.files] as file, index (file.fileName)}
+											<tr>
+												<td class="text-truncate file-name" title={file.fileName}
+													>{file.fileName}</td
+												>
+												<td class="text-end text-nowrap"><FileSize bytes={file.sizeBytes} /></td>
+												<td class="text-nowrap">
+													<span class="font-monospace">{file.sha1}</span>
+													<CopyButton value={file.sha1} label="SHA1 of {file.fileName}" />
+												</td>
+												<td>
+													<div class="d-flex align-items-center justify-content-end gap-2">
+														<IconButton
+															icon="download"
+															tone="primary"
+															label="Download {file.fileName}"
+															tooltip="Download"
+															onclick={() => ondownload(file.downloadUrl, rom)}
+														/>
+														<!-- Row 0 is the main file; the rest are separately downloadable set files (B1). -->
+														{@render bundleButton(
+															bundleEntry(game, rom, index === 0 ? undefined : rom.files[index - 1])
+														)}
+													</div>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
 						</div>
 					</div>
 				{/if}
 			</div>
+			{#if rom.header || auth.isAdmin}
+				<!-- R2, B9: the action row; Header details left, the Admin actions right. -->
+				<div class="card-footer bg-body-tertiary d-flex align-items-center gap-2" hidden={!open}>
+					{#if rom.header}
+						<IconButton
+							icon="info"
+							label="Header details for {rom.fileName}"
+							tooltip="Header details"
+							onclick={() => onheader(rom)}
+						/>
+					{/if}
+					{#if auth.isAdmin}
+						<div class="ms-auto d-flex align-items-center gap-2">
+							<IconButton
+								icon="edit"
+								label="Edit release {rom.fileName}"
+								tooltip="Edit release"
+								onclick={() => onedit(rom)}
+							/>
+							{#if !rom.isPrimary}
+								<IconButton
+									icon="star"
+									label="Make primary {rom.fileName}"
+									tooltip="Make primary"
+									onclick={() => onaction({ kind: 'primary', rom })}
+								/>
+							{/if}
+							<IconButton
+								icon="move"
+								label="Move release {rom.fileName}"
+								tooltip="Move release"
+								onclick={() => onaction({ kind: 'move', rom })}
+							/>
+							<IconButton
+								icon="delete"
+								tone="danger"
+								label="Delete release {rom.fileName}"
+								tooltip="Delete release"
+								onclick={() => onaction({ kind: 'deleteRom', rom })}
+							/>
+						</div>
+					{/if}
+				</div>
+			{/if}
 		</article>
 	{/each}
 </div>
@@ -436,21 +424,8 @@
 	.file-name {
 		max-width: 32rem;
 	}
-	/* R2: the release header is clickable. It is bg-body-tertiary, where the light theme's default outline colours
-	   fall under 4.5:1, so it uses the text-emphasis colours in both themes (app.css does this in the dark theme). */
+	/* R2: the release header is clickable. */
 	.release-header {
 		cursor: pointer;
-		:global(.btn-outline-primary) {
-			--bs-btn-color: var(--bs-primary-text-emphasis);
-			--bs-btn-border-color: var(--bs-primary-text-emphasis);
-		}
-		:global(.btn-outline-secondary) {
-			--bs-btn-color: var(--bs-secondary-text-emphasis);
-			--bs-btn-border-color: var(--bs-secondary-text-emphasis);
-		}
-		:global(.btn-outline-danger) {
-			--bs-btn-color: var(--bs-danger-text-emphasis);
-			--bs-btn-border-color: var(--bs-danger-text-emphasis);
-		}
 	}
 </style>

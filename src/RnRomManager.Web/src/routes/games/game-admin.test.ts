@@ -182,17 +182,20 @@ describe('game detail admin actions', () => {
 		render(GamePage);
 
 		const del = await releaseDelete('Tetris 1.gb');
-		expect(del.className).toBe('btn btn-sm btn-outline-danger');
-		expect(del.textContent!.trim()).toBe('Delete release');
+		// R1, R2: icon buttons in the card footer.
+		expect(del.className).toBe('btn btn-sm btn-link text-danger-emphasis p-0');
 		const right = del.parentElement!;
-		expect(right.className).toBe('ms-auto d-flex flex-wrap gap-2');
-		expect([...right.children].map((b) => b.textContent!.trim())).toEqual([
-			'Edit release',
-			'Move release',
-			'Delete release'
+		expect(right.className).toBe('ms-auto d-flex align-items-center gap-2');
+		expect([...right.children].map((b) => b.getAttribute('aria-label'))).toEqual([
+			'Edit release Tetris 1.gb',
+			'Move release Tetris 1.gb',
+			'Delete release Tetris 1.gb'
 		]);
 		const row = right.parentElement!;
-		expect(row.firstElementChild!.textContent!.trim()).toBe('Header details');
+		expect(row.className).toBe('card-footer bg-body-tertiary d-flex align-items-center gap-2');
+		expect(row.firstElementChild!.getAttribute('aria-label')).toBe(
+			'Header details for Tetris 1.gb'
+		);
 		expect(
 			screen
 				.getByRole('article', { name: 'Tetris 1.gb' })
@@ -200,7 +203,7 @@ describe('game detail admin actions', () => {
 		).toBeNull();
 	});
 
-	it('Move release sits in the release body and opens the move dialog (R2)', async () => {
+	it('Move release sits in the release footer and opens the move dialog (R2)', async () => {
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
 		await screen.findByRole('article', { name: 'Tetris 1.gb' });
@@ -212,8 +215,8 @@ describe('game detail admin actions', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Show details for Tetris 1.gb' }));
 		const move = screen.getByRole('button', { name: 'Move release Tetris 1.gb' });
-		expect(move.closest('.card-body')).toBeTruthy();
-		expect(move.textContent!.trim()).toBe('Move release');
+		expect(move.closest('.card-footer')).toBeTruthy();
+		expect(move.textContent!.trim()).toBe('');
 		await fireEvent.click(move);
 
 		expect(modal().getByRole('heading', { name: 'Move release', hidden: true })).toBeTruthy();
@@ -289,7 +292,7 @@ describe('game detail admin actions', () => {
 				await screen.findByRole('button', { name: 'Show details for Tetris 1.gb' })
 			);
 			const edit = screen.getByRole('button', { name: 'Edit release Tetris 1.gb' });
-			expect(edit.className).toBe('btn btn-sm btn-outline-secondary');
+			expect(edit.className).toBe('btn btn-sm btn-link text-body-secondary p-0');
 			expect(edit.parentElement!.firstElementChild).toBe(edit);
 		});
 

@@ -397,7 +397,8 @@ describe('game detail page', () => {
 		render(GamePage);
 
 		const all = await screen.findByRole('button', { name: 'Play all discs of Tetris (World).m3u' });
-		expect(all.textContent?.trim()).toBe('All discs');
+		expect(all.textContent?.trim()).toBe('');
+		expect(all.querySelector('i.bi-collection-play')).toBeTruthy();
 		expect(all.previousElementSibling?.getAttribute('aria-label')).toBe('Play Tetris 1.gb');
 		expect(tooltips.find((t) => t.node === all)?.text).toBe('Play all discs in one session');
 		expect(screen.getAllByRole('button', { name: /^Play all discs/ })).toHaveLength(1);
@@ -429,7 +430,7 @@ describe('game detail page', () => {
 		const all = await screen.findByRole('button', {
 			name: 'Play all disks of Twin Disk (1990)(Synth).m3u'
 		});
-		expect(all.textContent?.trim()).toBe('All disks');
+		expect(all.querySelector('i.bi-collection-play')).toBeTruthy();
 		expect(tooltips.find((t) => t.node === all)?.text).toBe('Play all disks in one session');
 		expect(screen.queryByRole('button', { name: /^Play all discs/ })).toBeNull();
 
@@ -450,7 +451,7 @@ describe('game detail page', () => {
 		render(GamePage);
 
 		const all = await screen.findByRole('button', { name: 'Play all disks of Pixel Quest.m3u' });
-		expect(all.textContent?.trim()).toBe('All disks');
+		expect(all.querySelector('i.bi-collection-play')).toBeTruthy();
 
 		await fireEvent.click(all);
 		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
@@ -655,7 +656,7 @@ describe('game detail page', () => {
 			['USA', 'Europe']
 		);
 		await fireEvent.click(screen.getByRole('button', { name: 'Show details for Tetris 1.gb' }));
-		await fireEvent.click(screen.getByRole('button', { name: 'Header details' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Header details for Tetris 1.gb' }));
 		const caption = screen.getByText('Header of Tetris 1.gb');
 		const modal = caption.closest('.modal')!;
 		expect(modal.querySelector('.modal-title')?.textContent).toBe('Header — Tetris 1.gb');
@@ -889,28 +890,46 @@ describe('game detail page', () => {
 			]);
 		});
 
-		it('the action row holds Header details; the files toggle sits below it (B20)', async () => {
+		it('the footer action row holds Header details; the body blocks sit in one gap-3 wrapper (R2, B20)', async () => {
 			const detail = game([1]);
 			detail.roms[0].files = setFiles;
 			answers.push({ status: 200, body: detail });
 			render(GamePage);
-			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+			const article = await screen.findByRole('article', { name: 'Tetris 1.gb' });
 
-			const actions = details('Tetris 1.gb').querySelector('.card + .d-flex')!;
-			expect(actions.className).toBe('d-flex flex-wrap gap-2 mt-2');
-			const header = within(actions as HTMLElement).getByRole('button', {
-				name: 'Header details',
-				hidden: true
-			});
-			expect(header.className).toBe('btn btn-sm btn-outline-secondary');
+			const body = details('Tetris 1.gb');
+			expect(body.className).toBe('card-body small d-flex flex-column gap-3');
+			const footer = article.querySelector<HTMLElement>(':scope > .card-footer')!;
+			expect(footer.className).toBe('card-footer bg-body-tertiary d-flex align-items-center gap-2');
+			expect(footer.previousElementSibling).toBe(body);
+			// Hidden with the body while the card is closed.
+			expect(footer.hidden).toBe(true);
+			await fireEvent.click(chevron('Tetris 1.gb'));
+			expect(footer.hidden).toBe(false);
+
+			const header = within(footer).getByRole('button', { name: 'Header details for Tetris 1.gb' });
+			expect(header.className).toBe('btn btn-sm btn-link text-body-secondary p-0');
 			expect(header.querySelector('.bi-info-circle')).toBeTruthy();
-			const files = within(details('Tetris 1.gb')).getByRole('button', {
-				name: /files$/,
-				hidden: true
-			});
-			expect(
-				actions.compareDocumentPosition(files) & Node.DOCUMENT_POSITION_FOLLOWING
-			).toBeTruthy();
+			// The N files toggle and its card are one block; it stays a text button.
+			const files = within(body).getByRole('button', { name: /files$/ });
+			expect(files.parentElement!.parentElement).toBe(body);
+			expect(files.nextElementSibling!.className).toBe('card mt-2');
+			expect(files.className).not.toContain('mt-2');
+			// R1: every other action in the card is icon-only.
+			const texts = [...article.querySelectorAll('button, a.btn')]
+				.map((b) => b.textContent!.trim())
+				.filter(Boolean);
+			expect(texts).toEqual([`${setFiles.length + 1} files`]);
+		});
+
+		it('no footer for a Site user on a release without a header', async () => {
+			auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
+			const detail = game([1]);
+			detail.roms[0].header = null as unknown as (typeof detail.roms)[0]['header'];
+			answers.push({ status: 200, body: detail });
+			render(GamePage);
+			const article = await screen.findByRole('article', { name: 'Tetris 1.gb' });
+			expect(article.querySelector('.card-footer')).toBeNull();
 		});
 
 		it('no Header details without a header', async () => {
@@ -918,11 +937,11 @@ describe('game detail page', () => {
 			detail.roms[0].header = null as unknown as (typeof detail.roms)[0]['header'];
 			answers.push({ status: 200, body: detail });
 			render(GamePage);
-			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+			const article = await screen.findByRole('article', { name: 'Tetris 1.gb' });
 
 			expect(
-				within(details('Tetris 1.gb')).queryByRole('button', {
-					name: 'Header details',
+				within(article).queryByRole('button', {
+					name: /^Header details/,
 					hidden: true
 				})
 			).toBeNull();
@@ -934,7 +953,7 @@ describe('game detail page', () => {
 			await screen.findByRole('article', { name: 'Tetris 1.gb' });
 
 			await fireEvent.click(chevron('Tetris 1.gb'));
-			await fireEvent.click(screen.getByRole('button', { name: 'Header details' }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Header details for Tetris 1.gb' }));
 
 			const table = screen.getByText('Header of Tetris 1.gb').closest('table')!;
 			expect(table.className).toBe('table table-sm table-striped table-hover mb-0');
@@ -950,8 +969,20 @@ describe('game detail page', () => {
 		});
 
 		it.each([
-			[true, 'btn-warning', 'bi-sticky-fill', 'View note', 'Note for Tetris 1.gb'],
-			[false, 'btn-outline-secondary', 'bi-sticky', 'Add note', 'Add note for Tetris 1.gb']
+			[
+				true,
+				'btn-link text-warning-emphasis p-0',
+				'bi-sticky-fill',
+				'View note',
+				'Note for Tetris 1.gb'
+			],
+			[
+				false,
+				'btn-link text-body-secondary p-0',
+				'bi-sticky',
+				'Add note',
+				'Add note for Tetris 1.gb'
+			]
 		])(
 			'hasNote %s: note button %s, icon %s, tooltip %s (R4)',
 			async (hasNote, cls, icon, tip, name) => {
