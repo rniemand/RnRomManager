@@ -281,6 +281,39 @@ public class IngestReviewTests
     }
 
     [Test]
+    public async Task PendingArchiveItem_WhoseExtensionTheSystemDropped_StillResolves()
+    {
+        var bytes = new byte[16384];
+        new Random(1004).NextBytes(bytes);
+        var other = new byte[16384];
+        new Random(1005).NextBytes(other);
+        var path = Path.Combine(_factory.Root, "ingest", "sms", "old-pack.zip");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            foreach (var (name, content) in new[] { ("x.sg", bytes), ("y.sc", other) })
+            {
+                using var stream = zip.CreateEntry(name).Open();
+                stream.Write(content);
+            }
+        }
+        await Reviews.UpsertAsync(new ReviewItem { SystemId = "sms", Reason = "NoDatMatch", SourcePath = path, ArchivePath = path,
+            ArchiveEntry = "x.sg", OriginalFileName = "x.sg", Sha1 = Sha(bytes), Md5 = new string('0', 32), Crc32 = "00000000",
+            SizeBytes = bytes.Length, CreatedAt = DateTime.UtcNow, LastSeenJobId = Guid.NewGuid() }, default);
+        var item = (await Reviews.GetBySha1Async(Sha(bytes), default))!;
+        var user = await TestUsers.CreateAsync(_factory, $"sms-{Guid.NewGuid():N}"[..20], TestUsers.AllRoles);
+
+        var resolved = await Service<ReviewResolver>().ResolveInJobAsync(item.Id,
+            new ReviewResolutionRequest { Action = "Manual", Title = "X", Regions = ["World"], Languages = [], Flags = [] },
+            new RnRomManager.Core.Audit.AuditActor(user.Id, user.Username, null), default);
+
+        Assert.That(resolved.Code, Is.Null, string.Join("; ", resolved.Errors?.SelectMany(e => e.Value) ?? []));
+        var row = (await Service<IGameRepository>().GetAsync(resolved.GameId!.Value, default))!;
+        using var library = LibraryZip.Open(Path.Combine(_factory.Root, "roms", row.ZipPath), Service<InfoJsonReader>());
+        var game = library.InfoJson!.Game!;
+        Assert.That((game.System, game.Roms.Single().FileName, game.Roms.Single().OriginalFileName), Is.EqualTo(("sms", "X (World).sms", "x.sg")));
+    }
+
+    [Test]
     public async Task AllNullHeaders_UseIngestFoldersHandler_AndRemainPlausible()
     {
         var registry = new SystemRegistry([new IngestReviewHeaderless("gb"), new IngestReviewHeaderless("gbc")]);

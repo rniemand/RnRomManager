@@ -52,7 +52,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Game Boy Color | `gbc` | In ZIP | `.gbc` | No-Intro | `gambatte` |
 | Game Gear | `gg` | In ZIP | `.gg`, `.sms`, `.bin`, `.rom` | No-Intro | `smsplus` |
 | GameCube | `gc` | Next to ZIP | `.iso`, `.gcm` | Redump | — |
-| Master System | `sms` | In ZIP | `.sms`, `.sg`, `.bin`, `.rom`, `.bms` | No-Intro | `smsplus` |
+| Master System | `sms` | In ZIP | `.sms`, `.bin`, `.rom`, `.bms` | No-Intro | `smsplus` |
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen`, `.smd`, `.68k`, `.sgd`, `.mdx` | No-Intro | `genesis_plus_gx` |
 | MS-DOS | `dos` | Next to ZIP | `.dosz`, `.zip` | None | `dosbox_pure` |
 | Neo Geo Pocket | `ngp` | In ZIP | `.ngp` | No-Intro | `mednafen_ngp` |
@@ -71,7 +71,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg`, `.chd`, `.iso`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `yabause` |
 | Sega CD | `segacd` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `genesis_plus_gx` |
 | Sega Pico | `pico` | In ZIP | `.md`, `.bin`, `.pco` | No-Intro | `picodrive` |
-| SG-1000 / SC-3000 | `sg1000` | In ZIP | `.sg`, `.sc` | No-Intro | — |
+| SG-1000 / SC-3000 | `sg1000` | In ZIP | `.sg`, `.sc` | No-Intro | `smsplus` |
 | Sufami Turbo | `sufami` | In ZIP | `.st` | No-Intro | `snes9x` |
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc`, `.swc`, `.fig` | No-Intro | `snes9x` |
 | TurboGrafx-16 / PC Engine | `tg16` | In ZIP | `.pce` | No-Intro | `mednafen_pce` |

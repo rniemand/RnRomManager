@@ -26,6 +26,9 @@ public sealed class Sg1000Handler : ISystemHandler
     /// <inheritdoc />
     public bool KeepsSourceExtension => true;
 
+    /// <summary>SMS Plus GX, bundled; the play page names a <c>.sc</c> release <c>.sg</c> so it runs in SG-1000 mode (S7).</summary>
+    public string BrowserCore => "smsplus";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;

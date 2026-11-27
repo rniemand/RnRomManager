@@ -1193,6 +1193,7 @@ public class IngestPipelineTests
     [TestCase("s32x", "pals.pco")]
     [TestCase("sg1000", "harbor.sms")]
     [TestCase("gg", "comet.sg")]
+    [TestCase("sms", "comet.sg")]
     public async Task SegaFile_InTheWrongFolderOrUnsupported_IsUnsupportedType(string folder, string name)
     {
         var result = await IngestAsync(Drop(folder, name, name.EndsWith(".sms") ? Harbor : Comet));

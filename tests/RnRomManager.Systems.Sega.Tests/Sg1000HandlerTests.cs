@@ -17,7 +17,7 @@ public class Sg1000HandlerTests
             Is.EqualTo(("sg1000", "SG-1000 / SC-3000", "SG-1000", "sg1000", "Sega - SG-1000")));
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".sg", ".sc" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((2048L, 1048576L)));
-        Assert.That((Handler.EmbedRomsInZip, Handler.KeepsSourceExtension, Handler.BrowserCore), Is.EqualTo((true, true, (string?)null)));
+        Assert.That((Handler.EmbedRomsInZip, Handler.KeepsSourceExtension, Handler.BrowserCore), Is.EqualTo((true, true, "smsplus")));
         Assert.That((Handler.DatSource, Handler.DatFolder), Is.EqualTo((DatSource.Libretro, DatKind.NoIntro)));
         Assert.That(Handler.MetadatKinds, Is.EqualTo(DatKind.Metadat));
     }

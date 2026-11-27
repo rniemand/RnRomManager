@@ -474,6 +474,14 @@ describe('contentFileName', () => {
 	it('scopes every DOSBox Pure release to its game, so each keeps its own browser save (MS-DOS P8)', () => {
 		expect(contentFileName('dosbox_pure', game, 'A#B.dosz')).toBe(`${game}-A_B.dosz`);
 	});
+
+	it('names an SG-1000 or SC-3000 release .sg for smsplus', () => {
+		expect(contentFileName('smsplus', game, 'A (Japan).sc')).toBe('A (Japan).sg');
+		expect(contentFileName('smsplus', game, 'B.SG')).toBe('B.sg');
+		expect(contentFileName('smsplus', game, 'C #1.sg')).toBe('C _1.sg');
+		expect(contentFileName('smsplus', game, 'D.sms')).toBe('D.sms');
+		expect(contentFileName('picodrive', game, 'E.sc')).toBe('E.sc');
+	});
 });
 
 describe('PSP page (PSP B3)', () => {
