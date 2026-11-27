@@ -1,6 +1,6 @@
 ---
 title: Amiga CD32 and CDTV support
-status: ready
+status: in-progress
 created: 2026-11-27
 ---
 
