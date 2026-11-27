@@ -1,6 +1,6 @@
 ---
 title: Sega Pico support
-status: in-progress
+status: completed
 created: 2026-11-27
 ---
 
