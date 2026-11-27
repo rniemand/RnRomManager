@@ -53,6 +53,13 @@ public sealed class LibraryEditor(
 
     internal ReleaseEditor ReleaseEditor => field ??= new(LibraryEditSupport, GameRemover, ExternalReleaseEditor, jobLock, games, roms, mirror, reader, systems, paths, audit, auditPaths, time, logger);
 
+    internal Sg1000Mover Sg1000Mover => field ??= new(LibraryEditSupport, ReleaseEditor, mirror, reader, systems, paths, audit, time, logger);
+
+    /// <inheritdoc cref="Sg1000Mover.MoveAsync"/>
+    /// <remarks>Takes no job lock: only <c>Sg1000MoveJob</c>, which holds it, calls it. Not cancellable once started.</remarks>
+    internal Task<LibraryEditResult> MoveToSg1000Async(GameRow row, AuditActor actor, CancellationToken ct) =>
+        Sg1000Mover.MoveAsync(row, actor);
+
     /// <inheritdoc cref="ReleaseEditor.DeleteReleaseAsync"/>
     public Task<LibraryEditResult> DeleteReleaseAsync(
         Guid gameId,
