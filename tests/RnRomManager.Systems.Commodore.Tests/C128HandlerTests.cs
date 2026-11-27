@@ -15,7 +15,7 @@ public class C128HandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("c128", "Commodore 128", "C128", "c128", "Commodore - 128")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".d64", ".d71", ".d81", ".g64", ".t64", ".tap", ".prg", ".p00", ".crt" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".d64", ".d71", ".d81", ".g64", ".t64", ".tap", ".prg", ".p00", ".crt", ".g41" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((256L, 8L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.DatSource), Is.EqualTo((true, DatSource.None)));
         Assert.That(Handler.MetadatKinds, Is.Empty);

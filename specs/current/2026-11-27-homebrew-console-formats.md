@@ -145,7 +145,7 @@ No UI, API-shape, permission, setting, job, migration or backup change. Existing
   - `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`.
 
   Done when: those pass, plus `npm run lint` and `npm run check`.
-- [ ] **4. VICE `.g41`/`.g4z`**: V1, V2, their T1 parts, D1 for the four Commodore systems. Files: `C64Handler.cs`, `PetHandler.cs`, `Vic20Handler.cs`, `C128Handler.cs`, `ViceImages.cs`, `BrowserCoreExtensionsTests.cs`, README and docs. Tests: `C64HandlerTests`, `PetHandlerTests` and `Vic20HandlerTests` (lists; `[TestCase("Game.g4z", ".g41")]` and `[TestCase("Game.g41.gz", ".g41")]` on their `SourceExtension` tests), `C128HandlerTests` (list), `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`. Done when: those pass, and `NotIngested` has no `NoDat` entry outside `puae`.
+- [x] **4. VICE `.g41`/`.g4z`**: V1, V2, their T1 parts, D1 for the four Commodore systems. Files: `C64Handler.cs`, `PetHandler.cs`, `Vic20Handler.cs`, `C128Handler.cs`, `ViceImages.cs`, `BrowserCoreExtensionsTests.cs`, README and docs. Tests: `C64HandlerTests`, `PetHandlerTests` and `Vic20HandlerTests` (lists; `[TestCase("Game.g4z", ".g41")]` and `[TestCase("Game.g41.gz", ".g41")]` on their `SourceExtension` tests), `C128HandlerTests` (list), `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`. Done when: those pass, and `NotIngested` has no `NoDat` entry outside `puae`.
 
 No Playwright change: no UI changes.
 

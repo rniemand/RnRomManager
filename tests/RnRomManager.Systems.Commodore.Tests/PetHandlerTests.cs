@@ -14,7 +14,7 @@ public class PetHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("pet", "Commodore PET", "PET", "pet", "Commodore - PET")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".prg", ".d64", ".tap", ".t64", ".g64", ".d80", ".d82", ".d71", ".d81", ".x64", ".p00", ".d6z", ".d7z", ".d8z", ".g6z", ".x6z", ".gz" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".prg", ".d64", ".tap", ".t64", ".g64", ".d80", ".d82", ".d71", ".d81", ".x64", ".p00", ".d6z", ".d7z", ".d8z", ".g6z", ".x6z", ".gz", ".g41", ".g4z" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((256L, 8L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.DatSource, Handler.DatFolder), Is.EqualTo((true, DatSource.Libretro, DatKind.Tosec)));
         Assert.That(Handler.MetadatKinds, Is.Empty);
@@ -33,6 +33,8 @@ public class PetHandlerTests
     [TestCase("Game.d7z", ".d71")]
     [TestCase("Game.d8z", ".d81")]
     [TestCase("Game.g6z", ".g64")]
+    [TestCase("Game.g4z", ".g41")]
+    [TestCase("Game.g41.gz", ".g41")]
     [TestCase("Game.x6z", ".x64")]
     [TestCase("Game.D6Z", ".d64")]
     [TestCase("Game.d64.gz", ".d64")]
