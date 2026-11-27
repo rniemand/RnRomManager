@@ -419,9 +419,61 @@ public class GameQueryTests
             await Dapper.SqlMapper.ExecuteAsync(connection, "INSERT INTO game_actions (game_id, igdb_rating) VALUES (@rated, 70)", new { rated });
         }
 
-        var candidates = await _games.ListPullCoverCandidatesAsync(default);
+        var candidates = await _games.ListPullCoverCandidatesAsync(includeChecked: true, default);
 
         Assert.That(candidates.Select(c => c.Id), Is.EqualTo(new[] { rated }.Concat(new[] { twinA, twinB }.Order()).Append(zeta)));
+    }
+
+    private async Task ActionsSql(string sql, object args)
+    {
+        await using var connection = _factory.Create();
+        await Dapper.SqlMapper.ExecuteAsync(connection, sql, args);
+    }
+
+    [Test]
+    public async Task PullCoverCandidates_CheckedOnly_ReturnedOnlyWhenIncluded()
+    {
+        var plain = await Add("Plain", igdbId: 1);
+        var checkedOnly = await Add("Checked", igdbId: 2);
+        var pulled = await Add("Pulled", igdbId: 3);
+        await ActionsSql("INSERT INTO game_actions (game_id, cover_image_checked_at) VALUES (@checkedOnly, UTC_TIMESTAMP())", new { checkedOnly });
+        await ActionsSql("INSERT INTO game_actions (game_id, cover_image_pulled_at, cover_image_checked_at) VALUES (@pulled, UTC_TIMESTAMP(), UTC_TIMESTAMP())", new { pulled });
+
+        Assert.That((await _games.ListPullCoverCandidatesAsync(includeChecked: true, default)).Select(c => c.Id), Is.EqualTo(new[] { checkedOnly, plain }));
+        Assert.That((await _games.ListPullCoverCandidatesAsync(includeChecked: false, default)).Select(c => c.Id), Is.EqualTo(new[] { plain }));
+    }
+
+    [Test]
+    public async Task IgdbLinked_MissingRatingOnly_LeavesOutRatedGames()
+    {
+        await Add("Unlinked");
+        await Add("Not On Igdb", igdbId: 0);
+        var noRow = await Add("No Row", igdbId: 1);
+        var noRating = await Add("No Rating", igdbId: 2);
+        var rated = await Add("Rated", igdbId: 3);
+        await ActionsSql("INSERT INTO game_actions (game_id, last_igdb_sync_at) VALUES (@noRating, UTC_TIMESTAMP())", new { noRating });
+        await ActionsSql("INSERT INTO game_actions (game_id, igdb_rating) VALUES (@rated, 70)", new { rated });
+
+        Assert.That((await _games.ListIgdbLinkedAsync(missingRatingOnly: false, default)).Select(c => c.Id), Is.EqualTo(new[] { noRating, noRow, rated }));
+        Assert.That((await _games.ListIgdbLinkedAsync(missingRatingOnly: true, default)).Select(c => c.Id), Is.EqualTo(new[] { noRating, noRow }));
+    }
+
+    [Test]
+    public async Task ActionsSummary_CountsPendingMissingAndRatings()
+    {
+        await Add("Unlinked");
+        await Add("Plain", igdbId: 1);
+        var checkedOnly = await Add("Checked", igdbId: 2);
+        var pulled = await Add("Pulled", igdbId: 3);
+        var rated = await Add("Rated", igdbId: 4);
+        await ActionsSql("INSERT INTO game_actions (game_id, cover_image_checked_at) VALUES (@checkedOnly, UTC_TIMESTAMP())", new { checkedOnly });
+        await ActionsSql("INSERT INTO game_actions (game_id, cover_image_pulled_at, igdb_rating) VALUES (@pulled, UTC_TIMESTAMP(), 60)", new { pulled });
+        await ActionsSql("INSERT INTO game_actions (game_id, igdb_rating, last_igdb_sync_at) VALUES (@rated, 70, '2026-11-26 10:15:30')", new { rated });
+
+        var summary = await _games.GetActionsSummaryAsync(default);
+
+        Assert.That(summary, Is.EqualTo(new GameActionsSummary(IgdbLinked: 4, CoversPending: 2, CoversMissing: 3, RatingsMissing: 2,
+            LastIgdbSyncAt: new DateTime(2026, 11, 26, 10, 15, 30, DateTimeKind.Utc))));
     }
 
     [Test]

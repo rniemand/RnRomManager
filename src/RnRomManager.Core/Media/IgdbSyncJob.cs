@@ -24,7 +24,7 @@ public sealed class IgdbSyncJob(
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {
-        var linked = await games.ListIgdbLinkedAsync(cancellationToken).ConfigureAwait(false);
+        var linked = await games.ListIgdbLinkedAsync(missingRatingOnly: false, cancellationToken).ConfigureAwait(false);
         context.Progress.SetTotal(linked.Count);
         int updated = 0, noRating = 0, notFound = 0;
 

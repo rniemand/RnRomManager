@@ -117,7 +117,7 @@ public class PullCoversJobTests
 
     private async Task<string> Run(params GameRow[] candidates)
     {
-        _games.ListPullCoverCandidatesAsync(Arg.Any<CancellationToken>()).Returns(candidates);
+        _games.ListPullCoverCandidatesAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(candidates);
         return JsonSerializer.Serialize(await Job().RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None));
     }
 
@@ -297,7 +297,7 @@ public class PullCoversJobTests
     {
         var row = await Add("Tetris", 42);
         Igdb(new IgdbGameRating(42, "co1", null, null));
-        _games.ListPullCoverCandidatesAsync(Arg.Any<CancellationToken>()).Returns([row]);
+        _games.ListPullCoverCandidatesAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([row]);
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
 

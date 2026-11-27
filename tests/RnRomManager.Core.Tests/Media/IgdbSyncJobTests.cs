@@ -34,7 +34,7 @@ public class IgdbSyncJobTests
 
     private async Task<string> Run(CancellationToken ct, params GameRow[] linked)
     {
-        _games.ListIgdbLinkedAsync(Arg.Any<CancellationToken>()).Returns(linked);
+        _games.ListIgdbLinkedAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(linked);
         var job = new IgdbSyncJob(_games, _igdb, _items, new FakeTimeProvider(Now));
         return JsonSerializer.Serialize(await job.RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), ct));
     }

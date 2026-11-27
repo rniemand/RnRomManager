@@ -45,7 +45,7 @@ public sealed class PullCoversJob(
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {
-        var candidates = await games.ListPullCoverCandidatesAsync(cancellationToken).ConfigureAwait(false);
+        var candidates = await games.ListPullCoverCandidatesAsync(includeChecked: true, cancellationToken).ConfigureAwait(false);
         context.Progress.SetTotal(candidates.Count);
         var breaker = new CircuitBreaker();
         var counts = new Dictionary<string, int> { [Pulled] = 0, [NoCover] = 0, [ImageLimit] = 0, [Skipped] = 0, [Error] = 0 };
