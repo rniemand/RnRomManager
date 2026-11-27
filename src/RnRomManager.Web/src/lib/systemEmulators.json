@@ -92,6 +92,42 @@
 			"note": "RetroArch core: VICE x64sc"
 		}
 	],
+	"cd32": [
+		{
+			"name": "WinUAE",
+			"url": "https://www.winuae.net/",
+			"os": ["windows"]
+		},
+		{
+			"name": "FS-UAE",
+			"url": "https://fs-uae.net/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: PUAE"
+		}
+	],
+	"cdtv": [
+		{
+			"name": "WinUAE",
+			"url": "https://www.winuae.net/",
+			"os": ["windows"]
+		},
+		{
+			"name": "FS-UAE",
+			"url": "https://fs-uae.net/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: PUAE"
+		}
+	],
 	"coleco": [
 		{
 			"name": "Gearcoleco",

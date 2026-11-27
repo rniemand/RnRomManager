@@ -82,7 +82,7 @@ public partial class LibraryEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [], [IngestSeeder.PicoDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Download Quest (USA)", "Download Quest (USA).nds", DsQuest)],
             [Gb] =
             [
@@ -419,7 +419,7 @@ public partial class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "3do", "fbneo", "mame2003", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c128", "c64", "amiga", "pet", "plus4", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "dos", "ngp", "ngpc", "3ds", "n64", "nds", "nes", "switch", "sgx", "pcfx", "psx", "psp", "pc2", "satellaview", "saturn", "segacd", "pico", "sufami", "snes", "tg16", "tgcd", "vb", "wii", "ws", "wsc", "x360" }));
+            Is.EqualTo(new[] { "s32x", "3do", "fbneo", "mame2003", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c128", "c64", "amiga", "cd32", "cdtv", "pet", "plus4", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "dos", "ngp", "ngpc", "3ds", "n64", "nds", "nes", "switch", "sgx", "pcfx", "psx", "psp", "pc2", "satellaview", "saturn", "segacd", "pico", "sufami", "snes", "tg16", "tgcd", "vb", "wii", "ws", "wsc", "x360" }));
         Assert.That(systems.Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(34).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.Single(s => s.GetProperty("id").GetString() == id);
@@ -430,6 +430,8 @@ public partial class LibraryEndpointsTests
         Assert.That((Find("segacd").GetProperty("displayName").GetString(), Find("segacd").GetProperty("shortName").GetString()), Is.EqualTo(("Sega CD", "SCD")));
         Assert.That((Find("tgcd").GetProperty("displayName").GetString(), Find("tgcd").GetProperty("shortName").GetString()), Is.EqualTo(("TurboGrafx-CD / PC Engine CD", "TGCD")));
         Assert.That((Find("pcfx").GetProperty("displayName").GetString(), Find("pcfx").GetProperty("shortName").GetString()), Is.EqualTo(("PC-FX", "PC-FX")));
+        Assert.That((Find("cd32").GetProperty("displayName").GetString(), Find("cd32").GetProperty("shortName").GetString()), Is.EqualTo(("Commodore Amiga CD32", "CD32")));
+        Assert.That((Find("cdtv").GetProperty("displayName").GetString(), Find("cdtv").GetProperty("shortName").GetString()), Is.EqualTo(("Commodore CDTV", "CDTV")));
         Assert.That((Find("ngp").GetProperty("displayName").GetString(), Find("ngp").GetProperty("shortName").GetString()), Is.EqualTo(("Neo Geo Pocket", "NGP")));
         Assert.That((Find("ngpc").GetProperty("displayName").GetString(), Find("ngpc").GetProperty("shortName").GetString()), Is.EqualTo(("Neo Geo Pocket Color", "NGPC")));
         Assert.That((Find("ws").GetProperty("displayName").GetString(), Find("ws").GetProperty("shortName").GetString()), Is.EqualTo(("WonderSwan", "WS")));
@@ -453,7 +455,7 @@ public partial class LibraryEndpointsTests
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "32X", "3DO", "Arcade (FinalBurn Neo)", "Arcade (MAME 2003-Plus)", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 128", "Commodore 64", "Commodore Amiga", "Commodore PET", "Commodore Plus/4", "Commodore VIC-20", "Famicom Disk System", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "MS-DOS", "Neo Geo Pocket", "Neo Geo Pocket Color", "Nintendo 3DS", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
+            "32X", "3DO", "Arcade (FinalBurn Neo)", "Arcade (MAME 2003-Plus)", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 128", "Commodore 64", "Commodore Amiga", "Commodore Amiga CD32", "Commodore CDTV", "Commodore PET", "Commodore Plus/4", "Commodore VIC-20", "Famicom Disk System", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "MS-DOS", "Neo Geo Pocket", "Neo Geo Pocket Color", "Nintendo 3DS", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
             "PC Engine SuperGrafx", "PC-FX", "PlayStation", "PlayStation Portable", "Pocket Challenge V2", "Satellaview", "Saturn", "Sega CD", "Sega Pico", "Sufami Turbo", "Super Nintendo Entertainment System", "TurboGrafx-16 / PC Engine", "TurboGrafx-CD / PC Engine CD", "Virtual Boy", "Wii", "WonderSwan", "WonderSwan Color", "Xbox 360"
         }));
     }

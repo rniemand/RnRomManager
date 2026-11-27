@@ -41,7 +41,7 @@ Adds two disc systems to `RnRomManager.Systems.Commodore`: **Commodore Amiga CD3
     - `/* CDTV system colour: a dark walnut, same in both themes; white on it is AAA (~12:1). */`, `--bs-cdtv: #40362a`, `.text-bg-cdtv` the same way.
 
     No other token uses either value.
-  - `systemColours.ts`: `cd32: { name: 'cd32', foreground: '#fff' }` and `cdtv: { name: 'cdtv', foreground: '#fff' }` directly after `amiga`.
+  - `systemColours.ts`: `cd32: { name: 'cd32', foreground: '#fff' }` and `cdtv: { name: 'cdtv', foreground: '#fff' }` directly after `amiga`, and `'cd32'` and `'cdtv'` join the `SystemColour` name union in `src/lib/types/SystemColour.ts` after `'amiga'`.
   - `src/lib/icons/icons.ts`: `'system-cd32': 'bi bi-disc'` and `'system-cdtv': 'bi bi-disc'` after `'system-pcfx'`.
   - `IgdbPlatforms.ById`: `["cd32"] = 114` after `["c64"] = 15`, and `["cdtv"] = 158` after it. The map is keyed alphabetically. IGDB lists "Amiga CD32" as 114 and "Commodore CDTV" as 158 (from RomM's IGDB platform table, read 2026-11-27). No other key uses either id.
   - `systemEmulators.json`: keys `cd32` and `cdtv` after `c64`, keeping the map alphabetical. Each gets a copy of `amiga`'s three entries in its order: WinUAE (`["windows"]`), FS-UAE, and RetroArch (`"note": "RetroArch core: PUAE"`).
@@ -110,7 +110,7 @@ Adds two disc systems to `RnRomManager.Systems.Commodore`: **Commodore Amiga CD3
 | Api | `src/RnRomManager.Api/Endpoints/PlayDisc.cs` | A5 |
 | Api | `src/RnRomManager.Api/Endpoints/LibraryEndpoints.cs`, `LibraryDtos.cs` | A10 |
 | Api | `src/RnRomManager.Api/Endpoints/BiosInfo.cs` | A11 |
-| Web | `src/app.css`, `src/lib/systemColours.ts`, `src/lib/icons/icons.ts`, `src/lib/systemEmulators.json` | A3 |
+| Web | `src/app.css`, `src/lib/systemColours.ts`, `src/lib/types/SystemColour.ts`, `src/lib/icons/icons.ts`, `src/lib/systemEmulators.json` | A3 |
 | Web | `static/emulator/params.js`, `static/emulator/play.js` | A6–A9 |
 | Web | `src/lib/emulator.ts`, `src/lib/components/modals/EmulatorModal.svelte`, `src/lib/components/games/GameResults.svelte`, `GameSaves.svelte`, `src/routes/games/[id]/+page.svelte` | A6, A10 |
 | Test data | `tests/RnRomManager.TestData/IngestSeeder.cs` | `Cd32Dat = "Commodore - CD32"` and `CdtvDat = "Commodore - CDTV"` (new) after `PcfxDat`; both appended to `RedumpLayouts` (its doc comment's disc-system count +2) and to `EmptyDats` after `PcfxDat`; `"cd32", "cdtv"` appended to the disc-folder loop; `[Cd32Dat] = [], [CdtvDat] = []` after `[PcfxDat] = []` in the seed `FixtureDatWriter.Write` call |
@@ -138,8 +138,8 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
     - the PNG is valid, 512×512 and different from `amiga.png` and from each other;
     - with a registry holding only that handler, `DatCache` loads a Redump fixture catalog with one synthetic cue/bin game and finds its `.bin` by SHA-1, and loads an empty catalog.
   - Done when: `dotnet test tests/RnRomManager.Systems.Commodore.Tests` passes and the solution builds with warnings as errors.
-- [ ] **2. Register CD32 and CDTV, and update fixtures** (A2, A3, and A12's rows with Play `—`):
-  - The `AppHost.cs` lines, `IgdbPlatforms.cs`, `systemEmulators.json`, `app.css`, `systemColours.ts`, `icons.ts` and the README rows.
+- [x] **2. Register CD32 and CDTV, and update fixtures** (A2, A3, and A12's rows with Play `—`):
+  - The `AppHost.cs` lines, `IgdbPlatforms.cs`, `systemEmulators.json`, `app.css`, `systemColours.ts`, `types/SystemColour.ts`, `icons.ts` and the README rows.
   - `IngestSeeder`: the disc-folder loop and the `FixtureDatWriter.Write` entries (Changes table).
   - Every test file whose full-registry manifest lists `IngestSeeder.PcfxDat` adds `[IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = []` after it. Today those are `AuditLibraryEditTests`, `DatEndpointsTests`, `GamePlayedEndpointTests`, `ImageEndpointsTests`, `ImageUrlEndpointsTests`, `IngestArchiveTests`, `IngestDeleteEndpointsTests`, `IngestEndpointsTests`, `IngestPipelineTests`, `IngestRestoreEndpointsTests`, `IngestReviewTests`, `LibraryEditTests`, `LibraryEndpointsTests`, `LibraryMoveMergeTests`, `MediaRetryEndpointsTests`, `NoteEndpointsTests`, `ReportEndpointsTests`, `ReviewEndpointsTests` and `ZipEntryEndpointsTests`. `PcfxHandlerTests` (a one-entry manifest) stays as it is. Before committing, grep `tests/` and check that every full manifest listing `IngestSeeder.PcfxDat` also lists both new DATs.
   - Counts and orders:
@@ -270,6 +270,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
 
 - 2026-11-27 Multi-disc sets for CD32/CDTV? → Out of scope; each disc plays alone (user)
 - 2026-11-27 Deep review → handlers now end with `SegaPicoHandler`; BIOS Info extended-ROM `ok` rule fixed for a missing Kickstart (null `Size`); `.iso` play-disc cases folded into `PlayDisc_AStandaloneChd_StreamsUnchanged`; `systemEmulators.json` entry order, doc-comment and README clause placement, `BrowserCore` comment text and the `discError` text pinned; stale parallel-spec list updated (reviewer)
+- 2026-11-27 Step 2 → the colour names also need the `SystemColour` union in `types/SystemColour.ts`, or `npm run check` fails (code)
 
 ## Kickoff prompt
 ```text

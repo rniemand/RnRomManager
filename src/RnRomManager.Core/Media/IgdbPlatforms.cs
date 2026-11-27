@@ -16,6 +16,8 @@ public static class IgdbPlatforms
         ["amiga"] = 16,
         ["c128"] = 15, // shared with c64
         ["c64"] = 15,
+        ["cd32"] = 114,
+        ["cdtv"] = 158,
         ["coleco"] = 68,
         ["fds"] = 51,
         ["dos"] = 13,

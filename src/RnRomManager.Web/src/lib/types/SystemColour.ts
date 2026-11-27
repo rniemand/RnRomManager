@@ -51,6 +51,8 @@ export interface SystemColour {
 		| 'vic20'
 		| 'c128'
 		| 'amiga'
+		| 'cd32'
+		| 'cdtv'
 		| 'fds'
 		| '3ds'
 		| 'satellaview'

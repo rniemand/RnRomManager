@@ -373,6 +373,24 @@
 	background-color: var(--bs-amiga) !important;
 }
 
+/* Amiga CD32 system colour: a deep CD32 violet, same in both themes; white on it is AAA (~12:1). */
+:root {
+	--bs-cd32: #3d2b6b;
+}
+.text-bg-cd32 {
+	color: #fff !important;
+	background-color: var(--bs-cd32) !important;
+}
+
+/* CDTV system colour: a dark walnut, same in both themes; white on it is AAA (~12:1). */
+:root {
+	--bs-cdtv: #40362a;
+}
+.text-bg-cdtv {
+	color: #fff !important;
+	background-color: var(--bs-cdtv) !important;
+}
+
 /* Famicom Disk System colour: a dark disk-card ochre, same in both themes; white on it is AAA (~7.6:1). */
 :root {
 	--bs-fds: #6b4f0a;
