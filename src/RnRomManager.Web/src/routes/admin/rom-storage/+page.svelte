@@ -305,8 +305,8 @@
 					{#if row.compressionConfigurable}
 						<Button
 							class="badge border-0 {level(row.zipCompression).badge}"
-							aria-label="Change ZIP compression of {row.displayName} ({level(row.zipCompression)
-								.label})"
+							aria-label="Change ZIP compression of {row.displayName}, {level(row.zipCompression)
+								.label}"
 							{@attach fromAction(tooltip, () => 'Change compression level')}
 							disabled={blocked}
 							onclick={() => askZip(row, false)}>{level(row.zipCompression).label}</Button

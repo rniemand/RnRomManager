@@ -313,7 +313,7 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 		const text = (el: Element | null) => el?.textContent?.replace(/\s+/g, ' ').trim();
 		const dialog = (title: string) =>
 			screen.getByRole('heading', { name: title, hidden: true }).closest('.modal') as HTMLElement;
-		const edit = /^Change ZIP compression of Game Boy Advance \(/;
+		const edit = /^Change ZIP compression of Game Boy Advance, /;
 		const repack = 'Repack Game Boy Advance ZIPs';
 
 		async function chooseLevel(level: string): Promise<HTMLElement> {
@@ -331,7 +331,7 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 
 			const gba = await row('Game Boy Advance');
 			const badge = within(gba).getByRole('button', {
-				name: 'Change ZIP compression of Game Boy Advance (High)'
+				name: 'Change ZIP compression of Game Boy Advance, High'
 			});
 			expect(badge.className).toBe('badge border-0 text-bg-success');
 			expect(badge.textContent?.trim()).toBe('High');
