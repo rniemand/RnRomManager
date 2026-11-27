@@ -1,6 +1,6 @@
 ---
 title: Amiga CD32 and CDTV support
-status: draft
+status: ready
 created: 2026-11-27
 ---
 
@@ -10,7 +10,7 @@ created: 2026-11-27
 Adds two disc systems to `RnRomManager.Systems.Commodore`: **Commodore Amiga CD32** (`cd32`) and **Commodore CDTV** (`cdtv`). Their Redump discs are imported against libretro's `Commodore - CD32` and `Commodore - CDTV` DATs and stored next to the game's ZIP, as PC-FX discs are. Releases play in the browser on PUAE (`puae`, already vendored for Commodore Amiga) through play-disc. The play URL carries the system, so the play page can load the right Kickstart ROMs from `Paths:Bios` and pick the right PUAE model.
 
 ## Out of scope
-- **Multi-disc sets.** `DiscSets.MaxDiscs` stays 0 for both systems, so no **All discs** button, and `play-disc-set` refuses both systems because neither is in `FirmwareNames`. PUAE would also need the vendored `.m3u`-first edit in `downloadRom()`, which today covers only `yabause` and `genesis_plus_gx`. The DATs hold 2 CD32 and 8 CDTV `(Disc n)`/`(Disc A)` entries. See Open questions.
+- **Multi-disc sets.** `DiscSets.MaxDiscs` stays 0 for both systems, so no **All discs** button, and `play-disc-set` refuses both systems because neither is in `FirmwareNames`. PUAE would also need the vendored `.m3u`-first edit in `downloadRom()`, which today covers only `yabause` and `genesis_plus_gx`. The DATs hold 2 CD32 and 8 CDTV `(Disc n)`/`(Disc A)` entries; each disc plays alone.
 - **Library battery saves.** PUAE exposes no SRAM: `retro_get_memory_data` returns only `RETRO_MEMORY_SYSTEM_RAM`. A CD32/CDTV game's NVRAM goes to its own `<content>.nvr` in the core's save directory. The modal's battery export finds nothing (`empty`), which is silent, the same as for Amiga floppies today. NVRAM persistence across sessions is left to the maintainer's post-merge boot check.
 - **Other content.** `.m3u`, `.gdi` and hard-disk images, a header reader (`ReadHeader` returns null), and bundling any Kickstart ROM.
 - **Other PUAE models.** The Amiga Forever or TOSEC Kickstart file names that PUAE also searches for, and the CD32FR model.
@@ -269,11 +269,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
 - 2026-11-27 Independent review → R1 DAT order is `Commodore - 64`, Amiga, CD32, CDTV, PET; R2 DatEndpointsTests message 10 → 12; R3 README PUAE line already says no Kickstart is included; R4 named `playAmigaCd` helper; R5 BIOS Info's extended-ROM group follows the Kickstart's size; R6 BIOS Info is its own Step 5 (Steps renumbered to 8); R7 README CloneCD/MDS/TOC sentence and development.md's `playUrl` signature (reviewer)
 - 2026-11-27 Review → self-reviewed against the code (this fork may not start a Plan reviewer): the new-tab `playUrl` callers need no `system`; the quick-play and core tests already hold Amiga floppy cases; the DAT ordinal order pinned; counts given as deltas because parallel system specs move them (reviewer)
 
-### Open questions
-- **Multi-disc sets for CD32/CDTV?** 2 CD32 and 8 CDTV DAT entries are multi-disc.
-  - (a) Out of scope, with each disc playing alone (recommended: few titles, and it needs a `DiscSets.MaxDiscs` entry, a `FirmwareNames` entry and extending the vendored `.m3u`-first `downloadRom()` edit to `puae`).
-  - (b) Add sets in this spec as a final step.
-  - (c) A follow-up spec.
+- 2026-11-27 Multi-disc sets for CD32/CDTV? → Out of scope; each disc plays alone (user)
 
 ## Kickoff prompt
 ```text
