@@ -16,6 +16,11 @@ export function reportTabs(isAdmin: boolean): ReportTab[] {
 		},
 		{ href: resolve('/reports/duplicates'), label: 'Duplicates', icon: 'report-duplicates' },
 		{
+			href: resolve('/reports/duplicate-shas'),
+			label: 'Duplicate SHAs',
+			icon: 'report-duplicate-shas'
+		},
+		{
 			href: resolve('/reports/multiple-releases'),
 			label: 'Multiple Releases',
 			icon: 'report-multiple-releases'

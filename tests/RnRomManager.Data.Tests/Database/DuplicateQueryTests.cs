@@ -103,7 +103,11 @@ public class DuplicateQueryTests
     }
 
     /// <summary>D2: adds a set file to each game's release with the given name and hashes.</summary>
-    private async Task AddSetFile(Guid gameId, string fileName, string sha1, string md5)
+    private async Task AddSetFile(
+        Guid gameId,
+        string fileName,
+        string sha1,
+        string md5)
     {
         await using var connection = _factory.Create();
         await connection.ExecuteAsync("""

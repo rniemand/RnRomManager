@@ -8,6 +8,7 @@ describe('reportTabs (S1)', () => {
 		['/reports/library-size', 'Library Size', 'report-size'],
 		['/reports/missing-images', 'Missing Images', 'report-missing-images'],
 		['/reports/duplicates', 'Duplicates', 'report-duplicates'],
+		['/reports/duplicate-shas', 'Duplicate SHAs', 'report-duplicate-shas'],
 		['/reports/multiple-releases', 'Multiple Releases', 'report-multiple-releases'],
 		['/reports/hacks', 'Games With Hacks', 'report-hacks'],
 		['/reports/image-resolutions', 'Image Resolutions', 'report-image-resolutions']

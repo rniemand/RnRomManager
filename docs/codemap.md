@@ -226,6 +226,7 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 - `/jobs` — jobs/+page.svelte
 - `/login` — login/+page.svelte
 - `/reports/activity` — reports/activity/+page.svelte
+- `/reports/duplicate-shas` — reports/duplicate-shas/+page.svelte
 - `/reports/duplicates` — reports/duplicates/+page.svelte
 - `/reports/hacks` — reports/hacks/+page.svelte
 - `/reports/image-resolutions` — reports/image-resolutions/+page.svelte
@@ -358,6 +359,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `src/RnRomManager.Web/src/lib/components/ingest/`: IngestFileTable
 - `src/RnRomManager.Web/src/lib/components/layout/`: AccordionItem, AppFooter, Navbar, NavTabs, PageTitle, RomToolsTabs, ToastHost
 - `src/RnRomManager.Web/src/lib/components/modals/`: AboutModal, BaseModal, CollectionModal, CollectionPickerModal, ConfirmModal, CreateUserModal, DeleteCollectionModal, DeleteImageModal, DeleteReviewItemsModal, DismissReviewModal, EditReleaseModal, EmulatorModal, GameAdminModal, GameCollectionsModal, GlobalSearch, HotkeysModal, InfoJsonModal, IngestDeleteModal, LogoModal, MergeDuplicatesModal, PermanentDeleteModal, PullCoverImagesModal, ReleaseNoteModal, RepackWarning, RepackZipsModal, ResetPasswordModal, RestoreBackupModal, ReviewDeleteModal, RomHeaderModal, SaveFileModal, StorageMigrationModal, SuggestImagesModal, SystemEmulatorsModal, UploadImageModal, ViewImageModal, ZipCompressionModal
+- `src/RnRomManager.Web/src/lib/components/reports/`: DuplicateGroupsReport
 - `src/RnRomManager.Web/src/lib/components/review/`: ReviewAttachTab, ReviewHeader, ReviewItemInfo, ReviewManualTab, ReviewMatchedTab, ReviewSuggestionsTab
 - `src/RnRomManager.Web/src/lib/components/systems/`: SystemGames, SystemList
 - `src/RnRomManager.Web/src/lib/enums/`: AddResult, AttachFlag, BundleTicketState, CollectionsTab, DiscoveryKind, EmulatorOs, GroupSort, HotkeyId, index, JobStatus, LibrarySort, LibraryView, LogoKind, PauseReason, ReleaseKind, RememberedTab, ReviewReason, Role, RunItemState, RunStatus, SaveKind, SortDir, ThemeChoice

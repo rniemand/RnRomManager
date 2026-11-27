@@ -697,7 +697,7 @@ describe('GlobalSearch', () => {
 			collections = [{ id: 'c1', name: 'Faves', gameCount: 2, coverUrl: null, updatedAt: '' }];
 			items = [item('g1', 'Tetris')];
 			render(GlobalSearch, { open: true });
-			await typeAndWait('dup');
+			await typeAndWait('duplicates');
 
 			const texts = options().map((o) => o.textContent!.replace(/\s+/g, ' ').trim());
 			expect(texts[0]).toBe('Duplicates');
