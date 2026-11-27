@@ -25,6 +25,9 @@ public sealed class SegaPicoHandler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    /// <summary>Sega Pico P5: PicoDrive, whose files the operator supplies for 32X too.</summary>
+    public string BrowserCore => "picodrive";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => MegaDriveHeader.Read(rom, Id);

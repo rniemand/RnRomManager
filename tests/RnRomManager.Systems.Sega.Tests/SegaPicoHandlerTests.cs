@@ -21,9 +21,9 @@ public class SegaPicoHandlerTests
     }
 
     [Test]
-    public void BrowserCore_IsNull_WithEmbeddedRoms()
+    public void BrowserCore_IsPicodrive_WithEmbeddedRoms()
     {
-        Assert.That(Handler.BrowserCore, Is.Null);
+        Assert.That(Handler.BrowserCore, Is.EqualTo("picodrive"));
         Assert.That(Handler.EmbedRomsInZip, Is.True);
     }
 

@@ -822,7 +822,7 @@ describe('play page 32X (B3)', () => {
 	it.each([
 		[
 			404,
-			'32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).'
+			'32X and Pico games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).'
 		],
 		[
 			409,
