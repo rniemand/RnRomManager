@@ -331,6 +331,8 @@ public partial class LibraryEndpointsTests
     [TestCase("Packed (USA).cso")]
     [TestCase("Packed (USA).PBP")]
     [TestCase("Packed (USA).chd")]
+    [TestCase("Packed (USA).elf")]
+    [TestCase("Packed (USA).PRX")]
     public async Task PlayDisc_APspCsoPbpOrChd_StreamsUnchanged(string name)
     {
         var bytes = Umd(30);
@@ -384,6 +386,10 @@ public partial class LibraryEndpointsTests
             using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
             Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc), id.ToString());
         }
+
+        using var binResponse = await _user.GetAsync(PlayDiscUrl(bin.Id, bin.RomIds[0]));
+        Assert.That((await AuthClient.JsonAsync(binResponse)).GetProperty("title").GetString(),
+            Does.Contain("a PSP disc must be a single .iso, .cso, .pbp, .chd, .elf or .prx"));
     }
 
     [Test]
@@ -641,6 +647,8 @@ public partial class LibraryEndpointsTests
     [TestCase("psx", "Chd Solo (USA).pbp")]
     [TestCase("psx", "Chd Solo (USA).PBP")]
     [TestCase("psx", "Chd Solo (USA).cbn")]
+    [TestCase("psx", "Chd Solo (USA).exe")]
+    [TestCase("psx", "Chd Solo (USA).EXE")]
     public async Task PlayDisc_AStandaloneChd_StreamsUnchanged(string system, string name)
     {
         var (id, folder, ids) = await DiscGame(system, "Chd Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
@@ -711,6 +719,19 @@ public partial class LibraryEndpointsTests
     public async Task PlayDisc_ALoneMdf_NamesTheSingleFileShapes()
     {
         var (id, _, ids) = await SaturnGame("Lone Mdf", [PsxSolo("Lone Mdf (USA).mdf", Umd(54))], ("Lone Mdf (USA).mdf", Umd(54)));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        var problem = await AuthClient.JsonAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.InvalidPlayDisc));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso, .chd, .img, .pbp, .cbn or .nrg"));
+    }
+
+    [Test]
+    public async Task PlayDisc_ALoneSaturnExe_Is409_NamingTheSingleFileShapes()
+    {
+        var (id, _, ids) = await SaturnGame("X", [PsxSolo("X (USA).exe", Umd(55))], ("X (USA).exe", Umd(55)));
 
         using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
 

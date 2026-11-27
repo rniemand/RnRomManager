@@ -687,7 +687,7 @@ describe('play page PSP (PSP B3)', () => {
 		[
 			409,
 			{ code: 'InvalidPlayDisc' },
-			"This UMD image can't be played in the browser: it must be one non-empty .iso, .cso, .pbp or .chd whose name matches the release."
+			"This UMD image can't be played in the browser: it must be one non-empty .iso, .cso, .pbp, .chd, .elf or .prx whose name matches the release."
 		],
 		[401, undefined, 'Your session has expired. Sign in again.'],
 		[500, { code: 'IoError' }, "Couldn't load the disc (HTTP 500)."]
