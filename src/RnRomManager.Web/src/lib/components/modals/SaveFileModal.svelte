@@ -32,9 +32,21 @@
 		save: SaveItem | null;
 		/** After the change was written (the ZIP was rewritten). */
 		onsaved: () => void;
+		/** S4 (add): the release a drop chose; the Release select is then fixed. */
+		initialRomId?: number | null;
+		/** S4 (add): the dropped file, put into the file input; the name defaults to it. */
+		initialFile?: File | null;
 	}
 
-	let { open = $bindable(), mode, game, save, onsaved }: Props = $props();
+	let {
+		open = $bindable(),
+		mode,
+		game,
+		save,
+		onsaved,
+		initialRomId = null,
+		initialFile = null
+	}: Props = $props();
 
 	let busy = $state(false);
 	let error = $state<unknown>(null);
@@ -53,12 +65,22 @@
 		untrack(() => {
 			error = null;
 			submitted = false;
-			romId = game.roms[0]?.id ?? null;
+			romId = initialRomId ?? game.roms[0]?.id ?? null;
 			kind = 'state';
-			name = save?.name ?? '';
+			// S4: a dropped file names the save: its name without the last extension, cut to the limit.
+			name =
+				save?.name ??
+				(initialFile ? initialFile.name.replace(/\.[^.]*$/, '').slice(0, maxNameLength) : '');
 			description = save?.description ?? '';
-			file = null;
-			if (fileInput) fileInput.value = '';
+			file = initialFile;
+			if (fileInput) {
+				fileInput.value = '';
+				if (initialFile) {
+					const transfer = new DataTransfer();
+					transfer.items.add(initialFile);
+					fileInput.files = transfer.files;
+				}
+			}
 		});
 	});
 
@@ -132,6 +154,7 @@
 						<Select
 							id="{formId}-release"
 							bind:value={romId}
+							disabled={initialRomId !== null}
 							options={game.roms.map((rom) => ({ value: rom.id, label: rom.fileName }))}
 						/>
 					</FormField>
