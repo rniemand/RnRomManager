@@ -292,6 +292,14 @@ test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
   await page.getByLabel("Match by").selectOption("title");
   await expect(page.getByText("No duplicate games found.")).toBeVisible();
   await expectAccessible(page, "duplicates report");
+  // D1: Duplicate SHAs follows Duplicates; the fixtures may or may not share a set-file hash.
+  await page.getByRole("link", { name: "Duplicate SHAs", exact: true }).click();
+  await expect(page).toHaveURL(/\/reports\/duplicate-shas$/);
+  await expect(page.getByLabel("Match by")).toHaveCount(0);
+  await expect(
+    page.getByText("No games share a file hash.").or(page.locator("section.card").first()),
+  ).toBeVisible();
+  await expectAccessible(page, "duplicate shas report");
   // Multiple Releases: Orbit Blocks has three releases; the Switch game's base + DLC is one release (DLC B14).
   await page.getByRole("link", { name: "Multiple Releases", exact: true }).click();
   await expect(page).toHaveURL(/\/reports\/multiple-releases$/);
@@ -336,7 +344,10 @@ test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
 
   // B28/B29: the DATs page's two panels (one open at a time), and a DAT row's download.
   await page.getByRole("link", { name: "DATs", exact: true }).click();
-  await page.getByRole("button", { name: "DAT files" }).click();
+  // A1: DAT files starts open, with Refresh DATs at its top.
+  await expect(
+    page.locator("#dat-files-panel").getByRole("button", { name: /Refresh DATs/ }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "DAT files" }),
   ).toHaveAttribute("aria-expanded", "true");
@@ -1809,6 +1820,16 @@ test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/reports\/duplicates$/);
 
+  // GS1/GS2: a seeded release's SHA1 finds its game, labelled with the release's file name.
+  const orbit = (await (await page.request.get("/api/games?q=Orbit%20Blocks")).json()).items[0];
+  const rom = (await (await page.request.get(`/api/games/${orbit.id}`)).json()).roms[0];
+  await page.keyboard.press("Control+k");
+  await dialog().getByRole("combobox").fill(rom.sha1.toUpperCase());
+  await expect(dialog().getByRole("option").first()).toContainText("Orbit Blocks");
+  await expect(dialog().getByRole("option").first()).toContainText(`SHA1: ${rom.fileName}`);
+  await page.keyboard.press("Escape");
+  await expect(dialog()).toBeHidden();
+
   // Rate and favourite it from its library card; both survive a reload.
   await openLibrary();
   const card = page.getByRole("group", {
@@ -2585,7 +2606,7 @@ test("images: upload, set cover, delete", async () => {
   await expect(images.getByText("Placeholder")).toBeVisible();
 
   // IGDB suggestions S17: the e2e stack has no IGDB keys, so the dialog explains what to set.
-  await images.getByRole("button", { name: "Suggest Images" }).click();
+  await images.getByRole("button", { name: "Suggest Images (covers)" }).click();
   await expect(dialog()).toHaveAccessibleName("Suggest Images");
   await expect(
     dialog().getByText(
@@ -2597,7 +2618,7 @@ test("images: upload, set cover, delete", async () => {
   await expect(dialog()).toBeHidden();
 
   // A box art upload replaces the placeholder and takes over as cover.
-  await images.getByRole("button", { name: "Upload Image" }).click();
+  await images.getByRole("button", { name: "Upload Image (covers)" }).click();
   await expect(dialog()).toHaveAccessibleName("Upload Image");
   await expectAccessible(page, "upload image modal");
   // U6/I2: URL is the default source; a loopback URL is refused by the server; the fallback switches to the file input.
@@ -2625,7 +2646,8 @@ test("images: upload, set cover, delete", async () => {
   await expect(images.getByText("Placeholder")).toHaveCount(0);
   await expect(card("boxart-01.png")).toContainText("64×64");
 
-  await images.getByRole("button", { name: "Upload Image" }).click();
+  // IM4: the Screenshots section's Upload Image opens preset to Screenshot.
+  await images.getByRole("button", { name: "Upload Image (screenshots)" }).click();
   await dialog().getByText("File", { exact: true }).click();
   await dialog()
     .getByLabel("Upload an image")
@@ -2634,7 +2656,6 @@ test("images: upload, set cover, delete", async () => {
       mimeType: "image/png",
       buffer: png(32, [40, 40, 200]),
     });
-  await dialog().getByText("Screenshot", { exact: true }).click();
   await dialog().getByRole("button", { name: "Upload", exact: true }).click();
   await expect(dialog()).toBeHidden();
   await expect(card("snap-01.png").getByText("Screenshot")).toBeVisible();
@@ -2864,6 +2885,28 @@ test("Deleted ROMs: restore one release, delete the rest for good", async () => 
   await expectAccessible(page, "permanent delete modal");
   await dialog().getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByText("No deleted ROMs")).toBeVisible();
+});
+
+test("Duplicates: the file ingestion set aside is listed, then deleted with Delete all", async () => {
+  await page.goto("/duplicates");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Duplicates" }),
+  ).toBeVisible();
+  // DU2: the tab's badge counts the one duplicate the seeded ingest moved to _duplicates/.
+  await expect(
+    page.getByRole("link", { name: /^Duplicates/ }).locator(".badge"),
+  ).toHaveText(/^1\s*duplicates$/);
+  await expect(page.getByText(/^1 file using /)).toBeVisible();
+  await expectAccessible(page, "duplicates tab");
+
+  // DU3: Delete all always confirms.
+  await page.getByRole("button", { name: /^Delete all/ }).click();
+  await expect(dialog()).toHaveAccessibleName("Permanently delete 1 file?");
+  await dialog().getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByText("No duplicate files.")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /^Duplicates/ }).locator(".badge"),
+  ).toHaveCount(0);
 });
 
 // Nintendo DS (spec Steps 10 and 11): the runnable cartridge is imported only now, after every test that asserts
@@ -3597,6 +3640,9 @@ test("Admin and Integrity pages are accessible", { tag: "@shard-b" }, async () =
       page.getByRole("heading", { level: 1, name: heading }),
     ).toBeAttached();
     await expect(page.locator('[role="status"]')).toHaveCount(0); // finished loading
+    // IN5: the issues page-size selector (shown once there are issues) defaults to 10.
+    if (path === "/integrity" && (await page.getByText("No issues.").count()) === 0)
+      await expect(page.getByLabel("Rows per page")).toHaveValue("10");
     await expectAccessible(page, path);
   }
 });
