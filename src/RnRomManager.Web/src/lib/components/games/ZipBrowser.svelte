@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from '#lib/components/forms/Button.svelte';
+	import IconButton from '#lib/components/forms/IconButton.svelte';
 	import { untrack } from 'svelte';
 	import type { SvelteSet } from 'svelte/reactivity';
 	import { api } from '#lib/api/client.js';
@@ -23,9 +24,11 @@
 		selected: string;
 		/** The expanded folder paths. */
 		expanded: SvelteSet<string>;
+		/** ZC3: opens the info.json viewer from the root info.json's name; without it the name is plain text. */
+		oninfojson?: () => void;
 	}
 
-	let { game, active, selected = $bindable(), expanded }: Props = $props();
+	let { game, active, selected = $bindable(), expanded, oninfojson }: Props = $props();
 
 	let data = $state<ZipEntries | null>(null);
 	let error = $state<unknown>(null);
@@ -144,8 +147,11 @@
 					{/each}
 				</ol>
 			</nav>
+			<!-- ZC1: folders are in the tree and breadcrumb; the table lists only this folder's files. -->
 			{#if folder.folders.length + folder.files.length === 0}
 				<EmptyState message="This folder is empty." />
+			{:else if folder.files.length === 0}
+				<EmptyState message="No files in this folder." />
 			{:else}
 				<!-- B12: the table sits in a card (T1); cell borders tell the cells apart, the card draws the outer edge.
 				     No .table-responsive: long names truncate instead, so the table never scrolls sideways. -->
@@ -164,25 +170,20 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each folder.folders as child (child.path)}
-								<tr>
-									<td class="text-truncate name-cell" title={child.name}>
-										<Button
-											icon="folder"
-											class="btn btn-link btn-sm p-0 text-start text-decoration-none text-truncate mw-100"
-											onclick={() => select(child.path)}>{child.name}</Button
-										>
-									</td>
-									<!-- B12: a folder has no size, compressed size or date: empty cells, no dash. Compressed and Modified hide below md so a phone needs no sideways scroll. -->
-									<td></td>
-									<td class="d-none d-md-table-cell"></td>
-									<td class="d-none d-md-table-cell"></td>
-									<td></td>
-								</tr>
-							{/each}
 							{#each folder.files as file (file.entry.path)}
 								<tr>
-									<td class="text-truncate name-cell" title={file.name}>{file.name}</td>
+									<td class="text-truncate name-cell" title={file.name}>
+										{#if file.entry.path === 'info.json' && oninfojson}
+											<!-- ZC3: the root info.json opens the same viewer as Manage → View info.json. -->
+											<Button
+												variant="link"
+												size="sm"
+												class="p-0 text-start"
+												aria-label="View info.json"
+												onclick={oninfojson}>{file.name}</Button
+											>
+										{:else}{file.name}{/if}
+									</td>
 									<!-- Z2: sizes as the Library card's size badge. -->
 									<td class="text-end text-nowrap"
 										><span class="badge text-bg-light border"
@@ -198,18 +199,14 @@
 										>{formatDateTime(file.entry.modifiedUtc)}</td
 									>
 									<td class="text-end">
-										<!-- An API download, not an app route. -->
-										<!-- eslint-disable svelte/no-navigation-without-resolve -->
-										<Button
-											variant="primary"
-											outline
-											size="sm"
+										<IconButton
 											icon="download"
+											tone="primary"
+											label="Download {file.name}"
+											tooltip="Download"
 											href={downloadUrl(file.entry.path)}
 											download
-											aria-label="Download {file.name}"
 										/>
-										<!-- eslint-enable svelte/no-navigation-without-resolve -->
 									</td>
 								</tr>
 							{/each}

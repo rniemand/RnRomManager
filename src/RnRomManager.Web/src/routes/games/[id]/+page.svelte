@@ -451,7 +451,13 @@
 
 	<div id="zip-panel" role="tabpanel" aria-labelledby="zip-tab" hidden={tab !== 'zip'}>
 		<h2 class="h5 visually-hidden">Zip Contents</h2>
-		<ZipBrowser {game} active={tab === 'zip'} bind:selected={zipSelected} expanded={zipExpanded} />
+		<ZipBrowser
+			{game}
+			active={tab === 'zip'}
+			bind:selected={zipSelected}
+			expanded={zipExpanded}
+			oninfojson={() => (infoJsonOpen = true)}
+		/>
 	</div>
 
 	<RomHeaderModal bind:open={headerOpen} rom={headerRom} />

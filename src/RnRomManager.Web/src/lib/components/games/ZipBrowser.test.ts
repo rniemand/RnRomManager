@@ -74,15 +74,12 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		await vi.waitFor(() => expect(expanded.has('roms')).toBe(true));
 	});
 
-	it('selecting from the tree, the breadcrumb or the table never changes expansion', async () => {
+	it('selecting from the tree or the breadcrumb never changes expansion', async () => {
 		const { expanded } = await setup();
 		await fireEvent.click(tree().getByRole('button', { name: 'Collapse roms' }));
 		const before = [...expanded].sort();
 
 		await fireEvent.click(tree().getByRole('button', { name: 'roms' }));
-		expect([...expanded].sort()).toEqual(before);
-		const table = screen.getByRole('table', { name: 'Contents of roms' });
-		await fireEvent.click(within(table).getByRole('button', { name: 'a' }));
 		expect([...expanded].sort()).toEqual(before);
 		const crumbs = within(screen.getByRole('navigation', { name: 'Folder path' }));
 		await fireEvent.click(crumbs.getByRole('button', { name: 'roms' }));
@@ -107,7 +104,7 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		expect(root.classList.contains('bg-primary-subtle')).toBe(false);
 	});
 
-	it('table in a card: size badges, empty folder cells, truncated names with a title, download button (B12)', async () => {
+	it('table in a card: size badges, truncated names with a title, download button (B12)', async () => {
 		await setup();
 		await fireEvent.click(tree().getByRole('button', { name: 'roms' }));
 
@@ -118,13 +115,10 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		// No .table-responsive: names truncate, so the table never scrolls sideways.
 		expect(table.closest('.table-responsive')).toBeNull();
 		expect(table.parentElement!.className).toBe('card mb-2 overflow-hidden');
-		const [folderRow, fileRow] = within(table).getAllByRole('row').slice(1);
-		const folderCells = [...folderRow.querySelectorAll('td')];
-		expect(folderCells.map((td) => td.textContent!.trim())).toEqual(['a', '', '', '', '']);
-		expect(folderRow.querySelector('[colspan]')).toBeNull();
-		expect(folderCells[0].className).toContain('text-truncate');
-		expect(folderCells[0].title).toBe('a');
-
+		// ZC1: no folder rows; sub-folder a is in the tree.
+		const rows = within(table).getAllByRole('row').slice(1);
+		expect(rows).toHaveLength(1);
+		const fileRow = rows[0];
 		const cells = [...fileRow.querySelectorAll('td')];
 		expect(cells[0].className).toContain('text-truncate');
 		expect(cells[0].className).not.toContain('text-break');
@@ -133,13 +127,12 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		// Compressed and Modified hide on a phone.
 		expect(cells[2].className).toBe('text-end text-nowrap d-none d-md-table-cell');
 		expect(cells[3].className).toContain('d-none d-md-table-cell');
-		expect(folderCells[2].className).toBe('d-none d-md-table-cell');
 		for (const cell of [cells[1], cells[2]]) {
 			expect(cell.querySelector('.badge')!.className).toBe('badge text-bg-light border');
 		}
 		expect(cells[1].textContent!.trim()).toBe('2.0 KiB');
 		const download = within(fileRow).getByRole('link', { name: 'Download b.gb' });
-		expect(download.className).toBe('btn btn-sm btn-outline-primary');
+		expect(download.className).toBe('btn btn-sm btn-link text-primary-emphasis p-0');
 		expect(download.closest('td')!.className).toBe('text-end');
 	});
 
@@ -148,5 +141,31 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		const table = screen.getByRole('table');
 		expect(table.closest('.col-md-9')).not.toBeNull();
 		expect(tree().getByRole('button', { name: 'roms' }).closest('.col-md-3')).not.toBeNull();
+	});
+	it('a folder with sub-folders but no files says so; a folder with neither is empty (ZC1)', async () => {
+		vi.stubGlobal('fetch', () =>
+			Promise.resolve(new Response(JSON.stringify(listing(['roms/a/deep.gb'])), { status: 200 }))
+		);
+		await setup();
+		expect(screen.getByText('No files in this folder.')).toBeTruthy();
+		expect(screen.queryByRole('table')).toBeNull();
+	});
+
+	it('the root info.json name calls oninfojson; without it, plain text (ZC3)', async () => {
+		const oninfojson = vi.fn();
+		const view = render(ZipBrowser, {
+			game: game(),
+			active: true,
+			selected: '',
+			expanded: new SvelteSet<string>(),
+			oninfojson
+		});
+		await fireEvent.click(await screen.findByRole('button', { name: 'View info.json' }));
+		expect(oninfojson).toHaveBeenCalledOnce();
+		view.unmount();
+
+		await setup();
+		expect(screen.queryByRole('button', { name: 'View info.json' })).toBeNull();
+		expect(screen.getByText('info.json').tagName).toBe('TD');
 	});
 });

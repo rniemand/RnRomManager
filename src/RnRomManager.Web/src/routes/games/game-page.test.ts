@@ -1193,7 +1193,7 @@ describe('game detail page', () => {
 		expect(tree().queryByRole('button', { name: 'a' })).toBeNull();
 	});
 
-	it('the table lists sub-folders then files with sizes and download links; breadcrumb and footer (Z4)', async () => {
+	it("the table lists the folder's files with sizes and download links; breadcrumb and footer (Z4, ZC1)", async () => {
 		navigateTo('/games/g1?tab=zip');
 		zipAnswers.push({
 			status: 200,
@@ -1205,20 +1205,12 @@ describe('game detail page', () => {
 
 		const table = screen.getByRole('table', { name: 'Contents of roms' });
 		const rows = within(table).getAllByRole('row').slice(1);
+		// ZC1: only this folder's files; sub-folders are in the tree and breadcrumb.
 		expect(rows.map((r) => r.querySelector('td')!.textContent!.trim())).toEqual([
-			'a b',
 			'Tetris (World).gb'
 		]);
-		// B12: a folder row leaves its other cells empty; sizes are badges.
-		expect([...rows[0].querySelectorAll('td')].map((td) => td.textContent!.trim())).toEqual([
-			'a b',
-			'',
-			'',
-			'',
-			''
-		]);
-		expect(rows[1].querySelectorAll('.badge.text-bg-light.border .file-size')).toHaveLength(2);
-		expect([...rows[1].querySelectorAll('.file-size')].map((s) => s.textContent)).toEqual([
+		expect(rows[0].querySelectorAll('.badge.text-bg-light.border .file-size')).toHaveLength(2);
+		expect([...rows[0].querySelectorAll('.file-size')].map((s) => s.textContent)).toEqual([
 			'2.0 KiB',
 			'1.0 KiB'
 		]);
@@ -1229,7 +1221,7 @@ describe('game detail page', () => {
 		expect(link.hasAttribute('download')).toBe(true);
 		expect(screen.getByText(/^3 files · 6\.0 KiB \(3\.0 KiB compressed\)$/)).toBeTruthy();
 
-		await fireEvent.click(within(rows[0]).getByRole('button', { name: 'a b' }));
+		await fireEvent.click((await folders()).getByRole('button', { name: 'a b' }));
 		expect(selectedFolder()).toBe('a b');
 		const crumbs = within(screen.getByRole('navigation', { name: 'Folder path' }));
 		expect(crumbs.getAllByRole('button').map((b) => b.textContent)).toEqual([
@@ -1239,6 +1231,32 @@ describe('game detail page', () => {
 		]);
 		await fireEvent.click(crumbs.getByRole('button', { name: 'Tetris.zip' }));
 		expect(selectedFolder()).toBe('Tetris.zip');
+	});
+
+	it('the root info.json opens the info.json viewer; a nested one is plain text (ZC3)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		zipAnswers.push({ status: 200, body: listing(['info.json', 'roms/info.json']) });
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const table = await screen.findByRole('table', { name: 'Contents of Tetris.zip' });
+		const view = within(table).getByRole('button', { name: 'View info.json' });
+		expect(view.className).toBe('btn btn-sm btn-link p-0 text-start');
+		// Opening the InfoJsonModal fetches the ZIP's info.json.
+		const pageFetch = globalThis.fetch;
+		const seen: string[] = [];
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			if (!url.endsWith('/info-json')) return pageFetch(url, init);
+			seen.push(url);
+			return Promise.resolve(new Response('{}', { status: 200 }));
+		});
+		await fireEvent.click(view);
+		await vi.waitFor(() => expect(seen).toEqual(['/api/games/g1/info-json']));
+
+		await fireEvent.click((await folders()).getByRole('button', { name: 'roms' }));
+		const nested = screen.getByRole('table', { name: 'Contents of roms' });
+		expect(within(nested).queryByRole('button', { name: 'View info.json' })).toBeNull();
+		expect(within(nested).getByText('info.json').tagName).toBe('TD');
 	});
 
 	it('an empty folder says so; a single file is "1 file" (Z4)', async () => {
