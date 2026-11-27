@@ -13,7 +13,8 @@ export interface CurrentJob {
 		| 'ZipRepack'
 		| 'SaveFolders'
 		| 'PullCovers'
-		| 'IgdbSync';
+		| 'IgdbSync'
+		| 'Sg1000Move';
 	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;
