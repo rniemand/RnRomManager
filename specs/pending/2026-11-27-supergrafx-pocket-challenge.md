@@ -1,0 +1,155 @@
+---
+title: PC Engine SuperGrafx and Pocket Challenge V2
+status: ready # draft | ready | in-progress | completed
+created: 2026-11-27
+---
+
+# PC Engine SuperGrafx and Pocket Challenge V2
+
+## Summary
+Two new cartridge systems that run on cores the image already ships, for the Admin who ingests ROMs and everyone who browses and plays the library: NEC PC Engine SuperGrafx (`sgx`, `.sgx`, Beetle PCE `mednafen_pce`) in `RnRomManager.Systems.Nec`, and Benesse Pocket Challenge V2 (`pc2`, `.pc2`, Beetle WonderSwan `mednafen_wswan`) in `RnRomManager.Systems.WonderSwan`. Each is its own family with its own libretro No-Intro DAT. Both cores already list these extensions (`BrowserCoreExtensionsTests` records them as `NewSystem`), so this closes the last two "a vendored core opens it but no system ingests it" gaps that need no new core. No new project, no vendoring, no BIOS.
+
+## Out of scope
+- SuperGrafx games dumped as `.pce`. They stay TurboGrafx-16 files: a `.pce` never matches the SuperGrafx DAT (another family), so it goes to Review under `tg16`. Beetle PCE still switches to SuperGrafx mode for the six titles in its CRC table (`sgx_table` in `mednafen/pce/pce.cpp`), so those play anyway.
+- Pocket Challenge V2 controls: EmulatorJS's `ws` control group is used as is (the PC2's own button labels aren't mapped).
+- System icons (`icons.ts`): both use the controller fallback, as `tg16`, `ws` and `wsc` do.
+- Seed games and e2e cases. Browser play through `mednafen_pce` and `mednafen_wswan` is already covered end to end by the TurboGrafx-16 and WonderSwan Color e2e cases, and adding seed games would move every seed and e2e count.
+- An automatic DAT refresh after upgrading (documented manual step, as for every new system).
+
+## Behaviour
+- **G1 SuperGrafx contract.** `SuperGrafxHandler` (new, `sealed`, `src/RnRomManager.Systems.Nec/SuperGrafxHandler.cs`, implements `ISystemHandler` directly, laid out like `TurboGrafx16Handler`):
+
+  | Member | Value |
+  |---|---|
+  | `Id` | `sgx` |
+  | `DisplayName` | `PC Engine SuperGrafx` |
+  | `ShortName` | `SGX` |
+  | `Family` | `sgx` (own family, as `tg16`, `tgcd` and `pcfx` are) |
+  | `RomExtensions` | `[".sgx"]` |
+  | `MinRomSizeBytes` | `524288` (the DAT's smallest entry) |
+  | `MaxRomSizeBytes` | `1048576 + 512` (the DAT's largest entry plus a copier header, checked before the strip, as `TurboGrafx16Handler` does) |
+  | `DatName` | `NEC - PC Engine SuperGrafx` |
+  | `EmbedRomsInZip` | `true` |
+  | `BrowserCore` | `mednafen_pce` |
+  | `DefaultBoxArtPng` | `BoxArt.Lazy(typeof(SuperGrafxHandler), "boxart.sgx.png")` |
+  | `ReadHeader` | always `null` (HuCards have no header; an unmatched file goes to Review) |
+  | `NormalizeForHashing` | `TurboGrafx16Handler.StripCopierHeader(rom)` (G2) |
+
+  Every other member keeps its default (`DatSource.Libretro`, `DatFolder` = `DatKind.NoIntro`, `MetadatKinds` = all four, `KeepsSourceExtension` false).
+  Facts (libretro-database `master`, `metadat/no-intro`, DAT version `2026.11.14`, checked 2026-11-27): 5 games, all `.sgx`, 524,288–1,048,576 bytes; `releaseyear`, `developer`, `publisher` and `genre` metadat all exist; thumbnails repository `libretro-thumbnails/NEC_-_PC_Engine_SuperGrafx` exists.
+- **G2 Copier header.** `TurboGrafx16Handler` gains `internal static ReadOnlyMemory<byte> StripCopierHeader(ReadOnlyMemory<byte> rom)` holding today's body of its `NormalizeForHashing` (`rom.Length % 8192 == CopierHeaderBytes ? rom[CopierHeaderBytes..] : rom`); its own `NormalizeForHashing` calls it, unchanged in behaviour. `SuperGrafxHandler` calls the same method (same project, so `internal` is enough). SuperGrafx dumps are multiples of 8 KiB like HuCards.
+- **G3 SuperGrafx play.** Beetle PCE (`EmulatorJS/beetle-pce-libretro` `e1ac90d`, the vendored build) picks SuperGrafx mode in `PCE_Load` (`mednafen/pce/pce.cpp`) when the content extension is exactly `sgx` (`strcmp`, case-sensitive) or the CRC is one of six known titles. The play page names the ROM `File` after the release (`play.js`), so a release named `… .sgx` reaches the core with that extension. No change to `params.js` (`mednafen_pce` is already allowed), `play.js` or `emulator.ts`: an embedded release never carries `disc`, so the play page takes the HuCard path (ROM from `GET /api/games/{id}/roms/{romId}/download`, no BIOS request).
+- **P1 Pocket Challenge V2 contract.** `PocketChallengeV2Handler` (new, `sealed`, `src/RnRomManager.Systems.WonderSwan/PocketChallengeV2Handler.cs`, implements `ISystemHandler` directly; not a `WonderSwanHandlerBase` subclass, since that base fixes `Family` to `wonderswan`):
+
+  | Member | Value |
+  |---|---|
+  | `Id` | `pc2` (`public const string PocketChallengeV2Id = "pc2"` on `WonderSwanFooterReader`, beside `WonderSwanId`) |
+  | `DisplayName` | `Pocket Challenge V2` |
+  | `ShortName` | `PC2` |
+  | `Family` | `pc2` (own family) |
+  | `RomExtensions` | `[".pc2"]` |
+  | `MinRomSizeBytes` | `WonderSwanFooterReader.FooterSize` (16) |
+  | `MaxRomSizeBytes` | `16L * 1024 * 1024` (the DAT's largest entry) |
+  | `DatName` | `Benesse - Pocket Challenge V2` |
+  | `MetadatKinds` | `[]` (libretro has no metadat for it) |
+  | `EmbedRomsInZip` | `true` |
+  | `BrowserCore` | `mednafen_wswan` |
+  | `DefaultBoxArtPng` | `BoxArt.Lazy(typeof(PocketChallengeV2Handler), "boxart.pc2.png")` |
+  | `ReadHeader` | `WonderSwanFooterReader.Read(rom) is { } header ? header with { ClassifiedSystemId = Id } : null` (P2) |
+
+  Facts (libretro-database `master`, `metadat/no-intro`, DAT version `2026.10.07`, checked 2026-11-27): 75 games, all `.pc2`, 2,097,152–16,777,216 bytes; no `releaseyear`, `developer`, `publisher` or `genre` metadat; no `libretro-thumbnails/Benesse_-_Pocket_Challenge_V2` repository (thumbnail lookups simply miss, as for other systems without one).
+- **P2 PC2 footer.** PC2 carts boot on the same NEC V30MZ reset vector, so the WonderSwan footer applies: plausible when the footer's first byte is `0xEA` (`JMP FAR`); `Title` null; `Fields` are W2's ten (`publisherId`, `colour`, `gameId`, `version`, `romSize`, `saveType`, `vertical`, `mapper`, `checksum`, `checksumValid`), unchanged. `ClassifiedSystemId` is always `pc2`, whatever the colour byte, so an unmatched `.pc2` is never renamed to `.ws`/`.wsc`. `WonderSwanFooterReader` itself is unchanged.
+- **P3 PC2 play.** Beetle WonderSwan (`EmulatorJS/beetle-wswan-libretro` `fbc945d`) lists `pc2` and loads it as a WonderSwan cart (its `Load` in `libretro.c` has no PC2 branch). No change to `params.js`, `play.js` or `emulator.ts`; play follows the embedded-release rules (ROM from `/download`, no BIOS, generic `srm` saves).
+- **R1 Ingestion.** The existing pipeline, per family:
+  - A `.sgx` in `ingest/sgx/` matching the SuperGrafx DAT (after the copier-header strip) is stored under `sgx` with the DAT's name; unmatched → Review (`NoDatMatch`) under `sgx`, no rename. Under 524,288 bytes → `TooSmall`; over 1,049,088 → `TooLarge`.
+  - A `.pc2` in `ingest/pc2/` matching the PC2 DAT is stored under `pc2`; unmatched with a plausible footer → Review (`NoDatMatch`) under `pc2`, file name unchanged (a colour footer too); unmatched with an implausible footer → `InvalidHeader`. Under 16 bytes → `TooSmall`; over 16 MiB → `TooLarge`.
+  - Another family's extension is `UnsupportedType`: a `.sgx` in `ingest/tg16/`, a `.pce` in `ingest/sgx/`, a `.pc2` in `ingest/ws/` (as today), a `.ws` in `ingest/pc2/`.
+  - `.pc2` releases have the Header button with P2's fields; `.sgx` releases have none (null header, as `tg16`).
+- **R2 Registration.** In `AppHost.AddSystemHandlers`, after `services.AddSystemHandler<WonderSwanColorHandler>();` (today's last line): `services.AddSystemHandler<SuperGrafxHandler>();` then `services.AddSystemHandler<PocketChallengeV2Handler>();`. No new `using` (both namespaces are already imported). Registry order ends `…, "pcfx", "ws", "wsc", "sgx", "pc2"`. `/api/systems` (`DisplayName`, `OrdinalIgnoreCase`): `sgx` between `switch` (`Nintendo Switch`) and `pcfx` (`PC-FX`; a space sorts before `-`), `pc2` between `psp` (`PlayStation Portable`) and `satellaview`. `/api/admin/dats` (`DatName`, `Ordinal`): `Benesse - Pocket Challenge V2` between `Bandai - WonderSwan Color` and `Coleco - ColecoVision`; `NEC - PC Engine SuperGrafx` between `NEC - PC Engine CD - TurboGrafx-CD` and `NEC - PC-FX`. A DAT refresh fetches 6 more files (5 for SuperGrafx, 1 for PC2). `ingest/sgx/` and `ingest/pc2/` are created at startup like every system's. Ingestion refuses with `DatsMissing` until **Admin → DATs → Refresh DATs**.
+- **R3 Colours and box art.** `src/RnRomManager.Web/src/app.css`, each block laid out like its neighbours (comment, `:root` rule, `.text-bg-<id>` rule), same in both themes:
+  - Directly after the PC-FX block: `/* PC Engine SuperGrafx system colour: violet, same in both themes; white on it is AA (~5.0:1). */` `--bs-sgx: #b000f8;` and `.text-bg-sgx { color: #fff !important; background-color: var(--bs-sgx) !important; }`
+  - Directly after the WonderSwan Color block: `/* Pocket Challenge V2 system colour: lavender, same in both themes; black on it is AA (~12.6:1). */` `--bs-pc2: #d0bfff;` and `.text-bg-pc2 { color: #000 !important; background-color: var(--bs-pc2) !important; }`
+  - `src/lib/types/SystemColour.ts`: the union gains `| 'sgx'` after `| 'pcfx'` and `| 'pc2'` after `| 'wsc'`. `src/lib/systemColours.ts`: `sgx: { name: 'sgx', foreground: '#fff' },` after its `pcfx` entry, `pc2: { name: 'pc2', foreground: '#000' },` after its `wsc` entry.
+  - Box art: `sgx.svg` + 512×512 `sgx.png` in `src/RnRomManager.Systems.Nec/Resources/boxart/`, `pc2.svg` + 512×512 `pc2.png` in `src/RnRomManager.Systems.WonderSwan/Resources/boxart/` (drawn for this project, MIT, visibly different from `tg16`/`ws`/`wsc`). Both folders' `README.md` name the new files (Nec: "`tg16.svg`, `tgcd.svg`, `pcfx.svg` and `sgx.svg` are the sources… The embedded `tg16.png`, `tgcd.png`, `pcfx.png` and `sgx.png`…"; WonderSwan: "`ws.svg`, `wsc.svg` and `pc2.svg` are the sources…", plus a third export line in its code block, `msedge --headless=new --hide-scrollbars --force-device-scale-factor=1 --window-size=512,512 --screenshot=pc2.png file:///<full path>/pc2.svg`; the Nec README's single example line stays). The csproj `EmbeddedResource Include="Resources/boxart/*.png"` globs already embed them.
+- **R4 Catalogs.**
+  - `IgdbPlatforms.ById`: `["sgx"] = 128` between `["segacd"]` and `["sms"]` (IGDB "PC Engine SuperGrafx"); `["pc2"] = 57` between `["ngpc"]` and `["pcfx"]` with the comment `// Pocket Challenge V2: IGDB has no platform of its own; searches as WonderSwan`. Re-check 128 on igdb.com when implementing and fix it here if it differs. `IgdbPlatformsTests.PlatformIds_AreDistinctAndPositive` asserts `IgdbPlatforms.ById["pc2"]` equals `IgdbPlatforms.ById["ws"]` and excludes `"pc2"` from its uniqueness check, as it does `fbneo` and `c128`.
+  - `src/RnRomManager.Web/src/lib/systemEmulators.json`: key `sgx` between `segacd` and `sms` (the file's alphabetical slot), with `tg16`'s three entries (Mednafen, ares, RetroArch) and RetroArch's `note` set to `"RetroArch core: Beetle SuperGrafx"`; key `pc2` between `ngpc` and `pcfx`, with ares (`https://ares-emu.net/`, `["windows", "macos"]`) and RetroArch (`https://www.retroarch.com/?page=platforms`, the five OSes, `"note": "RetroArch core: Beetle WonderSwan"`).
+- **R5 README.** Two supported-systems rows in the generated order (`SupportedSystemsTableTests`): `| PC Engine SuperGrafx | \`sgx\` | In ZIP | \`.sgx\` | No-Intro | \`mednafen_pce\` |` between the `Nintendo Switch` and `PC-FX` rows, and `| Pocket Challenge V2 | \`pc2\` | In ZIP | \`.pc2\` | No-Intro | \`mednafen_wswan\` |` between the `PlayStation Portable` and `Satellaview` rows. Line 15's Play list gains `PC Engine SuperGrafx` after `PC-FX` and `Pocket Challenge V2` after `WonderSwan Color`; line 140's upgrade question ends `…, Arcade (FinalBurn Neo), WonderSwan, WonderSwan Color, PC Engine SuperGrafx or Pocket Challenge V2?` (was `…, WonderSwan or WonderSwan Color?`). Line 176's Beetle WonderSwan sub-bullet `(WonderSwan and WonderSwan Color)` → `(WonderSwan, WonderSwan Color and Pocket Challenge V2)`; line 173's Beetle PCE sub-bullet `(TurboGrafx-16 / PC Engine and TurboGrafx-CD / PC Engine CD)` → `(TurboGrafx-16 / PC Engine, PC Engine SuperGrafx and TurboGrafx-CD / PC Engine CD)`.
+- **R6 Core extension guard.** `BrowserCoreExtensionsTests.NotIngested` drops `".sgx"` from `(NewSystem, ["mednafen_pce"], [".sgx"])` and `".pc2"` from `(NewSystem, ["mednafen_wswan"], [".pc2"])`; both rows hold only that extension, so both rows go. `NewSystem` stays (PicoDrive and PUAE rows use it). `CoreExtensions` and `Exceptions` are unchanged (both cores already list the extensions).
+
+## Changes
+| Area | File(s) | Change |
+|---|---|---|
+| Systems | `src/RnRomManager.Systems.Nec/SuperGrafxHandler.cs` (new), `TurboGrafx16Handler.cs`, `Resources/boxart/{sgx.svg,sgx.png,README.md}` | G1, G2, R3 |
+| Systems | `src/RnRomManager.Systems.WonderSwan/PocketChallengeV2Handler.cs` (new), `WonderSwanFooterReader.cs` (`PocketChallengeV2Id` const only), `Resources/boxart/{pc2.svg,pc2.png,README.md}` | P1, P2, R3 |
+| Api | `src/RnRomManager.Api/AppHost.cs` | R2 |
+| Core | `src/RnRomManager.Core/Media/IgdbPlatforms.cs` | R4 |
+| Web | `src/app.css`, `src/lib/types/SystemColour.ts`, `src/lib/systemColours.ts`, `src/lib/systemEmulators.json` | R3, R4 |
+| Test data | `tests/RnRomManager.TestData/IngestSeeder.cs` | `SuperGrafxDat`/`PocketChallengeV2Dat` consts, `EmptyDats`, `ingest/sgx/`, `ingest/pc2/`, the `FixtureDatWriter.Write` dictionary |
+| Tests (new) | `tests/RnRomManager.Systems.Nec.Tests/SuperGrafxHandlerTests.cs`, `tests/RnRomManager.Systems.WonderSwan.Tests/PocketChallengeV2HandlerTests.cs` | G1, G2, P1, P2 |
+| Tests (existing) | every file listing `IngestSeeder.WonderSwanColorDat` (§ Steps 2), `DatEndpointsTests`, `IngestSeederTests`, `SystemStartupTests`, `IngestEndpointsTests`, `LibraryEndpointsTests`, `IngestPipelineTests`, `BrowserCoreExtensionsTests`, `IgdbPlatformsTests`, `SupportedSystemsTableTests` (via README), `SystemEmulatorsCatalogTests`, `TurboGrafx16HandlerTests` (unchanged, guards G2), `systemColours.test.ts` | |
+| Docs | `README.md`, `docs/features.md`, `docs/zip-format.md`, `docs/deployment.md`, `docs/development.md`, `docs/adding-a-system.md` | R5, last step |
+
+No migrations (`system_id` is a `VARCHAR`), config keys, endpoints or vendored files. API: `GET /api/systems` and `GET /api/admin/dats` gain two rows each (additive). Existing data is untouched; existing `ws`/`wsc`/`tg16` behaviour is unchanged.
+
+## Risks
+- **Two new systems break every full-registry DAT manifest** (`DatsMissing`) and the system count/order assertions: all fixed in step 2's single commit.
+- **SuperGrafx detection is case-sensitive in the core.** `strcmp(ext, "sgx")`: a release named `… .SGX` would boot in PC Engine mode unless its CRC is in the core's table. DAT-matched releases take the DAT's lower-case name, and Review's Manual entry uses `RomExtensions[0]` (`.sgx`), so only an Admin's own upper-case rename could hit this. Accepted; not handled.
+- **Pocket Challenge V2 play is unverified with a real dump.** The core has no PC2-specific code and the PC2's buttons map onto WonderSwan controls; a game that needs a PC2-only button may be unplayable. The Play button still shows (the core lists `pc2`). Note it in `docs/features.md` (step 4).
+- **The PC2 footer check is an assumption.** It holds if every PC2 cart starts its footer with `JMP FAR`, as every V30MZ cart must to boot; a DAT-matched file never reaches the check, so only unmatched files are affected.
+- **IGDB id 128** is from memory (igdb.com refused the check from this machine); step 2 re-checks it.
+
+## Steps
+Steps 2 and 3 run integration tests (category `Integration`), which need Docker.
+
+- [ ] **1. Handlers and box art** (G1, G2, P1, P2, R3 box art): `SuperGrafxHandler`, `TurboGrafx16Handler.StripCopierHeader`, `PocketChallengeV2Handler`, `WonderSwanFooterReader.PocketChallengeV2Id`, the two SVG/PNG pairs and README edits. Not registered yet.
+  - Files: § Changes "Systems" rows, `tests/RnRomManager.Systems.Nec.Tests/SuperGrafxHandlerTests.cs` (new), `tests/RnRomManager.Systems.WonderSwan.Tests/PocketChallengeV2HandlerTests.cs` (new).
+  - Tests: `SuperGrafxHandlerTests` (new, as `TurboGrafx16HandlerTests`): `SuperGrafx_Contract` (every G1 value: `Id`, `DisplayName`, `ShortName`, `Family`, `DatName`, `RomExtensions`, `(524288L, 1049088L)`, `BrowserCore` `mednafen_pce`, `EmbedRomsInZip` true, `MetadatKinds` = `DatKind.Metadat`); `ReadHeader_IsAlwaysNull` for sizes 0, 524288, 524800; `NormalizeForHashing_StripsA512ByteCopierHeader` (524288 + 512 bytes → the last 524288); `NormalizeForHashing_LeavesAnUnheaderedDumpUnchanged` (524288 bytes); `DefaultBoxArt_IsA512x512Png_DifferentFromTheTurboGrafx16One`. `PocketChallengeV2HandlerTests` (new, as `WonderSwanHandlerTests`): `PocketChallengeV2_Contract` (every P1 value; `MetadatKinds` empty; `(16L, 16L * 1024 * 1024)`; `BrowserCore` `mednafen_wswan`; `Family` `pc2`, not `WonderSwanHandlerBase.FamilyId`); `ReadHeader_ClassifiesAsPc2_WhateverTheColourByte` (`SyntheticWsRomBuilder { Colour = true }` and `{ }` both → `ClassifiedSystemId` `pc2`, plausible, the ten W2 field keys in order); `ReadHeader_WithoutTheJump_IsImplausible` (`Opcode = 0x00`); `ReadHeader_UnderTheFooterSize_IsNull` (`HandlerAsserts.AssertNoHeader(handler, new byte[15])`); `DefaultBoxArt_IsA512x512Png_DifferentFromTheWonderSwanOnes`. `TurboGrafx16HandlerTests` unchanged and passing.
+  - Done when: `dotnet test tests/RnRomManager.Systems.Nec.Tests` and `dotnet test tests/RnRomManager.Systems.WonderSwan.Tests` pass and `dotnet build` passes with warnings as errors.
+- [ ] **2. Registration, catalogs, colours and existing tests** (R2, R3 colours, R4, R5 rows, R6):
+  - `AppHost.cs` (two lines after `WonderSwanColorHandler`), `IgdbPlatforms.cs`, `systemEmulators.json`, `app.css`, `SystemColour.ts`, `systemColours.ts`, README rows (R5's two rows only), `BrowserCoreExtensionsTests` (R6).
+  - `IngestSeeder`: `public const string SuperGrafxDat = "NEC - PC Engine SuperGrafx";` and `public const string PocketChallengeV2Dat = "Benesse - Pocket Challenge V2";` after `WonderSwanColorDat`; both appended after `WonderSwanColorDat` in `EmptyDats`; `Directory.CreateDirectory(Path.Combine(ingest, "sgx"));` and `(…, "pc2")` after the `wsc` line; `[SuperGrafxDat] = [], [PocketChallengeV2Dat] = []` at the end of the `FixtureDatWriter.Write` dictionary. `RedumpLayouts` unchanged (PC2 is written with the default No-Intro layout, extra metadat files and all, as Commodore 64 is; the app reads only the main DAT).
+  - Every test file listing `IngestSeeder.WonderSwanColorDat` (today `AuditLibraryEditTests`, `DatEndpointsTests`, `GamePlayedEndpointTests`, `ImageEndpointsTests`, `ImageUrlEndpointsTests`, `IngestArchiveTests`, `IngestDeleteEndpointsTests`, `IngestEndpointsTests`, `IngestPipelineTests`, `IngestRestoreEndpointsTests`, `IngestReviewTests`, `LibraryEditTests`, `LibraryEndpointsTests`, `LibraryMoveMergeTests`, `MediaRetryEndpointsTests`, `NoteEndpointsTests`, `ReportEndpointsTests`, `ReviewEndpointsTests`, `ZipEntryEndpointsTests`) adds `[IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = []` right after its `WonderSwanColorDat` entry (step 3 fills `IngestPipelineTests`' entries). Before committing, check every manifest listing `WonderSwanColorDat` also lists `PocketChallengeV2Dat`.
+  - Counts and orders: `DatEndpointsTests` names 46 → 48 (message "34 libretro systems, the 10 disc systems, Switch, the test titledb system, MAME and FBNeo"); its ordinal admin-rows list gains `IngestSeeder.PocketChallengeV2Dat` between `IngestSeeder.WonderSwanColorDat` and `IngestSeeder.ColecoVisionDat`, and `IngestSeeder.SuperGrafxDat` between `IngestSeeder.TurboGrafxCdDat` and `IngestSeeder.PcfxDat`; refresh requests 152 → 158 (message: "…, 1 for Commodore 64, Commodore PET, Commodore Plus/4, Commodore VIC-20, Commodore Amiga, Pocket Challenge V2 and each disc system (no metadat), …"). `IngestSeederTests` `*.dat` count (line 70) 162 → 172. `SystemStartupTests` both id arrays end `"ws", "wsc", "sgx", "pc2"`; `IngestEndpointsTests.Pending_ListsEverySystem_IgnoringJunk` likewise. `LibraryEndpointsTests.Systems_ListsEveryRegisteredSystem_WithCountsAndSortedRegions`: the id array gains `"sgx"` between `"switch"` and `"pcfx"` and `"pc2"` between `"psp"` and `"satellaview"`; `Has.Exactly(31).True` → `33`; after the `wsc` displayName/shortName assert, in its form: `Find("sgx")` → `("PC Engine SuperGrafx", "SGX")`, `Find("pc2")` → `("Pocket Challenge V2", "PC2")`. `LibraryEndpointsTests`: `[TestCase("sgx", false, true, "mednafen_pce")]` and `[TestCase("pc2", false, true, "mednafen_wswan")]` after `Games_QuickPlay_IsThePrimaryReleaseWhenPlayable`'s `wsc` case; `[TestCase("sgx", "mednafen_pce")]` and `[TestCase("pc2", "mednafen_wswan")]` after `GameDetail_BrowserCore_IsTheSystemHandlers`'s `wsc` case. `IgdbPlatformsTests` (R4). `systemColours.test.ts`: new `it('gives PC Engine SuperGrafx violet with white text and Pocket Challenge V2 lavender with black text', …)` after the WonderSwan case: `systemColour('sgx')` → `{ name: 'sgx', foreground: '#fff' }`, `systemColour('pc2')` → `{ name: 'pc2', foreground: '#000' }`.
+  - Tests: the files above plus `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`, `SystemEmulatorsCatalogTests`, `SeedIngestTests` (counts unchanged); web `npm run lint`, `npm run check`, `npx vitest run src/lib/systemColours.test.ts`.
+  - Done when: those pass (Docker running).
+- [ ] **3. Ingest behaviour** (R1): `IngestPipelineTests`. Static fields beside `SwanLagoon`: `Sgx = Atari(524288, 190)` and `Challenge = new SyntheticWsRomBuilder { Seed = 1967 }.Build()`. The class manifest's step-2 entries become `[IngestSeeder.SuperGrafxDat] = [new FixtureGame("Twin Vdp (Japan)", "Twin Vdp (Japan).sgx", Sgx)]` and `[IngestSeeder.PocketChallengeV2Dat] = [new FixtureGame("Quiz Ladder (Japan)", "Quiz Ladder (Japan).pc2", Challenge)]`. Cases, after `Ws_OverSixteenMiB_IsTooLarge`:
+  - `SuperGrafx_DatMatch_IsStoredAsSgx`: `Sgx` as `ingest/sgx/twin.sgx` → `(Ingested, "sgx")`, `sgx/T/Twin Vdp.zip`, release `FileName` `Twin Vdp (Japan).sgx`, `Header` null.
+  - `SuperGrafx_CopierHeadered_MatchesTheStrippedBytes`: `CopierHeadered(Sgx)` as `ingest/sgx/hdr.sgx` → `(Ingested, "sgx")`, the stored release's SHA-1 equals `Sgx`'s.
+  - `SuperGrafx_Unmatched_GoesToReview`: `Atari(524288, 191)` as `ingest/sgx/odd.sgx` → `(Review, "NoDatMatch", "sgx")`, `ingest/sgx/odd.sgx` still present.
+  - `SuperGrafx_OutsideTheSizeLimits_Fails` with `[TestCase(524287, "TooSmall")]`, `[TestCase(1049089, "TooLarge")]`: `Atari(size, 192)` as `ingest/sgx/odd.sgx`.
+  - `Pc2_DatMatch_IsStoredAsPc2`: `Challenge` as `ingest/pc2/quiz.pc2` → `(Ingested, "pc2")`, `pc2/Q/Quiz Ladder.zip`, release `FileName` `Quiz Ladder (Japan).pc2`, header keys W2's ten in order.
+  - `Pc2_UnmatchedColourFooter_StaysPc2_NotRenamed`: `{ Seed = 1968, Colour = true }` as `ingest/pc2/odd.pc2` → `(Review, "NoDatMatch", "pc2")`, `ingest/pc2/odd.pc2` still present and no `odd.wsc`.
+  - `Pc2_UnmatchedWithoutTheJump_IsInvalidHeader`: `{ Seed = 1969, Opcode = 0x00 }` as `ingest/pc2/bad.pc2` → `(Failed, InvalidHeader)`.
+  - `Pc2_UnderTheFooterSize_IsTooSmall` (`new byte[15]`), `Pc2_OverSixteenMiB_IsTooLarge` (`new byte[16 * 1024 * 1024 + 1]`).
+  - `OtherFamilysExtension_IsUnsupportedType` gains `[TestCase("pc2", "other.ws")]` after its `("ws", "other.pc2")` case (that case stays: PC2 is another family). `TurboGrafx16_FileInAnotherFamilysFolder_IsUnsupportedType` gains `[TestCase("tg16", "x.sgx")]` and `[TestCase("sgx", "circuit.pce")]` (body: `name.EndsWith(".pce") ? Circuit : Comet` already gives bytes; the type check doesn't read them).
+  - Files: `IngestPipelineTests.cs`.
+  - Done when: `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~IngestPipelineTests"` passes (Docker running).
+- [ ] **4. Docs**:
+  - `README.md`: R5's Play list, upgrade question and attribution edits (rows already in).
+  - `docs/features.md`: line 3's list "…, WonderSwan and WonderSwan Color ROMs, …" → "…, WonderSwan, WonderSwan Color, PC Engine SuperGrafx and Pocket Challenge V2 ROMs, …"; the line-154 Play list gains `PC Engine SuperGrafx` after `PC-FX` and `Pocket Challenge V2` after `WonderSwan Color`, and in its core list "Beetle PCE for TurboGrafx-16 / PC Engine and TurboGrafx-CD / PC Engine CD" → "Beetle PCE for TurboGrafx-16 / PC Engine, PC Engine SuperGrafx and TurboGrafx-CD / PC Engine CD" and "Beetle WonderSwan for WonderSwan and WonderSwan Color" → "Beetle WonderSwan for WonderSwan, WonderSwan Color and Pocket Challenge V2"; line 176 "SuperGrafx isn't supported" → "**PC Engine SuperGrafx** is its own system (`sgx`) on the same core: `.sgx` releases play from the ZIP, and the `.sgx` name is what switches the core to SuperGrafx mode"; after the WonderSwan Play sub-bullet (line 180): "  - **Pocket Challenge V2** uses the same Beetle WonderSwan core, which runs `.pc2` releases from the ZIP as WonderSwan carts with WonderSwan controls and no BIOS. Booting real dumps hasn't been verified."; the ingestion intro's folder list gains `ingest/sgx/`, `ingest/pc2/` after `ingest/wsc/`; the WonderSwan ingest bullet (line 230) drops its last sentence ("Pocket Challenge V2 (`.pc2`) isn't supported.") and a bullet follows it: "- Drop `.sgx` files (or archives of them) into `ingest/sgx/` (PC Engine SuperGrafx; a 512-byte copier header is stripped as for TurboGrafx-16; ROMs are 512 KiB to 1 MiB plus a header), and `.pc2` files into `ingest/pc2/` (Pocket Challenge V2; the WonderSwan cartridge footer must start with `JMP FAR` when a file matches no DAT; ROMs are 16 bytes to 16 MiB). Each is its own system: a DAT match names the game, otherwise it goes to Review. SuperGrafx games dumped as `.pce` stay TurboGrafx-16 files."
+  - `docs/zip-format.md`: layout lines `sgx/                  PC Engine SuperGrafx (.sgx)` after `tg16/` and `pc2/                  Pocket Challenge V2 (.pc2)` after `wsc/`; `sgx`, `pc2` appended to the `system` id list; after the TurboGrafx-16 `header` line (257): "PC Engine SuperGrafx `header`: always null."; after the WonderSwan header block: "Pocket Challenge V2 `header`: the same ten fields from the same footer."
+  - `docs/deployment.md`: in the `/app/ingest` row, after the `ingest/ws/` entry: `` `ingest/sgx/` (PC Engine SuperGrafx: `.sgx`, copier header stripped) `ingest/pc2/` (Pocket Challenge V2: `.pc2`) ``; after the WonderSwan upgrade section: "Upgrading to the release that adds PC Engine SuperGrafx and Pocket Challenge V2:" with "- **Refresh DATs after upgrading.** They are identified against libretro's No-Intro `NEC - PC Engine SuperGrafx` DAT (with its developer, publisher, genre and release-year metadat) and `Benesse - Pocket Challenge V2` DAT (no metadat). Until **Admin → DATs → Refresh DATs** has downloaded them, every import is refused with `DatsMissing`. `ingest/sgx/` and `ingest/pc2/` are created at startup." and "- Browser play needs nothing extra: Beetle PCE and Beetle WonderSwan already ship in the image, and neither system needs a BIOS."
+  - `docs/development.md`: the `src/RnRomManager.Systems.Nec` row (line 35, already stale: it names only `tg16`) becomes "the `tg16` (TurboGrafx-16 / PC Engine), `sgx` (PC Engine SuperGrafx), `tgcd` and `pcfx` handlers: HuCards have no header and share the size-based 512-byte copier-header strip; default box art"; the `src/RnRomManager.Systems.WonderSwan` row (line 43) becomes "the `ws` and `wsc` handlers (shared `wonderswan` family), the `pc2` (Pocket Challenge V2) handler (its own family, same footer), the cartridge footer reader, default box art".
+  - `docs/adding-a-system.md`: the `BrowserCore` row (line 61) gains "`sgx` returns `mednafen_pce` (the `.sgx` extension selects SuperGrafx mode), `pc2` returns `mednafen_wswan`," after the `ws`/`wsc` item; the `DefaultBoxArtPng` row's list gains "/PC Engine SuperGrafx/Pocket Challenge V2" after "WonderSwan Color"; the `Family` row (line 47) ends "Pocket Challenge V2 reads the WonderSwan footer but is its own `pc2` family, so a `.pc2` is never classified or renamed as a WonderSwan cart."
+  - Tests: none. Done when: every item is in its doc and `pwsh scripts/codemap.ps1` is clean.
+
+## Decisions
+- 2026-11-27 Group SuperGrafx and Pocket Challenge V2 in one spec? → yes: both are new cartridge systems on already-vendored cores, no new project, no vendoring (user: "logical groupings").
+- 2026-11-27 SuperGrafx family → its own `sgx` family, not `tg16`: within a shared family an unmatched `.sgx` dropped in `ingest/tg16/` would be stored as `tg16`, and a header-based split isn't possible (both are headerless). Precedent `tgcd`, `pcfx`, `fds` (code).
+- 2026-11-27 PC2 family → its own `pc2` family: inside `wonderswan` the footer classifies every unmatched `.pc2` as `ws`/`wsc` and `RenameToClassifiedExtension` would rename it (code, `IngestIdentifier` step 5).
+- 2026-11-27 PC2 header → reuse `WonderSwanFooterReader`, `ClassifiedSystemId` forced to `pc2` (code: Beetle WonderSwan loads `.pc2` through the same `Load`, so the footer layout and `JMP FAR` apply).
+- 2026-11-27 PC2 metadat → none (`MetadatKinds` = `[]`): libretro has no PC2 metadat files (checked 2026-11-27) (code).
+- 2026-11-27 How does Beetle PCE select SuperGrafx? → by the content extension `sgx` (case-sensitive) or a 6-title CRC table, in `PCE_Load`; no core option is set (code, `beetle-pce-libretro` `e1ac90d`).
+- 2026-11-27 Size limits → SGX 512 KiB to 1 MiB + 512 (DAT range, `tg16` pattern); PC2 16 B to 16 MiB (WonderSwan pattern) (code).
+- 2026-11-27 Seed games and e2e → none: both cores' browser path is already e2e-tested through `tg16` and `wsc`, and seed games would move every seed and e2e count (code default).
+- 2026-11-27 IGDB → `sgx` 128; `pc2` falls back to WonderSwan's 57 (no IGDB platform of its own) (code).
+- 2026-11-27 Colours → `sgx` `#b000f8`/white (~5.0:1), `pc2` `#d0bfff`/black (~12.6:1). `sgx` is the white-text AA colour farthest (RGB distance) from every `--bs-*` value in `app.css` and the Bootstrap colours the map uses; its nearest is PSP `#8a1c7c`, 133 apart (code, reviewer).
+- 2026-11-27 Review round 1: `IgdbPlatforms` and `systemEmulators.json` slots are the alphabetical ones; `sgx` colour moved off green (near PET, GB, 3DO); `features.md` core-list wording pinned; WonderSwan box-art README gains the `pc2` export line (reviewer).
+- 2026-11-27 Review round 2: `sgx` teal blue `#0e6e8c` was near Satellaview and TurboGrafx-16; replaced by `#b000f8`, picked by distance to every existing colour (reviewer).
+
+## Kickoff prompt
+```text
+/spec implement 2026-11-27-supergrafx-pocket-challenge.md
+```
+Starts the spec, or resumes it at the first unticked step.
