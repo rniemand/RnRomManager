@@ -196,17 +196,18 @@ public static partial class ReportEndpoints
             {
                 null or "title" => DuplicateMatch.Title,
                 "igdb" => DuplicateMatch.Igdb,
+                "hash" => DuplicateMatch.Hash,
                 _ => null,
             };
             if (matchKind is null)
-                errors["match"] = ["Must be title or igdb."];
+                errors["match"] = ["Must be title, igdb or hash."];
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var result = await repository.ListDuplicatesAsync(matchKind!.Value, system, page ?? 1, pageSize ?? 25, ctx.RequestAborted);
             return Results.Ok(Paging.ToDto(result, group => new
             {
                 system = group.SystemId, systemName = SystemName(systems, group.SystemId), baseTitle = group.BaseTitle,
-                gamesKey = group.GamesKey, igdbId = group.IgdbId,
+                gamesKey = group.GamesKey, igdbId = group.IgdbId, hashKind = group.HashKind, hash = group.Hash,
                 games = group.Games.Select(g => new
                 {
                     id = g.Id, displayTitle = g.DisplayTitle, romCount = g.RomCount, zipSizeBytes = g.ZipSizeBytes, createdAt = g.CreatedAt,
@@ -350,10 +351,21 @@ public static partial class ReportEndpoints
             var errors = new Dictionary<string, string[]>();
             if (string.IsNullOrEmpty(request.System) || systems.ById(request.System) is null)
                 errors["system"] = ["Choose a registered system."];
-            // D3: a title dismissal gives baseTitle, an IGDB one igdbId ("given" = present and not JSON null).
+            // D3: a title dismissal gives baseTitle, an IGDB one igdbId ("given" = present and not JSON null); D4: a hash
+            // one gives hash alone.
             var igdbGiven = request.IgdbId is { ValueKind: not JsonValueKind.Null };
+            var hashGiven = request.Hash is not null;
             int igdbId = 0;
-            if (igdbGiven == (request.BaseTitle is not null))
+            if (hashGiven)
+            {
+                if (igdbGiven || request.BaseTitle is not null)
+                    errors["hash"] = ["Give hash alone, without baseTitle or igdbId."];
+                else if (!DismissHashPattern().IsMatch(request.Hash!))
+                    errors["hash"] = ["Must be sha1:<40 hex> or md5:<32 hex>."];
+            }
+            else if (!igdbGiven && request.BaseTitle is null)
+                errors["igdbId"] = ["Give baseTitle, igdbId or hash."];
+            else if (igdbGiven && request.BaseTitle is not null)
                 errors["igdbId"] = ["Give baseTitle or igdbId, not both."];
             else if (igdbGiven && !(request.IgdbId!.Value.ValueKind == JsonValueKind.Number && request.IgdbId.Value.TryGetInt32(out igdbId) && igdbId >= 1))
                 errors["igdbId"] = ["Must be a positive whole number."];
@@ -364,8 +376,10 @@ public static partial class ReportEndpoints
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             // A key that matches no current group is stored anyway: the group may have just changed (RP8).
-            await repository.DismissDuplicateAsync(igdbGiven ? DuplicateMatch.Igdb : DuplicateMatch.Title, request.System!,
-                igdbGiven ? igdbId.ToString(CultureInfo.InvariantCulture) : request.BaseTitle!, request.GamesKey!, EndpointUser.Id(ctx.User),
+            var (kind, key) = hashGiven ? (DuplicateMatch.Hash, request.Hash!)
+                : igdbGiven ? (DuplicateMatch.Igdb, igdbId.ToString(CultureInfo.InvariantCulture))
+                : (DuplicateMatch.Title, request.BaseTitle!);
+            await repository.DismissDuplicateAsync(kind, request.System!, key, request.GamesKey!, EndpointUser.Id(ctx.User),
                 time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
             return Results.NoContent();
         }).RequireAuthorization(AuthSetup.AdminOnly);
@@ -410,6 +424,9 @@ public static partial class ReportEndpoints
 
     [GeneratedRegex("^[0-9a-f]{64}$")]
     private static partial Regex GamesKeyPattern();
+
+    [GeneratedRegex("^(sha1:[0-9a-f]{40}|md5:[0-9a-f]{32})$")]
+    private static partial Regex DismissHashPattern();
 
     /// <summary>The paged reports' shared rules: house paging, and an optional registered <c>system</c>.</summary>
     private static Dictionary<string, string[]> Validate(

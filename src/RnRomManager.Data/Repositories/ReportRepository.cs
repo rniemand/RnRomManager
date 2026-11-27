@@ -365,7 +365,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
     /// <see cref="DuplicateGroups.GamesKey"/>) so dismissed groups drop out before paging.
     /// </summary>
     private const string TitleGroups = """
-        SELECT d.SystemId, d.BaseTitle, d.GamesKey, d.GameIds, d.IgdbId FROM (
+        SELECT d.SystemId, d.BaseTitle, d.GamesKey, d.GameIds, d.IgdbId, NULL AS HashKind, NULL AS Hash FROM (
             SELECT r.system_id AS SystemId, MIN(r.base_title) AS BaseTitle, NULL AS IgdbId,
                    SHA2(GROUP_CONCAT(DISTINCT r.game_id ORDER BY r.game_id SEPARATOR ','), 256) AS GamesKey,
                    GROUP_CONCAT(DISTINCT r.game_id ORDER BY r.game_id SEPARATOR ',') AS GameIds
@@ -381,7 +381,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
 
     /// <summary>D1: 2+ games of one system sharing an <c>igdb_id &gt; 0</c>, keyed as <see cref="TitleGroups"/>.</summary>
     private const string IgdbGroups = """
-        SELECT d.SystemId, d.BaseTitle, d.GamesKey, d.GameIds, d.IgdbId FROM (
+        SELECT d.SystemId, d.BaseTitle, d.GamesKey, d.GameIds, d.IgdbId, NULL AS HashKind, NULL AS Hash FROM (
             SELECT g.system_id AS SystemId, MIN(g.display_title) AS BaseTitle, g.igdb_id AS IgdbId,
                    SHA2(GROUP_CONCAT(g.id ORDER BY g.id SEPARATOR ','), 256) AS GamesKey,
                    GROUP_CONCAT(g.id ORDER BY g.id SEPARATOR ',') AS GameIds
@@ -396,7 +396,46 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         WHERE x.games_key IS NULL
         """;
 
-    private static string MatchKind(DuplicateMatch match) => match == DuplicateMatch.Igdb ? "igdb" : "title";
+    /// <summary>D2: every release (<c>roms</c>) and set file (<c>rom_files</c>) with its system, game, name and hashes.</summary>
+    private const string HashFiles = """
+        SELECT r.system_id AS s, r.game_id AS g, r.file_name AS n, r.sha1, r.md5 FROM roms r
+        UNION ALL
+        SELECT r.system_id, f.game_id, f.file_name, f.sha1, f.md5 FROM rom_files f JOIN roms r ON r.id = f.rom_id
+        """;
+
+    /// <summary>
+    /// D2: 2+ games of one system sharing a file SHA1, plus an MD5 group only when its files don't all share one SHA1 (so
+    /// an identical file isn't listed twice). Keyed as <see cref="TitleGroups"/>; a dismissal stores <c>kind:hash</c>.
+    /// </summary>
+    private const string HashGroups = $"""
+        SELECT d.SystemId, d.BaseTitle, d.GamesKey, d.GameIds, NULL AS IgdbId, d.HashKind, d.Hash FROM (
+            SELECT h.s AS SystemId, MIN(h.n) AS BaseTitle, 'sha1' AS HashKind, LOWER(h.sha1) AS Hash,
+                   SHA2(GROUP_CONCAT(DISTINCT h.g ORDER BY h.g SEPARATOR ','), 256) AS GamesKey,
+                   GROUP_CONCAT(DISTINCT h.g ORDER BY h.g SEPARATOR ',') AS GameIds
+            FROM ({HashFiles}) h
+            WHERE @systemId IS NULL OR h.s = @systemId
+            GROUP BY h.s, h.sha1
+            HAVING COUNT(DISTINCT h.g) >= 2
+            UNION ALL
+            SELECT h.s, MIN(h.n), 'md5', LOWER(h.md5),
+                   SHA2(GROUP_CONCAT(DISTINCT h.g ORDER BY h.g SEPARATOR ','), 256),
+                   GROUP_CONCAT(DISTINCT h.g ORDER BY h.g SEPARATOR ',')
+            FROM ({HashFiles}) h
+            WHERE @systemId IS NULL OR h.s = @systemId
+            GROUP BY h.s, h.md5
+            HAVING COUNT(DISTINCT h.g) >= 2 AND COUNT(DISTINCT h.sha1) > 1
+        ) d
+        LEFT JOIN duplicate_dismissals x
+            ON x.match_kind = 'hash' AND x.system_id = d.SystemId AND x.base_title = CONCAT(d.HashKind, ':', d.Hash) AND x.games_key = d.GamesKey
+        WHERE x.games_key IS NULL
+        """;
+
+    private static string MatchKind(DuplicateMatch match) => match switch
+    {
+        DuplicateMatch.Igdb => "igdb",
+        DuplicateMatch.Hash => "hash",
+        _ => "title",
+    };
 
     public async Task<Page<DuplicateGroup>> ListDuplicatesAsync(
         DuplicateMatch match,
@@ -405,12 +444,17 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         int pageSize,
         CancellationToken cancellationToken)
     {
-        var groupsSql = match == DuplicateMatch.Igdb ? IgdbGroups : TitleGroups;
+        var groupsSql = match switch
+        {
+            DuplicateMatch.Igdb => IgdbGroups,
+            DuplicateMatch.Hash => HashGroups,
+            _ => TitleGroups,
+        };
         var args = new { systemId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
         await using var connection = connections.Create();
         var groups = await connection.QueryPageAsync<GroupRow>(
             $"SELECT COUNT(*) FROM ({groupsSql}) g",
-            $"{groupsSql} ORDER BY d.SystemId, d.BaseTitle, d.IgdbId LIMIT @pageSize OFFSET @offset",
+            $"{groupsSql} ORDER BY SystemId, BaseTitle, IgdbId, Hash LIMIT @pageSize OFFSET @offset",
             args, page, pageSize, cancellationToken);
 
         var ids = groups.Items.SelectMany(g => g.GameIds.Split(',')).Distinct().ToList();
@@ -429,7 +473,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             g.GameIds.Split(',').Select(Guid.Parse).Where(games.ContainsKey).Select(id => games[id])
                 // Suggested target first: most releases, then the oldest.
                 .OrderByDescending(x => x.RomCount).ThenBy(x => x.CreatedAt).ThenBy(x => x.Id.ToString("D"), StringComparer.Ordinal)
-                .ToList(), g.IgdbId)).ToList();
+                .ToList(), g.IgdbId, g.HashKind, g.Hash)).ToList();
         return new Page<DuplicateGroup>(items, page, pageSize, groups.Total);
     }
 
