@@ -30,6 +30,9 @@ public interface IIntegrityIssueRepository
         int pageSize,
         CancellationToken cancellationToken);
 
+    /// <summary>IN3: one issue by id; null when there is none.</summary>
+    Task<IntegrityIssue?> GetAsync(long id, CancellationToken cancellationToken);
+
     /// <summary>Every <c>Open</c> issue.</summary>
     Task<IReadOnlyList<IntegrityIssue>> ListAllOpenAsync(CancellationToken cancellationToken);
 

@@ -34,6 +34,13 @@ public sealed class GameRepository : IGameRepository
             new CommandDefinition($"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken));
     }
 
+    public async Task<bool> ZipPathExistsAsync(string zipPath, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "SELECT EXISTS(SELECT 1 FROM games WHERE zip_path = @zipPath)", new { zipPath }, cancellationToken: cancellationToken));
+    }
+
     public async Task<IReadOnlyDictionary<Guid, UserSaveCount>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds,
         CancellationToken cancellationToken)
     {

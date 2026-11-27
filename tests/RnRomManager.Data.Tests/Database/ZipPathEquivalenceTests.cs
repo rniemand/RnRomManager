@@ -64,6 +64,16 @@ public class ZipPathEquivalenceTests
     }
 
     [Test]
+    public async Task ZipPathExists_MatchesExactAndCollationEqualSpellings_Only()
+    {
+        await MirrorAsync("ext/O/Orbit.zip");
+
+        Assert.That(await _games.ZipPathExistsAsync("ext/O/Orbit.zip", CancellationToken.None), Is.True);
+        Assert.That(await _games.ZipPathExistsAsync("EXT/o/ORBIT.ZIP", CancellationToken.None), Is.True);
+        Assert.That(await _games.ZipPathExistsAsync("ext/O/Orbit2.zip", CancellationToken.None), Is.False);
+    }
+
+    [Test]
     public async Task ExistingRows_AreMatchedByTheDatabase_WithTheirStoredSpelling()
     {
         var cafe = await MirrorAsync(Decomposed);
