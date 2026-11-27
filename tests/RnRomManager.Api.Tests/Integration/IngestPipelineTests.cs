@@ -79,6 +79,8 @@ public class IngestPipelineTests
     private static readonly byte[] NinjaAudio3 = new SyntheticDiscBuilder { Seed = 2603, Size = 32 * 1024 }.Build();
     private static readonly byte[] FoxAudio1 = new SyntheticDiscBuilder { Seed = 2901, Size = 32 * 1024 }.Build();
     private static readonly byte[] FoxData = new SyntheticDiscBuilder { Seed = 2902 }.Build();
+    private static readonly byte[] ChickAudio2 = new SyntheticDiscBuilder { Seed = 3201, Size = 32 * 1024 }.Build();
+    private static readonly byte[] ChickData = new SyntheticDiscBuilder { Seed = 3202 }.Build();
     /// <summary>CloneCD B6: a one-track PlayStation disc whose whole <c>.img</c> is the DAT's data track.</summary>
     private static readonly byte[] CloneStarImage = new SyntheticDiscBuilder { Seed = 2701, Size = 2352 * 28 }.Build();
     private static readonly byte[] CloneCcd = System.Text.Encoding.UTF8.GetBytes("[CloneCD]\nVersion=3\n[Disc]\nSessions=1\nDataTracksScrambled=0\n[TRACK 1]\nMODE=2\nINDEX 1=0\n");
@@ -200,7 +202,7 @@ public class IngestPipelineTests
             // TurboGrafx-CD B3: libretro's DAT lists one track per disc, usually the data track (Track 02).
             [IngestSeeder.TurboGrafxCdDat] = [new FixtureGame("Disc Ninja (Japan)", "Disc Ninja (Japan) (Track 02).bin", NinjaData)],
             // PC-FX X4: the real DAT names a data track too.
-            [IngestSeeder.PcfxDat] = [new FixtureGame("Disc Fox (Japan)", "Disc Fox (Japan) (Track 2).bin", FoxData)], [IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = [],
+            [IngestSeeder.PcfxDat] = [new FixtureGame("Disc Fox (Japan)", "Disc Fox (Japan) (Track 2).bin", FoxData)], [IngestSeeder.Cd32Dat] = [new FixtureGame("Disc Chick (Europe)", "Disc Chick (Europe) (Track 01).bin", ChickData)], [IngestSeeder.CdtvDat] = [],
             [IngestSeeder.NeoGeoPocketDat] = [new FixtureGame("Dual Mode (Japan)", "Dual Mode (Japan).ngp", DualMode)],
             [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)], [IngestSeeder.WonderSwanDat] = [new FixtureGame("Mono Flag (Japan)", "Mono Flag (Japan).ws", MonoFlag)], [IngestSeeder.WonderSwanColorDat] = [new FixtureGame("Swan Lagoon (Japan)", "Swan Lagoon (Japan).wsc", SwanLagoon)],
             [IngestSeeder.SuperGrafxDat] = [new FixtureGame("Twin Vdp (Japan)", "Twin Vdp (Japan).sgx", Sgx)],
@@ -789,6 +791,63 @@ public class IngestPipelineTests
         }));
     }
 
+    private const string ChickCue = "Disc Chick (Europe).cue", ChickTrack1 = "Disc Chick (Europe) (Track 01).bin", ChickTrack2 = "Disc Chick (Europe) (Track 02).bin";
+
+    private void DropChickSet(string system)
+    {
+        var cueText = $"FILE \"{ChickTrack1}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+            + $"FILE \"{ChickTrack2}\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
+        foreach (var (name, bytes) in new[] { (ChickCue, System.Text.Encoding.UTF8.GetBytes(cueText)), (ChickTrack1, ChickData), (ChickTrack2, ChickAudio2) })
+            File.SetLastWriteTimeUtc(Drop(system, name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+    }
+
+    [Test]
+    public async Task Cd32_DatMatchedCueWithTwoBins_IsOneRelease_NamedByItsDataTrack()
+    {
+        DropChickSet("cd32");
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "cd32").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome)),
+            Is.EquivalentTo(new[] { (ChickCue, IngestOutcome.Ingested), (ChickTrack1, IngestOutcome.Ingested), (ChickTrack2, IngestOutcome.Ingested) }));
+        var folder = Path.Combine(Roms, "cd32", "D");
+        Assert.That(Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal),
+            Is.EqualTo(new[] { ChickTrack1, ChickTrack2, ChickCue, "Disc Chick.zip" }));
+        Assert.That(File.ReadAllBytes(Path.Combine(folder, ChickTrack2)), Is.EqualTo(ChickAudio2));
+        var game = ReadZip("cd32/D/Disc Chick.zip");
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName, rom.ExternalFileName, rom.Identification.Method), Is.EqualTo(("cd32", ChickTrack1, ChickTrack1, IdentificationMethod.Dat)));
+        Assert.That(rom.Header, Is.Null);
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EquivalentTo(new[] { ChickCue, ChickTrack2 }));
+        Assert.That(Directory.GetFiles(Ingest("cd32")), Is.Empty);
+    }
+
+    [Test]
+    public async Task Cd32_AdfInItsFolder_IsUnsupportedType_AndMovedToFailed()
+    {
+        var file = DropAged("cd32", "floppy.adf", new SyntheticDiscBuilder { Seed = 3203, Size = 880 * 1024 }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+        Assert.That(File.Exists(file.FullPath), Is.False);
+        Assert.That(File.Exists(Path.Combine(Ingest("cd32"), "_failed", "floppy.adf")), Is.True);
+        Assert.That(File.Exists(Path.Combine(Ingest("cd32"), "_failed", "floppy.adf.error.txt")), Is.True);
+    }
+
+    [Test]
+    public async Task Cd32_DatMatchedCueSetInCdtvFolder_GoesToReviewAsThreeNoDatMatchItems()
+    {
+        DropChickSet("cdtv");
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "cdtv").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome, i.Reason)), Is.EquivalentTo(new[]
+        {
+            (ChickCue, IngestOutcome.Review, (string?)"NoDatMatch"), (ChickTrack1, IngestOutcome.Review, "NoDatMatch"), (ChickTrack2, IngestOutcome.Review, "NoDatMatch"),
+        }));
+    }
+
     /// <summary>CHD B2: synthetic bytes standing in for a CHD (never a real image); the MAME magic only for realism.</summary>
     private static byte[] FakeChd(int seed)
     {
@@ -811,6 +870,8 @@ public class IngestPipelineTests
     [TestCase("3do")]
     [TestCase("tgcd")]
     [TestCase("pcfx")]
+    [TestCase("cd32")]
+    [TestCase("cdtv")]
     public async Task Chd_Lone_GoesToReviewAsNoDatMatch_WithItsFoldersSystem(string system)
     {
         var result = await IngestAsync(DropAged(system, "Mystery Disc.chd", FakeChd(2301)));
