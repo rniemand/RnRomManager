@@ -63,8 +63,8 @@ public sealed class LibraryMirror : ILibraryMirror
             // S6: the delete above cascaded the game's old per-owner rows.
             if (ownerCounts[game.Id].Count > 0)
                 await connection.ExecuteAsync(new CommandDefinition("""
-                    INSERT INTO game_user_save_counts (game_id, username, save_count) VALUES (@GameId, @Username, @SaveCount)
-                    """, ownerCounts[game.Id].Select(o => new { GameId = game.Id, Username = o.Key, SaveCount = o.Value }),
+                    INSERT INTO game_user_save_counts (game_id, username, save_count, state_count) VALUES (@GameId, @Username, @SaveCount, @StateCount)
+                    """, ownerCounts[game.Id].Select(o => new { GameId = game.Id, Username = o.Key, SaveCount = o.Value.Saves, StateCount = o.Value.States }),
                     transaction, cancellationToken: cancellationToken));
 
             if (roms.Count > 0)
@@ -127,14 +127,15 @@ public sealed class LibraryMirror : ILibraryMirror
         await transaction.CommitAsync(cancellationToken);
     }
 
-    private static readonly IReadOnlyDictionary<string, int> NoOwners = new Dictionary<string, int>();
+    private static readonly IReadOnlyDictionary<string, UserSaveCount> NoOwners = new Dictionary<string, UserSaveCount>();
 
     /// <summary>
     /// The ZIP's <c>saves/</c> entries but the index (<c>games.save_count</c>), and per owner (S6) the saves of a readable
     /// <c>saves.json</c> whose <c>uploadedBy</c> passes <see cref="UsernamePolicy"/>, grouped ignoring case like the column's
-    /// collation. 0 and none when the ZIP can't be read (display only: the next write or sync corrects it).
+    /// collation, with how many of them are save states (SV3). 0 and none when the ZIP can't be read (display only: the
+    /// next write or sync corrects it).
     /// </summary>
-    private (int Total, IReadOnlyDictionary<string, int> PerOwner) SaveCounts(string zipPath)
+    private (int Total, IReadOnlyDictionary<string, UserSaveCount> PerOwner) SaveCounts(string zipPath)
     {
         if (_roms is null)
             return (0, NoOwners);
@@ -151,7 +152,7 @@ public sealed class LibraryMirror : ILibraryMirror
         }
     }
 
-    private static IReadOnlyDictionary<string, int> OwnerCounts(ZipArchive zip)
+    private static IReadOnlyDictionary<string, UserSaveCount> OwnerCounts(ZipArchive zip)
     {
         if (zip.GetEntry(LibraryZip.SavesIndexEntry) is not { } index || index.Length > GameSaves.MaxIndexBytes)
             return NoOwners;
@@ -170,6 +171,6 @@ public sealed class LibraryMirror : ILibraryMirror
         return result.Index!.Saves
             .Where(s => UsernamePolicy.Validate(s.UploadedBy) is null)
             .GroupBy(s => s.UploadedBy!, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(g => g.Key, g => new UserSaveCount(g.Count(), g.Count(s => s.Kind == GameSaves.KindState)), StringComparer.OrdinalIgnoreCase);
     }
 }

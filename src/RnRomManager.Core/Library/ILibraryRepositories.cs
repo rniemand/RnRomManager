@@ -20,8 +20,11 @@ public interface IGameRepository
     /// <summary>Every <c>games</c> row (integrity: the state before its DB repair, §12.1).</summary>
     Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken);
 
-    /// <summary>S7: <paramref name="username"/>'s own save count per game (from <c>game_user_save_counts</c>); games without a row are absent.</summary>
-    Task<IReadOnlyDictionary<Guid, int>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds, CancellationToken cancellationToken);
+    /// <summary>
+    /// S7, SV3: <paramref name="username"/>'s own save and save-state counts per game (from <c>game_user_save_counts</c>);
+    /// games without a row are absent.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, UserSaveCount>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds, CancellationToken cancellationToken);
 
     /// <summary>A6: the game's IGDB link changed: its <c>game_actions</c> rating, vote count and sync time become null.</summary>
     Task ClearIgdbSyncAsync(Guid gameId, CancellationToken cancellationToken);

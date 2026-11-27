@@ -113,8 +113,39 @@ public partial class LibraryMirrorTests
         var bob = await _games.GetUserSaveCountsAsync("BOB", [game.GameId, other], CancellationToken.None);
         var alice = await _games.GetUserSaveCountsAsync("alice", [game.GameId], CancellationToken.None);
 
-        Assert.That(bob, Is.EqualTo(new Dictionary<Guid, int> { [game.GameId] = 2 }));
+        Assert.That(bob, Is.EqualTo(new Dictionary<Guid, UserSaveCount> { [game.GameId] = new(2, 0) }));
         Assert.That(alice, Is.Empty);
         Assert.That(await _games.GetUserSaveCountsAsync("bob", [], CancellationToken.None), Is.Empty);
+    }
+
+    [Test]
+    public async Task SaveCounts_CountStatesPerOwner()
+    {
+        var saves = new[]
+        {
+            Save(1, "bob") with { Kind = GameSaves.KindState }, Save(2, "Bob") with { Kind = GameSaves.KindState }, Save(3, "bob"),
+            Save(4, "alice"),
+        };
+        WriteSavesZip(saves, TestSaves.V1Index([.. saves]));
+        var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
+
+        await CountingMirror().ReplaceAsync(Entry(game), CancellationToken.None);
+
+        Assert.That(await _games.GetUserSaveCountsAsync("bob", [game.GameId], CancellationToken.None),
+            Is.EqualTo(new Dictionary<Guid, UserSaveCount> { [game.GameId] = new(3, 2) }));
+        Assert.That(await _games.GetUserSaveCountsAsync("alice", [game.GameId], CancellationToken.None),
+            Is.EqualTo(new Dictionary<Guid, UserSaveCount> { [game.GameId] = new(1, 0) }));
+    }
+
+    [Test]
+    public async Task GetUserSaveCounts_ARowWithoutAStateCount_HasNullStates()
+    {
+        var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
+        await _mirror.ReplaceAsync(Entry(game), CancellationToken.None);
+        await using (var db = _factory.Create())
+            await db.ExecuteAsync("INSERT INTO game_user_save_counts (game_id, username, save_count) VALUES (@id, 'bob', 4)", new { id = game.GameId });
+
+        Assert.That(await _games.GetUserSaveCountsAsync("bob", [game.GameId], CancellationToken.None),
+            Is.EqualTo(new Dictionary<Guid, UserSaveCount> { [game.GameId] = new(4, null) }));
     }
 }

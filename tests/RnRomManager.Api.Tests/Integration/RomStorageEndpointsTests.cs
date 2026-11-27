@@ -115,6 +115,10 @@ public class RomStorageEndpointsTests
         Assert.That(Compression(rows.Single(r => r.GetProperty("id").GetString() == "switch")), Is.EqualTo(("Med", false)));
         int GameCount(string id) => rows.Single(r => r.GetProperty("id").GetString() == id).GetProperty("gameCount").GetInt32();
         Assert.That((GameCount(LegacyExternalTestHandler.SystemId), GameCount("gba")), Is.EqualTo((1, 0)), "Z1: 0 when a system has no games");
+        long TotalBytes(string id) => rows.Single(r => r.GetProperty("id").GetString() == id).GetProperty("totalBytes").GetInt64();
+        var size = (await Service<RnRomManager.Core.Reports.IReportRepository>().ListSystemSizesAsync(default)).Single(s => s.SystemId == LegacyExternalTestHandler.SystemId);
+        Assert.That((TotalBytes(LegacyExternalTestHandler.SystemId), TotalBytes("gba")), Is.EqualTo((size.Bytes, 0L)), "RZ2: the Library size report's bytes, 0 without games");
+        Assert.That(size.Bytes, Is.GreaterThan(0));
     }
 
     [Test]

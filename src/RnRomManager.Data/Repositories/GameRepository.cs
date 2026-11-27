@@ -34,16 +34,16 @@ public sealed class GameRepository : IGameRepository
             new CommandDefinition($"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken));
     }
 
-    public async Task<IReadOnlyDictionary<Guid, int>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds,
+    public async Task<IReadOnlyDictionary<Guid, UserSaveCount>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds,
         CancellationToken cancellationToken)
     {
         if (gameIds.Count == 0)
-            return new Dictionary<Guid, int>();
+            return new Dictionary<Guid, UserSaveCount>();
         await using var connection = _connections.Create();
-        return (await connection.QueryAsync<(Guid GameId, int SaveCount)>(new CommandDefinition(
-                "SELECT game_id, save_count FROM game_user_save_counts WHERE username = @username AND game_id IN @gameIds",
+        return (await connection.QueryAsync<(Guid GameId, int SaveCount, int? StateCount)>(new CommandDefinition(
+                "SELECT game_id, save_count, state_count FROM game_user_save_counts WHERE username = @username AND game_id IN @gameIds",
                 new { username, gameIds }, cancellationToken: cancellationToken)))
-            .ToDictionary(r => r.GameId, r => r.SaveCount);
+            .ToDictionary(r => r.GameId, r => new UserSaveCount(r.SaveCount, r.StateCount));
     }
 
     public async Task ClearIgdbSyncAsync(Guid gameId, CancellationToken cancellationToken)
@@ -261,6 +261,7 @@ public sealed class GameRepository : IGameRepository
                    (SELECT EXISTS(SELECT 1 FROM rom_files f WHERE f.rom_id = r.id) FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryHasFiles,
                    (SELECT JSON_EXTRACT(r.header, '$.encrypted') = 'true' FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryEncrypted,
                    g.rating AS Rating, g.favourite AS Favourite, g.save_count AS SaveCount, g.title AS Title, g.igdb_id AS IgdbId,
+                   (SELECT a.igdb_rating FROM game_actions a WHERE a.game_id = g.id) AS IgdbRating,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres,
                    {(words.Count == 0 ? "NULL" : AddOnNamesJson)} AS AddOns
             FROM {from} {filter}
@@ -271,7 +272,8 @@ public sealed class GameRepository : IGameRepository
         var items = rows.Items.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId, r.BoxArtSha1,
             r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns)),
-            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true, r.IgdbId)).ToList();
+            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true, r.IgdbId,
+            IgdbRating: r.IgdbRating)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, rows.Total);
     }
 

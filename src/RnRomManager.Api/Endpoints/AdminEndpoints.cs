@@ -8,6 +8,7 @@ using RnRomManager.Core.Backups;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Reports;
 using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
@@ -49,18 +50,25 @@ public static class AdminEndpoints
         admin.MapGet("/logs/stream", LogStream.RunAsync).WithMetadata(MaintenanceExempt.Instance);
 
         // ROM Zip Config B12: every system's default and effective ROM storage, ordered as /api/systems.
-        admin.MapGet("/rom-storage", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games, IRomStorageSettings romStorage) =>
+        admin.MapGet("/rom-storage", async (
+            HttpContext ctx,
+            ISystemRegistry systems,
+            IGameRepository games,
+            IRomStorageSettings romStorage,
+            IReportRepository reports) =>
         {
             var pending = (await StorageMigrationJob.ListMovesAsync(games, systems, ctx.RequestAborted))
                 .GroupBy(g => g.SystemId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
             // Timeline polish Z1: each system's game count.
             var gameCounts = (await games.ListSystemStatsAsync(ctx.RequestAborted)).ToDictionary(s => s.SystemId, s => s.GameCount, StringComparer.OrdinalIgnoreCase);
+            // RZ2: each system's library size, as the Library size report counts it.
+            var sizes = (await reports.ListSystemSizesAsync(ctx.RequestAborted)).ToDictionary(s => s.SystemId, s => s.Bytes, StringComparer.OrdinalIgnoreCase);
             return Results.Ok(systems.All.OrderBy(h => h.DisplayName, StringComparer.OrdinalIgnoreCase).Select(h => new
             {
                 id = h.Id, displayName = h.DisplayName, defaultEmbedRoms = h.DefaultEmbedRomsInZip, embedRoms = h.EmbedRomsInZip,
                 configurable = h.RomStorageConfigurable, pendingGames = h.RomStorageConfigurable ? pending.GetValueOrDefault(h.Id) : 0,
                 zipCompression = romStorage.Compression(h.Id).ToString(), compressionConfigurable = h.EmbedRomsInZip,
-                gameCount = gameCounts.GetValueOrDefault(h.Id),
+                gameCount = gameCounts.GetValueOrDefault(h.Id), totalBytes = sizes.GetValueOrDefault(h.Id),
             }));
         });
 

@@ -459,6 +459,18 @@ public class GameQueryTests
     }
 
     [Test]
+    public async Task List_CarriesTheStoredIgdbRating()
+    {
+        var rated = await Add("Rated", igdbId: 1);
+        await Add("Unrated", igdbId: 2);
+        await ActionsSql("INSERT INTO game_actions (game_id, igdb_rating) VALUES (@rated, 81.6)", new { rated });
+
+        var page = await _games.ListAsync(new GameQuery(), default);
+
+        Assert.That(page.Items.Select(i => (i.DisplayTitle, i.IgdbRating)), Is.EqualTo(new (string, double?)[] { ("Rated", 81.6), ("Unrated", null) }));
+    }
+
+    [Test]
     public async Task ActionsSummary_CountsPendingMissingAndRatings()
     {
         await Add("Unlinked");
