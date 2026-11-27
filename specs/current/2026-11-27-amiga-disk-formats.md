@@ -80,7 +80,7 @@ No migration or config key changes. Existing data is untouched. Raising the limi
   - `dotnet test tests/RnRomManager.Systems.Commodore.Tests --filter "FullyQualifiedName~AmigaHandlerTests"` and `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~IngestPipelineTests.Amiga|FullyQualifiedName~BrowserCoreExtensionsTests|FullyQualifiedName~SupportedSystemsTableTests"` pass;
   - `NotIngested` has no `puae` NoDat entry;
   - the `AmigaHandler` class and `BrowserCore` summaries match Changes; the README row, `features.md`'s ingest paragraph and `deployment.md`'s `/app/ingest` row list the new types, with the 1 KiB–64 MiB size.
-- [ ] **2. Kickstart for browser play**: K1–K6. Files: `src/RnRomManager.Api/Endpoints/BiosInfo.cs`, `docs/adding-a-system.md`, `src/RnRomManager.Web/static/emulator/params.js`, `src/RnRomManager.Web/static/emulator/play.js`, `src/RnRomManager.Web/src/lib/emulatorParams.test.ts`, `src/RnRomManager.Web/src/lib/emulatorPlay.test.ts`, `tests/RnRomManager.Api.Tests/Integration/EmulatorEndpointsTests.BiosInfo.cs`, `docs/features.md` (Play paragraph), `docs/configuration.md`, `docs/development.md`, `README.md` (Game detail bullet), `docs/deployment.md` (`/app/bios` row and the Amiga upgrade bullet). Tests:
+- [x] **2. Kickstart for browser play**: K1–K6. Files: `src/RnRomManager.Api/Endpoints/BiosInfo.cs`, `docs/adding-a-system.md`, `src/RnRomManager.Web/static/emulator/params.js`, `src/RnRomManager.Web/static/emulator/play.js`, `src/RnRomManager.Web/src/lib/emulatorParams.test.ts`, `src/RnRomManager.Web/src/lib/emulatorPlay.test.ts`, `tests/RnRomManager.Api.Tests/Integration/EmulatorEndpointsTests.BiosInfo.cs`, `docs/features.md` (Play paragraph), `docs/configuration.md`, `docs/development.md`, `README.md` (Game detail bullet), `docs/deployment.md` (`/app/bios` row and the Amiga upgrade bullet). Tests:
   - `emulatorParams.test.ts`: `isAmigaHardDisk` (`x.hdf`, `X.LHA` and `x.hdz` true; `x.adf` and `x.m3u` false), both `amigaKickstartSizeError` texts, and `amigaHardDiskKickstartMissing`.
   - `emulatorPlay.test.ts` has a new `describe('play page Amiga Kickstart (Amiga K1–K3)')`:
     - an `.adf` with both 404 sends `[kickA500, kickA1200, romUrl]` and sets no `EJS_externalFiles`;
@@ -122,6 +122,8 @@ No Playwright change: no e2e plays Amiga, and synthetic images don't boot.
 
 - 2026-11-27 Kickstart support for hard-disk play? → Load optional `kick34005.A500`/`kick40068.A1200` for every Amiga launch and require `kick40068.A1200` for `.hdf`/`.hdz`/`.lha`, as drafted (user)
 - 2026-11-27 Deep review against `main` after #213 (CD32/CDTV) merged: `isAmiga` gated on `system === null` so discs keep their own Kickstarts; loop and assignment placed after the `isAmigaCd` ones; K5 group placed before `Commodore Amiga CD32`; Overlap risk updated; `adding-a-system.md`, the `BrowserCore` summary, the `isAmigaCd` and F7 test comments and the features "floppy images" wording added; `.hdz` test buffer sized over 1 KiB; TooLarge test follows the sparse-file `Ds_` pattern; manual-resolve test follows the GameGear helpers (code)
+
+- 2026-11-27 `deployment.md`'s existing Amiga upgrade bullet "Browser play needs nothing extra" contradicted K3, so it now says "Floppy browser play" (code)
 
 ## Kickoff prompt
 ```text

@@ -474,6 +474,39 @@ export function cdtvBiosSizeError(name) {
 	return `The CDTV BIOS ${name} in the BIOS folder (Paths:Bios) must be 256 KiB: ask an Admin to replace it.`;
 }
 
+/** Amiga K1: the optional Kickstarts, requested in this order for every Amiga floppy or hard-disk launch. */
+export const amigaKickstarts = [
+	{ name: 'kick34005.A500', bytes: 262144 },
+	{ name: 'kick40068.A1200', bytes: 524288 }
+];
+
+/** Amiga K3: the hard-disk and WHDLoad types, which need kick40068.A1200. */
+export const amigaHardDiskExtensions = ['.hdf', '.hdz', '.lha'];
+
+/**
+ * Amiga K3: whether a release is a hard-disk image or WHDLoad install (a disk set's name is an .m3u, so never one).
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isAmigaHardDisk(name) {
+	const lower = name.toLowerCase();
+	return amigaHardDiskExtensions.some((extension) => lower.endsWith(extension));
+}
+
+/**
+ * Amiga K4: shown when an Amiga Kickstart isn't its exact size.
+ * @param {string} name
+ * @returns {string}
+ */
+export function amigaKickstartSizeError(name) {
+	const size = name === 'kick34005.A500' ? '256 KiB' : '512 KiB';
+	return `The Amiga Kickstart ${name} in the BIOS folder (Paths:Bios) must be ${size}: ask an Admin to replace it.`;
+}
+
+/** Amiga K3: shown when a hard-disk release has no kick40068.A1200. */
+export const amigaHardDiskKickstartMissing =
+	'Amiga hard-disk games need a Kickstart: ask an Admin to put kick40068.A1200 in the BIOS folder (Paths:Bios).';
+
 /**
  * The play page's message for a failed play-disc request.
  * @param {number | null} status the HTTP status, or null for a network or body-read failure

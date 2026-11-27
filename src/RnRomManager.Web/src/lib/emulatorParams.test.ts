@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { formatSize } from './format';
 import {
+	amigaHardDiskKickstartMissing,
+	amigaKickstartSizeError,
 	cdtvBiosSizeError,
+	isAmigaHardDisk,
 	contentSize,
 	biosError,
 	biosFor,
@@ -168,6 +171,23 @@ describe('parsePlayParams', () => {
 	it('names the CDTV BIOS file of the wrong size (CD32 A7)', () => {
 		expect(cdtvBiosSizeError('kick34005.CDTV')).toBe(
 			'The CDTV BIOS kick34005.CDTV in the BIOS folder (Paths:Bios) must be 256 KiB: ask an Admin to replace it.'
+		);
+	});
+
+	it('tells hard-disk releases from floppies and sets (Amiga K3)', () => {
+		for (const name of ['x.hdf', 'X.LHA', 'x.hdz']) expect(isAmigaHardDisk(name)).toBe(true);
+		for (const name of ['x.adf', 'x.m3u']) expect(isAmigaHardDisk(name)).toBe(false);
+	});
+
+	it('names the Amiga Kickstart of the wrong size and the missing A1200 one (Amiga K4)', () => {
+		expect(amigaKickstartSizeError('kick34005.A500')).toBe(
+			'The Amiga Kickstart kick34005.A500 in the BIOS folder (Paths:Bios) must be 256 KiB: ask an Admin to replace it.'
+		);
+		expect(amigaKickstartSizeError('kick40068.A1200')).toBe(
+			'The Amiga Kickstart kick40068.A1200 in the BIOS folder (Paths:Bios) must be 512 KiB: ask an Admin to replace it.'
+		);
+		expect(amigaHardDiskKickstartMissing).toBe(
+			'Amiga hard-disk games need a Kickstart: ask an Admin to put kick40068.A1200 in the BIOS folder (Paths:Bios).'
 		);
 	});
 
