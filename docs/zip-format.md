@@ -39,6 +39,7 @@ roms/
   amiga/                Commodore Amiga (.adf, or .ipf as the DAT names it; .hdf, .hdz, .lha, .dms, .fdi or .raw from Review)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)
+  sg1000/               SG-1000 / SC-3000 (.sg, .sc)
   md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it; an unmatched .mdx keeps its extension)
   s32x/                 32X (.32x, .bin)
   pico/                 Sega Pico (.md, .bin, .pco)
@@ -175,7 +176,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `8` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `plus4`, `tgcd`, `pcfx`, `cd32`, `cdtv`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`, `ws`, `wsc`, `sgx`, `pc2`, `pico`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `sg1000`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `plus4`, `tgcd`, `pcfx`, `cd32`, `cdtv`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`, `ws`, `wsc`, `sgx`, `pc2`, `pico`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
