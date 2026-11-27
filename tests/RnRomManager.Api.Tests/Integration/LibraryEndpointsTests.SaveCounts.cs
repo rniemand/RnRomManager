@@ -72,6 +72,35 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
+    public async Task OwnStateSaveCount_IsTheViewersOwnStates_NullForALegacyRow_ZeroWithoutARow()
+    {
+        var id = await Tetris();
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+            await connection.ExecuteAsync("""
+                INSERT INTO game_user_save_counts (game_id, username, save_count, state_count) VALUES (@id, 'plain', 3, 1);
+                INSERT INTO game_user_save_counts (game_id, username, save_count) VALUES (@id, 'legacy', 2);
+                """, new { id });
+        using var legacy = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "legacy");
+        (await legacy.LoginAsync("legacy", TestUsers.Password)).Dispose();
+        using var stranger = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "stranger");
+        (await stranger.LoginAsync("stranger", TestUsers.Password)).Dispose();
+
+        async Task<int?> States(AuthClient client)
+        {
+            using var list = await client.GetAsync("/api/games");
+            var item = (await AuthClient.JsonAsync(list)).GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == id);
+            var states = item.GetProperty("ownStateSaveCount");
+            return states.ValueKind == System.Text.Json.JsonValueKind.Null ? null : states.GetInt32();
+        }
+
+        Assert.That(await States(_user), Is.EqualTo(1));
+        Assert.That(await States(legacy), Is.Null);
+        Assert.That(await States(stranger), Is.EqualTo(0));
+    }
+
+    [Test]
     public async Task SaveCount_InACollectionList_IsTheSiteUsersOwn()
     {
         var id = await Tetris();

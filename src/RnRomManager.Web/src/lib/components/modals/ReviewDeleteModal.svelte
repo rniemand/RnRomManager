@@ -70,7 +70,6 @@
 	confirmLabel="Delete file"
 	confirmClass="btn-danger"
 	size="lg"
-	scrollable
 	busy={busy || !item}
 	onconfirm={confirm}
 >

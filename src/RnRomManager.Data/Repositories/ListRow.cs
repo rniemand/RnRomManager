@@ -20,6 +20,7 @@ internal sealed class ListRow
     public bool? PrimaryHasFiles { get; init; }
     public bool? PrimaryEncrypted { get; init; }
     public int? IgdbId { get; init; }
+    public double? IgdbRating { get; init; }
     public int? Rating { get; init; }
     public bool Favourite { get; init; }
     public string Title { get; init; } = "";

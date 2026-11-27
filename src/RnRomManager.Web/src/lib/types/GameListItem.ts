@@ -29,6 +29,8 @@ export interface GameListItem {
 	saveCount: number;
 	/** S1: the viewer's own saves (Admins too). */
 	ownSaveCount: number;
+	/** SV2: the viewer's own save states; null when unknown (counted before the field existed). */
+	ownStateSaveCount: number | null;
 	/** Primary release to quick play (C2); null when the system has no browser core or the release is external. */
 	playRomId: number | null;
 	playRomFileName: string | null;
@@ -38,4 +40,6 @@ export interface GameListItem {
 	browserCore: string | null;
 	/** Timeline T9: the game's IGDB id; null (or 0) when not linked. */
 	igdbId: number | null;
+	/** GS1: the stored IGDB rating (0–100), null when none. */
+	igdbRating: number | null;
 }

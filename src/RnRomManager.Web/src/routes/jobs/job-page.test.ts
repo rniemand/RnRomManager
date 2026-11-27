@@ -71,11 +71,16 @@ describe('job detail page', () => {
 		);
 	});
 
-	it('links back to all jobs (ROM Zip Config B18)', async () => {
+	it('links back to all jobs (ROM Zip Config B18) as outline buttons (JB2)', async () => {
 		render(JobPage);
 
-		expect((await screen.findByRole('link', { name: 'All jobs' })).getAttribute('href')).toBe(
-			'/jobs'
-		);
+		const all = await screen.findByRole('link', { name: 'All jobs' });
+		expect(all.getAttribute('href')).toBe('/jobs');
+		expect(all.className).toBe('btn btn-sm btn-outline-primary');
+		expect(all.querySelector('i')!.className).toContain('bi-activity');
+		const back = screen.getByRole('link', { name: 'Back to Ingestion' });
+		expect(back.getAttribute('href')).toBe('/ingestion');
+		expect(back.querySelector('i')!.className).toContain('bi-arrow-left');
+		expect(back.parentElement!.className).toBe('d-flex flex-wrap gap-2 mb-3');
 	});
 });

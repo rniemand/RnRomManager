@@ -21,6 +21,8 @@ const counts = (changes: Partial<AdminActions> = {}): AdminActions => ({
 	igdbConfigured: true,
 	igdbLinked: 1200,
 	coversPending: 34,
+	coversMissing: 50,
+	ratingsMissing: 1000,
 	lastIgdbSyncAt: '2026-11-20T10:00:00Z',
 	...changes
 });
@@ -63,7 +65,7 @@ describe('Admin Actions tab (T1–T4)', () => {
 			'34 games to process'
 		);
 		expect(screen.getByTestId('ratings-count').textContent!.trim()).toBe(
-			`1,200 linked games · last refreshed ${formatDateTime('2026-11-20T10:00:00Z')}`
+			`1,000 games to process · last refreshed ${formatDateTime('2026-11-20T10:00:00Z')}`
 		);
 		expect(screen.getByRole('heading', { name: 'Pull Cover Images' })).toBeTruthy();
 		expect(screen.getByRole('heading', { name: 'Refresh IGDB Ratings' })).toBeTruthy();
@@ -74,7 +76,7 @@ describe('Admin Actions tab (T1–T4)', () => {
 	it('singular counts, and never refreshed', async () => {
 		answers['GET /api/admin/actions'] = {
 			status: 200,
-			body: counts({ coversPending: 1, igdbLinked: 1, lastIgdbSyncAt: null })
+			body: counts({ coversPending: 1, ratingsMissing: 1, lastIgdbSyncAt: null })
 		};
 		render(ActionsPage);
 
@@ -82,8 +84,81 @@ describe('Admin Actions tab (T1–T4)', () => {
 			'1 game to process'
 		);
 		expect(screen.getByTestId('ratings-count').textContent!.trim()).toBe(
-			'1 linked game · never refreshed'
+			'1 game to process · never refreshed'
 		);
+	});
+
+	it('Try Missing Images switches the count and the modal to the missing covers, then posts the flag', async () => {
+		answers['POST /api/jobs/pull-covers?retryMissing=true'] = {
+			status: 202,
+			body: { jobId: 'j7' }
+		};
+		render(ActionsPage);
+		await screen.findByTestId('covers-count');
+		const box = screen.getByLabelText('Try Missing Images') as HTMLInputElement;
+		expect(box.checked).toBe(false);
+		expect(box.id).toBe('pull-retry-missing');
+		expect(
+			screen.getByText("Also retries games whose IGDB cover couldn't be pulled before.").className
+		).toBe('form-text mb-3');
+
+		await fireEvent.click(box);
+		expect(screen.getByTestId('covers-count').textContent!.trim()).toBe('50 games to process');
+		await fireEvent.click(button('Pull Cover Images'));
+		expect(
+			screen.getByText(
+				'This replaces the cover of 50 games with their IGDB cover, including covers you uploaded.'
+			)
+		).toBeTruthy();
+		await fireEvent.click(
+			screen
+				.getAllByRole('button', { name: 'Pull Cover Images', hidden: true })
+				.find((b) => b.closest('.modal-footer'))!
+		);
+
+		await vi.waitFor(() => expect(calls).toContain('POST /api/jobs/pull-covers?retryMissing=true'));
+		expect(calls).not.toContain('POST /api/jobs/pull-covers');
+		expect(box.checked).toBe(true);
+	});
+
+	it('Repull ALL Ratings switches the count to every linked game and posts the flag', async () => {
+		answers['POST /api/jobs/igdb-sync?all=true'] = { status: 202, body: { jobId: 'j8' } };
+		render(ActionsPage);
+		await screen.findByTestId('ratings-count');
+		const box = screen.getByLabelText('Repull ALL Ratings') as HTMLInputElement;
+		expect(box.id).toBe('ratings-all');
+		expect(
+			screen.getByText('Refreshes every linked game, including ones that already have a rating.')
+		).toBeTruthy();
+
+		await fireEvent.click(box);
+		expect(screen.getByTestId('ratings-count').textContent!.trim()).toBe(
+			`1,200 games to process · last refreshed ${formatDateTime('2026-11-20T10:00:00Z')}`
+		);
+		await fireEvent.click(button('Refresh IGDB Ratings'));
+
+		await vi.waitFor(() => expect(calls).toContain('POST /api/jobs/igdb-sync?all=true'));
+		expect(calls).not.toContain('POST /api/jobs/igdb-sync');
+	});
+
+	it('the card texts describe the default runs', async () => {
+		render(ActionsPage);
+		await screen.findByTestId('covers-count');
+
+		expect(
+			screen
+				.getByText(/^Downloads the IGDB cover/)
+				.textContent!.replace(/\s+/g, ' ')
+				.trim()
+		).toBe(
+			"Downloads the IGDB cover of every linked game that hasn't been tried yet and makes it the game's cover, replacing the current cover."
+		);
+		expect(
+			screen
+				.getByText(/^Fetches the IGDB rating/)
+				.textContent!.replace(/\s+/g, ' ')
+				.trim()
+		).toBe('Fetches the IGDB rating and vote count of every linked game without a rating.');
 	});
 
 	it.each([
@@ -140,6 +215,8 @@ describe('Admin Actions tab (T1–T4)', () => {
 		);
 		expect((button('Pull Cover Images') as HTMLButtonElement).disabled).toBe(true);
 		expect((button('Refresh IGDB Ratings') as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByLabelText('Try Missing Images') as HTMLInputElement).disabled).toBe(true);
+		expect((screen.getByLabelText('Repull ALL Ratings') as HTMLInputElement).disabled).toBe(true);
 	});
 
 	it('a running job disables both buttons', async () => {

@@ -21,6 +21,7 @@ public class PullCoversJobTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 26, 10, 15, 30, 456, TimeSpan.Zero);
     private const string NowText = "2026-11-26T10:15:30.0000000+00:00";
+    private const string Earlier = "2026-01-01T00:00:00.0000000+00:00";
     private static readonly byte[] Cover = PngTests.Png(600, 800);
     private static readonly byte[] Placeholder = PngTests.Png(512, 512);
 
@@ -61,8 +62,11 @@ public class PullCoversJobTests
     [TearDown]
     public void TearDown() => _dir.Dispose();
 
-    private PullCoversJob Job() => new(_games, _igdb, _mirror, _reader, _systems, _items, _issues,
-        Options.Create(new PathsOptions { Roms = _dir.Path }), _audit, new FakeTimeProvider(Now), NullLogger<PullCoversJob>.Instance);
+    private PullCoversJob Job(bool retryMissing = false) => new(_games, _igdb, _mirror, _reader, _systems, _items, _issues,
+        Options.Create(new PathsOptions { Roms = _dir.Path }), _audit, new FakeTimeProvider(Now), NullLogger<PullCoversJob>.Instance)
+    {
+        RetryMissing = retryMissing,
+    };
 
     private static InfoJsonImage Image(
         string name,
@@ -115,10 +119,12 @@ public class PullCoversJobTests
     private void Igdb(params IgdbGameRating[] games) =>
         _igdb.GetGamesAsync(Arg.Any<IReadOnlyList<int>>(), Arg.Any<CancellationToken>()).Returns(games);
 
-    private async Task<string> Run(params GameRow[] candidates)
+    private Task<string> Run(params GameRow[] candidates) => Run(false, candidates);
+
+    private async Task<string> Run(bool retryMissing, params GameRow[] candidates)
     {
-        _games.ListPullCoverCandidatesAsync(Arg.Any<CancellationToken>()).Returns(candidates);
-        return JsonSerializer.Serialize(await Job().RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None));
+        _games.ListPullCoverCandidatesAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(candidates);
+        return JsonSerializer.Serialize(await Job(retryMissing).RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None));
     }
 
     private static string Summary(
@@ -201,12 +207,14 @@ public class PullCoversJobTests
         var full = await Add("Beta", 2, [.. Enumerable.Range(1, 20).Select(n => n == 1
             ? (Image("boxart-01.png", PngTests.Png(21, 5), cover: true), PngTests.Png(21, 5)) : Real(n))]);
         Igdb(new IgdbGameRating(1, "co1", null, null), new IgdbGameRating(2, "co2", null, null));
-        var before = Mtime(full);
+        var before = Read(full).Images;
 
         Assert.That(await Run(withPlaceholder, full), Is.EqualTo(Summary(pulled: 1, imageLimit: 1)));
 
         Assert.That(Read(withPlaceholder).Images, Has.Count.EqualTo(20));
-        Assert.That((Mtime(full), Read(full).Actions), Is.EqualTo((before, (InfoJsonActions?)null)));
+        // AC5: the full game is recorded as checked, its images unchanged.
+        Assert.That(Read(full).Actions, Is.EqualTo(new InfoJsonActions { CoverImageChecked = NowText }));
+        Assert.That(Read(full).Images, Is.EqualTo(before));
     }
 
     [Test]
@@ -245,8 +253,105 @@ public class PullCoversJobTests
         }));
         Assert.That(_written[6].Details, Is.EqualTo("IGDB returned HTTP 404."));
         await _mirror.Received(1).ReplaceAsync(Arg.Is<MirrorEntry>(e => e.ZipPath == already.ZipPath), Arg.Any<CancellationToken>());
-        await _mirror.ReceivedWithAnyArgs(1).ReplaceAsync(default!, default);
+        // AC5: the two NoCover games, Broken's 404 and Junk are recorded as checked.
+        await _mirror.ReceivedWithAnyArgs(5).ReplaceAsync(default!, default);
+        foreach (var row in new[] { noCover, notReturned, broken, junk })
+            Assert.That(Read(row).Actions?.CoverImageChecked, Is.EqualTo(NowText), row.Title);
+        foreach (var row in new[] { pending, relinked })
+            Assert.That(Read(row).Actions, Is.Null, row.Title);
         _audit.DidNotReceiveWithAnyArgs().Record(default!);
+    }
+
+    [TestCase(200)]
+    [TestCase(403)]
+    [TestCase(404)]
+    public async Task DownloadFailed_AnsweredByIgdb_IsRecordedAsChecked(int status)
+    {
+        var row = await Add("Tetris", 42);
+        Igdb(new IgdbGameRating(42, "co1", null, null));
+        _igdb.DownloadCoverAsync("co1", Arg.Any<CancellationToken>()).Returns(new IgdbCoverDownload(null, status, "no"));
+
+        Assert.That(await Run(row), Is.EqualTo(Summary(error: 1)));
+
+        var game = Read(row);
+        Assert.That((game.Actions?.CoverImagePulled, game.Actions?.CoverImageChecked), Is.EqualTo(((string?)null, NowText)));
+        Assert.That(game.Metadata.UpdatedAt, Is.EqualTo(Now));
+        await _mirror.Received(1).ReplaceAsync(Arg.Is<MirrorEntry>(e => e.Info.Actions!.CoverImageChecked == NowText), Arg.Any<CancellationToken>());
+        Assert.That((_written.Single().Outcome, _written.Single().Reason), Is.EqualTo(("Error", "DownloadFailed")));
+    }
+
+    [TestCase(null)]
+    [TestCase(500)]
+    [TestCase(503)]
+    public async Task DownloadFailed_NetworkOr5xx_IsNotRecorded(int? status)
+    {
+        var row = await Add("Tetris", 42);
+        Igdb(new IgdbGameRating(42, "co1", null, null));
+        _igdb.DownloadCoverAsync("co1", Arg.Any<CancellationToken>()).Returns(new IgdbCoverDownload(null, status, "down"));
+        var before = Mtime(row);
+
+        Assert.That(await Run(row), Is.EqualTo(Summary(error: 1)));
+
+        Assert.That((Mtime(row), Read(row).Actions), Is.EqualTo((before, (InfoJsonActions?)null)));
+        await _mirror.DidNotReceiveWithAnyArgs().ReplaceAsync(default!, default);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Candidates_IncludeCheckedOnlyWhenRetryingMissing(bool retryMissing)
+    {
+        await Run(retryMissing);
+
+        await _games.Received(1).ListPullCoverCandidatesAsync(retryMissing, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DefaultRun_CheckedInZipOnly_RemirrorsAndSkips()
+    {
+        var row = await Add("Tetris", 42, g => g with { Actions = new InfoJsonActions { CoverImageChecked = Earlier } });
+        Igdb(new IgdbGameRating(42, "co1", null, null));
+        var before = Mtime(row);
+
+        Assert.That(await Run(row), Is.EqualTo(Summary(skipped: 1)));
+
+        Assert.That(_written.Single().Details, Is.EqualTo("The cover was already checked."));
+        Assert.That(Mtime(row), Is.EqualTo(before));
+        await _mirror.Received(1).ReplaceAsync(Arg.Is<MirrorEntry>(e => e.ZipPath == row.ZipPath), Arg.Any<CancellationToken>());
+        await _igdb.DidNotReceiveWithAnyArgs().DownloadCoverAsync(default!, default);
+    }
+
+    [Test]
+    public async Task RetryMissing_PullsACheckedGame_AndKeepsTheCheckedTime()
+    {
+        var row = await Add("Tetris", 42, g => g with { Actions = new InfoJsonActions { CoverImageChecked = Earlier } });
+        Igdb(new IgdbGameRating(42, "co1", null, null));
+
+        Assert.That(await Run(retryMissing: true, row), Is.EqualTo(Summary(pulled: 1)));
+
+        Assert.That(Read(row).Actions, Is.EqualTo(new InfoJsonActions { CoverImagePulled = NowText, CoverImageChecked = Earlier }));
+    }
+
+    [Test]
+    public async Task RetryMissing_FailingAgain_RewritesTheCheckedTime()
+    {
+        var row = await Add("Tetris", 42, g => g with { Actions = new InfoJsonActions { CoverImageChecked = Earlier } });
+        Igdb(new IgdbGameRating(42, null, null, null));
+
+        Assert.That(await Run(retryMissing: true, row), Is.EqualTo(Summary(noCover: 1)));
+
+        Assert.That(Read(row).Actions?.CoverImageChecked, Is.EqualTo(NowText));
+    }
+
+    [Test]
+    public async Task FailedCheckedWrite_KeepsTheOutcome()
+    {
+        var row = await Add("Tetris", 42);
+        Igdb(new IgdbGameRating(42, null, null, null));
+        _mirror.ReplaceAsync(default!, default).ReturnsForAnyArgs(Task.FromException(new InvalidOperationException("db")));
+
+        Assert.That(await Run(row), Is.EqualTo(Summary(noCover: 1)));
+
+        Assert.That((_written.Single().Outcome, _written.Single().Reason), Is.EqualTo(("NoCover", (string?)null)));
     }
 
     [Test]
@@ -297,7 +402,7 @@ public class PullCoversJobTests
     {
         var row = await Add("Tetris", 42);
         Igdb(new IgdbGameRating(42, "co1", null, null));
-        _games.ListPullCoverCandidatesAsync(Arg.Any<CancellationToken>()).Returns([row]);
+        _games.ListPullCoverCandidatesAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([row]);
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
 

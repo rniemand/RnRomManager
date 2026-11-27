@@ -207,7 +207,7 @@ describe('Navbar', () => {
 				li.querySelector('hr') ? '---' : li.textContent?.trim()
 			);
 
-		it('an Admin gets Admin first, then the Theme choices, Change password and Logout', () => {
+		it('an Admin gets Admin and Jobs first, then the Theme choices, Change password and Logout', () => {
 			render(Navbar, {
 				me: { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false },
 				reviewCount: null,
@@ -215,6 +215,7 @@ describe('Navbar', () => {
 			});
 			expect(menuItems()).toEqual([
 				'Admin',
+				'Jobs',
 				'---',
 				'Theme',
 				'Light',
@@ -226,6 +227,10 @@ describe('Navbar', () => {
 				'Logout'
 			]);
 			expect(screen.getByRole('link', { name: 'Admin' }).getAttribute('href')).toBe('/admin/users');
+			const jobs = screen.getByRole('link', { name: 'Jobs' });
+			expect(jobs.getAttribute('href')).toBe('/jobs');
+			expect(jobs.className).toBe('dropdown-item d-flex align-items-center gap-2');
+			expect(jobs.querySelector('i')!.className).toContain('bi-activity');
 		});
 
 		it('a non-admin has no Admin item', () => {
@@ -236,6 +241,23 @@ describe('Navbar', () => {
 			});
 			expect(menuItems()[0]).toBe('Theme');
 			expect(screen.queryByRole('link', { name: 'Admin' })).toBeNull();
+			expect(screen.queryByRole('link', { name: 'Jobs' })).toBeNull();
+		});
+
+		it.each([
+			['/jobs', true],
+			['/jobs/j1', true],
+			['/admin/users', false]
+		])('Jobs is active on %s: %s', (path, active) => {
+			page.url = new URL(`http://localhost${path}`);
+			render(Navbar, {
+				me: { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false },
+				reviewCount: null,
+				onlogout: () => {}
+			});
+			const jobs = screen.getByRole('link', { name: 'Jobs' });
+			expect(jobs.classList.contains('active')).toBe(active);
+			expect(jobs.getAttribute('aria-current')).toBe(active ? 'page' : null);
 		});
 
 		it.each([

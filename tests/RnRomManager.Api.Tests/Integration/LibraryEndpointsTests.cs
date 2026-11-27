@@ -1009,6 +1009,10 @@ public partial class LibraryEndpointsTests
         Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(primaryId));
         Assert.That(item.GetProperty("playRomFileName").GetString(), Is.EqualTo("legacy.smc"));
         Assert.That(item.GetProperty("igdbId").GetInt32(), Is.EqualTo(77), "Timeline: list items carry the IGDB id");
+        Assert.That(item.GetProperty("igdbRating").ValueKind, Is.EqualTo(JsonValueKind.Null), "GS1: no rating stored");
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+            await connection.ExecuteAsync("INSERT INTO game_actions (game_id, igdb_rating) VALUES (@id, 81.6)", new { id });
+        Assert.That((await GetJson("/api/games")).GetProperty("items")[0].GetProperty("igdbRating").GetDouble(), Is.EqualTo(81.6), "GS1");
         Assert.That((await GetJson($"/api/games/{id}")).GetProperty("browserCore").GetString(), Is.EqualTo("snes9x"));
 
         using var response = await _user.GetAsync($"/api/games/{id}/roms/{primaryId}/download");

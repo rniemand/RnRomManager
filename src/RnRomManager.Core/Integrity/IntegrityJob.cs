@@ -75,7 +75,7 @@ public sealed class IntegrityJob(
         // A5: housekeeping of rows whose game the repair (or a delete) removed; not skipped by a cancel.
         var orphanActions = await games.DeleteOrphanActionsAsync(CancellationToken.None).ConfigureAwait(false);
         if (Hashes)
-            ZipCheck.Pulled = await games.ListCoverPulledAsync(CancellationToken.None).ConfigureAwait(false);
+            ZipCheck.CoverActions = await games.ListCoverActionsAsync(CancellationToken.None).ConfigureAwait(false);
 
         var findings = new Dictionary<(string, string, string), IntegrityFinding>();
         void Add(IntegrityFinding finding) => findings.TryAdd(finding.Key, finding);
@@ -197,7 +197,7 @@ public sealed class IntegrityJob(
             .FirstOrDefault(g => string.Equals(g.ZipPath, zip, StringComparison.OrdinalIgnoreCase));
         var external = await roms.ListExternalAsync(CancellationToken.None).ConfigureAwait(false);
         var checks = new ExternalChecks(external.ToLookup(r => r.ZipPath, StringComparer.OrdinalIgnoreCase), ExternalIntegrityCheck.Claimants(external), [], []);
-        ZipCheck.Pulled = await games.ListCoverPulledAsync(CancellationToken.None).ConfigureAwait(false);
+        ZipCheck.CoverActions = await games.ListCoverActionsAsync(CancellationToken.None).ConfigureAwait(false);
         var findings = new Dictionary<(string, string, string), IntegrityFinding>();
         void Add(IntegrityFinding finding) => findings.TryAdd(finding.Key, finding);
 

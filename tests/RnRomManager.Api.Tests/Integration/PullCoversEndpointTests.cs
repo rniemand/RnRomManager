@@ -117,6 +117,27 @@ public class PullCoversEndpointTests
     }
 
     [Test]
+    public async Task NoCover_IsChecked_DefaultRunSkipsIt_RetryMissingTriesAgain()
+    {
+        var id = await IngestAsync();
+        Assert.That((await Service<LibraryEditor>().PatchAsync(id, new GamePatch { SetIgdbId = true, IgdbId = 42 }, null, default)).Code, Is.Null);
+        _igdb.GetGamesAsync(default!, default).ReturnsForAnyArgs([new IgdbGameRating(42, null, null, null)]);
+
+        async Task<string?> RunAsync(string url)
+        {
+            using var response = await _admin.PostAsync(url);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+            return (await WaitForEndAsync((await AuthClient.JsonAsync(response)).GetProperty("jobId").GetGuid())).Summary;
+        }
+
+        Assert.That(await RunAsync("/api/jobs/pull-covers"), Is.EqualTo("""{"pulled":0,"noCover":1,"imageLimit":0,"skipped":0,"error":0}"""));
+        await using (var db = Service<IDbConnectionFactory>().Create())
+            Assert.That(await db.QuerySingleAsync<DateTime?>("SELECT cover_image_checked_at FROM game_actions WHERE game_id = @id", new { id }), Is.Not.Null);
+        Assert.That(await RunAsync("/api/jobs/pull-covers"), Is.EqualTo("""{"pulled":0,"noCover":0,"imageLimit":0,"skipped":0,"error":0}"""));
+        Assert.That(await RunAsync("/api/jobs/pull-covers?retryMissing=true"), Is.EqualTo("""{"pulled":0,"noCover":1,"imageLimit":0,"skipped":0,"error":0}"""));
+    }
+
+    [Test]
     public async Task NotConfigured_Is409_JobRunning_Is409()
     {
         _igdb.Configured.Returns(false);

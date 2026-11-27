@@ -108,6 +108,26 @@ public class IgdbSyncEndpointTests
     }
 
     [Test]
+    public async Task DefaultRun_SkipsRatedGames_AllRepullsThem()
+    {
+        var id = await IngestAsync();
+        Assert.That((await Service<LibraryEditor>().PatchAsync(id, new GamePatch { SetIgdbId = true, IgdbId = 42 }, null, default)).Code, Is.Null);
+        await Service<IGameRepository>().SaveIgdbSyncAsync(id, 70, 10, DateTime.UtcNow, default);
+        _igdb.GetGamesAsync(default!, default).ReturnsForAnyArgs([new IgdbGameRating(42, null, 81.6, 1234)]);
+
+        async Task<string?> RunAsync(string url)
+        {
+            using var response = await _admin.PostAsync(url);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+            return (await WaitForEndAsync((await AuthClient.JsonAsync(response)).GetProperty("jobId").GetGuid())).Summary;
+        }
+
+        Assert.That(await RunAsync("/api/jobs/igdb-sync"), Is.EqualTo("""{"updated":0,"noRating":0,"notFound":0}"""));
+        Assert.That(await RunAsync("/api/jobs/igdb-sync?all=true"), Is.EqualTo("""{"updated":1,"noRating":0,"notFound":0}"""));
+        Assert.That((await Service<IGameRepository>().GetActionsAsync(id, default))!.IgdbRating, Is.EqualTo(81.6));
+    }
+
+    [Test]
     public async Task NotConfigured_Is409_JobRunning_Is409()
     {
         _igdb.Configured.Returns(false);

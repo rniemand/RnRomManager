@@ -61,6 +61,8 @@
 	];
 	const visibleNavigation = $derived(navigation.filter((item) => !item.admin || isAdmin));
 	const adminActive = $derived(isActive('/admin/users'));
+	/** NV1: the Jobs item after Admin. */
+	const jobsActive = $derived(isActive('/jobs'));
 
 	/** U1: the phone menu closes after a navigation; on desktop the collapse is never `.show`. */
 	let collapse = $state<HTMLDivElement | null>(null);
@@ -175,6 +177,16 @@
 									href={resolve('/admin/users')}
 								>
 									<Icon name="admin" /> Admin
+								</a>
+							</li>
+							<li>
+								<a
+									class="dropdown-item d-flex align-items-center gap-2"
+									class:active={jobsActive}
+									aria-current={jobsActive ? 'page' : undefined}
+									href={resolve('/jobs')}
+								>
+									<Icon name="activity" /> Jobs
 								</a>
 							</li>
 							<li><hr class="dropdown-divider" /></li>

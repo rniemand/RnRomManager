@@ -36,6 +36,8 @@ public static class InfoJsonValidator
             return "igdbId must be null, 0 or positive";
         if (game.Actions?.CoverImagePulled is { } pulled && InfoJsonActions.Parse(pulled) is null)
             return "actions.coverImagePulled must be an ISO-8601 time";
+        if (game.Actions?.CoverImageChecked is { } checkedAt && InfoJsonActions.Parse(checkedAt) is null)
+            return "actions.coverImageChecked must be an ISO-8601 time";
         if (game.Roms.Count == 0)
             return "roms must not be empty";
         if (game.Roms.Count(r => r.IsPrimary) != 1)

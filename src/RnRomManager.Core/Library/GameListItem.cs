@@ -14,6 +14,8 @@ namespace RnRomManager.Core.Library;
 /// <param name="PrimaryEncrypted">3DS P4: the primary release's header has <c>encrypted: true</c>.</param>
 /// <param name="IgdbId">The game's IGDB id, null or 0 when not linked (Timeline).</param>
 /// <param name="OwnSaveCount">S1: the viewer's own saves, filled per request.</param>
+/// <param name="OwnStateSaveCount">SV2: the viewer's own save states, filled per request; null when unknown (a legacy row).</param>
+/// <param name="IgdbRating">GS1: the raw <c>game_actions.igdb_rating</c>, null when none is stored.</param>
 public sealed record GameListItem(
     Guid Id,
     string SystemId,
@@ -36,4 +38,6 @@ public sealed record GameListItem(
     bool PrimaryHasFiles = false,
     bool PrimaryEncrypted = false,
     int? IgdbId = null,
-    int OwnSaveCount = 0);
+    int OwnSaveCount = 0,
+    int? OwnStateSaveCount = null,
+    double? IgdbRating = null);

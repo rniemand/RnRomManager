@@ -62,12 +62,14 @@ public static class LibraryDtos
             dlcCount = game.DlcCount,
             saveCount = game.SaveCount,
             ownSaveCount = game.OwnSaveCount,
+            ownStateSaveCount = game.OwnStateSaveCount,
             playRomId = playable ? game.PrimaryRomId : null,
             playRomFileName = playable ? game.PrimaryRomFileName : null,
             // Sega CD B6: quick play adds disc=1 for an external primary, since a shared core can't tell on its own.
             playDisc = playable && game.PrimaryIsExternal && LibraryEndpoints.PlayDiscCores.Contains(core!),
             browserCore = core,
             igdbId = game.IgdbId,
+            igdbRating = game.IgdbRating,
         };
     }
 

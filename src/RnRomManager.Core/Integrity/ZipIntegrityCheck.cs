@@ -18,27 +18,32 @@ internal sealed class ZipIntegrityCheck(
     InfoJsonReader reader,
     ILibraryMirror mirror)
 {
-    /// <summary>A5: <c>cover_image_pulled_at</c> per game, read for runs that open ZIPs with hashing (Deep, Game).</summary>
-    internal IReadOnlyDictionary<Guid, DateTime>? Pulled { get; set; }
+    /// <summary>
+    /// A5, AC3: <c>cover_image_pulled_at</c> and <c>cover_image_checked_at</c> per game, read for runs that open ZIPs with
+    /// hashing (Deep, Game).
+    /// </summary>
+    internal IReadOnlyDictionary<Guid, (DateTime? Pulled, DateTime? Checked)>? CoverActions { get; set; }
 
     /// <summary>A5: the action mismatches this run repaired.</summary>
     internal List<IntegrityFinding> ActionRepairs { get; } = [];
 
     /// <summary>
-    /// A5: when the mirrored cover-pulled time differs from the ZIP's (both whole UTC seconds), the game is mirrored again
-    /// and the repair recorded as <c>DbRowUpdated</c>.
+    /// A5, AC3: when the mirrored cover-pulled or cover-checked time differs from the ZIP's (both whole UTC seconds), the
+    /// game is mirrored again and the repair recorded as <c>DbRowUpdated</c>.
     /// </summary>
     private async Task CheckActionsAsync(string zipPath, InfoJsonGame game, GameRow? row)
     {
-        if (Pulled is null || row is null || row.Id != game.GameId)
+        if (CoverActions is null || row is null || row.Id != game.GameId)
             return;
-        DateTime? inZip = InfoJsonActions.Parse(game.Actions?.CoverImagePulled) is { } pulled ? MirrorEntry.WholeSeconds(pulled.UtcDateTime) : null;
-        DateTime? inDb = Pulled.TryGetValue(game.GameId, out var stored) ? MirrorEntry.WholeSeconds(stored) : null;
-        if (inZip == inDb)
+        var stored = CoverActions.GetValueOrDefault(game.GameId);
+        if (FromZip(game.Actions?.CoverImagePulled) == FromDb(stored.Pulled) && FromZip(game.Actions?.CoverImageChecked) == FromDb(stored.Checked))
             return;
         var file = new FileInfo(Path.Combine(paths.Value.Roms, zipPath));
         await mirror.ReplaceAsync(new MirrorEntry(game, zipPath, file.Length, file.LastWriteTimeUtc), CancellationToken.None).ConfigureAwait(false);
         ActionRepairs.Add(new IntegrityFinding(DbRowUpdated, zipPath, SystemId: game.System, GameId: game.GameId));
+
+        static DateTime? FromZip(string? value) => InfoJsonActions.Parse(value) is { } time ? MirrorEntry.WholeSeconds(time.UtcDateTime) : null;
+        static DateTime? FromDb(DateTime? value) => value is { } time ? MirrorEntry.WholeSeconds(time) : null;
     }
 
     internal async Task CheckZipAsync(

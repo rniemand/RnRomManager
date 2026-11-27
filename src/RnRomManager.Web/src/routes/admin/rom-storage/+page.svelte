@@ -10,6 +10,7 @@
 	import { api } from '#lib/api/client.js';
 	import type { RomStorageRow } from '#lib/types/index.js';
 	import ErrorAlert from '#lib/components/common/ErrorAlert.svelte';
+	import FileSize from '#lib/components/common/FileSize.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
 	import Loading from '#lib/components/common/Loading.svelte';
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
@@ -24,7 +25,8 @@
 	 * systems change their compression level, or repack again, through a confirmation that starts the repack job.
 	 * ROM Zip Config and Jobs Restyle R1–R11: storage as icons with tooltips, levels as coloured badges, a Folder column,
 	 * system badges linking to the Library, one column per action and grouped headers. L1–L3: the legend shows the same
-	 * badges and a speed icon per level.
+	 * badges and a speed icon per level. Admin polish RZ1–RZ7: a Size column, one Storage column (default › configured)
+	 * with an inline switch, the level badge as the compression button, and Repack.
 	 */
 	type Level = RomStorageRow['zipCompression'];
 
@@ -46,9 +48,9 @@
 	];
 	const level = (value: Level) => levels.find((l) => l.value === value) ?? levels[1];
 
-	/** R6: the storage icon, its accessible label and its tooltip. */
-	const storage = (embed: boolean) =>
-		embed
+	/** R6: the storage icon, its accessible label and its tooltip; RZ5: both prefixed when default and configured differ. */
+	const storage = (embed: boolean, prefix = '') => {
+		const s = embed
 			? {
 					icon: 'storage-in-zip',
 					label: 'Stored in ZIP',
@@ -58,6 +60,19 @@
 					icon: 'storage-beside-zip',
 					label: 'Beside ZIP',
 					tip: "Beside ZIP: ROMs are separate files next to each game's ZIP"
+				};
+		return { icon: s.icon, label: prefix + s.label, tip: prefix + s.tip };
+	};
+	/** RZ5: the switch button's label and tooltip. */
+	const switchTo = (row: RomStorageRow) =>
+		row.embedRoms
+			? {
+					label: `Switch ${row.displayName} to beside ZIP`,
+					tip: "Switch to beside ZIP: move every game's ROMs out of its ZIP, next to it"
+				}
+			: {
+					label: `Switch ${row.displayName} to in ZIP`,
+					tip: "Switch to in ZIP: move every game's ROMs into its ZIP"
 				};
 	const pending = $derived(rows?.filter((r) => r.configurable && r.pendingGames > 0) ?? []);
 	const blocked = $derived(busy || jobs.current !== null);
@@ -223,17 +238,16 @@
 	<DataTable items={rows} key={(row) => row.id}>
 		{#snippet head()}
 			<tr>
-				<th scope="colgroup" colspan="3"><span class="visually-hidden">System</span></th>
-				<th scope="colgroup" colspan="3" class="text-center">ROM storage</th>
+				<th scope="colgroup" colspan="4"><span class="visually-hidden">System</span></th>
+				<th scope="colgroup" colspan="1" class="text-center">ROM storage</th>
 				<th scope="colgroup" colspan="2" class="text-center">ZIP compression</th>
 			</tr>
 			<tr>
 				<th scope="col">System</th>
 				<th scope="col">Folder</th>
 				<th scope="col" class="text-end">Games</th>
-				<th scope="col" class="text-center">Default</th>
-				<th scope="col" class="text-center">Configured</th>
-				<th scope="col" class="text-end">Change</th>
+				<th scope="col" class="text-end">Size</th>
+				<th scope="col" class="text-center">Storage</th>
 				<th scope="col" class="text-center">Level</th>
 				<th scope="col" class="text-end">Repack</th>
 			</tr>
@@ -254,37 +268,49 @@
 						>{row.id}</code
 					>
 				</td>
-				<td class="text-end">{formatCount(row.gameCount)}</td>
-				<td class="text-center">{@render storageIcon(row.defaultEmbedRoms)}</td>
-				<td class="text-center">
-					{@render storageIcon(row.embedRoms)}
+				<td class="text-end small">{formatCount(row.gameCount)}</td>
+				<td class="text-end">
+					{#if row.gameCount > 0}<FileSize bytes={row.totalBytes} />{:else}—{/if}
+				</td>
+				<td class="text-center text-nowrap">
+					{#if row.embedRoms === row.defaultEmbedRoms}
+						{@render storageIcon(storage(row.defaultEmbedRoms))}
+					{:else}
+						{@render storageIcon(storage(row.defaultEmbedRoms, 'Default: '))}<span
+							class="mx-1"
+							aria-hidden="true">›</span
+						>{@render storageIcon(storage(row.embedRoms, 'Configured: '))}
+					{/if}
 					{#if row.pendingGames > 0}
 						<span class="badge text-bg-warning ms-1"
 							>{row.pendingGames} game{row.pendingGames === 1 ? '' : 's'} still to move</span
 						>
 					{/if}
-				</td>
-				<td class="text-end">
 					{#if row.configurable}
-						<Button variant="primary" outline size="sm" disabled={blocked} onclick={() => ask(row)}
-							>{row.embedRoms ? 'Store beside ZIP' : 'Store in ZIP'}</Button
-						>
-					{/if}
-				</td>
-				<td class="text-center text-nowrap">
-					{#if row.compressionConfigurable}
-						{@render levelBadge(row.zipCompression)}
+						{@const s = switchTo(row)}
 						<Button
 							variant="primary"
 							outline
 							size="sm"
+							icon="move"
 							class="ms-2"
-							icon="edit"
-							aria-label="Edit ZIP compression of {row.displayName}"
-							{@attach fromAction(tooltip, () => 'Edit compression level')}
+							aria-label={s.label}
+							{@attach fromAction(tooltip, () => s.tip)}
 							disabled={blocked}
-							onclick={() => askZip(row, false)}
+							onclick={() => ask(row)}
 						/>
+					{/if}
+				</td>
+				<td class="text-center text-nowrap">
+					{#if row.compressionConfigurable}
+						<Button
+							class="badge border-0 {level(row.zipCompression).badge}"
+							aria-label="Change ZIP compression of {row.displayName}, {level(row.zipCompression)
+								.label}"
+							{@attach fromAction(tooltip, () => 'Change compression level')}
+							disabled={blocked}
+							onclick={() => askZip(row, false)}>{level(row.zipCompression).label}</Button
+						>
 					{:else}
 						<span class="text-body-secondary" aria-hidden="true">—</span><span
 							class="visually-hidden">Not applicable: ROMs are beside the ZIP</span
@@ -299,7 +325,7 @@
 							size="sm"
 							disabled={blocked}
 							onclick={() => askZip(row, true)}
-							>Repack again&#32;<span class="visually-hidden">{row.displayName} ZIPs</span></Button
+							>Repack&#32;<span class="visually-hidden">{row.displayName} ZIPs</span></Button
 						>
 					{/if}
 				</td>
@@ -338,8 +364,7 @@
 	<span class="badge {level(value).badge}">{level(value).label}</span>
 {/snippet}
 
-{#snippet storageIcon(embed: boolean)}
-	{@const s = storage(embed)}
+{#snippet storageIcon(s: { icon: string; label: string; tip: string })}
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<span class="d-inline-block fs-5" tabindex="0" use:tooltip={s.tip}
 		><Icon name={s.icon} label={s.label} /></span

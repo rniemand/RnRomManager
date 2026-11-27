@@ -44,6 +44,8 @@ const game = (id: string, title: string): GameListItem => ({
 	dlcCount: 0,
 	saveCount: 0,
 	ownSaveCount: 0,
+	ownStateSaveCount: null,
+	igdbRating: null,
 	playRomId: null,
 	playRomFileName: null,
 	playDisc: false,

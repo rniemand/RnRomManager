@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import type { Role } from '#lib/enums/index.js';
@@ -139,6 +139,39 @@ describe('GlobalSearch', () => {
 		const options = screen.getAllByRole('option', { hidden: true });
 		expect(options[1].textContent).toContain('Publisher: Nintendo');
 		expect(options[0].textContent).not.toMatch(/Developer:|Publisher:|Genre:/);
+	});
+
+	it('a linked game shows an IGDB line under the title, with its rating when stored (GS2)', async () => {
+		items = [
+			item('g1', 'Rated', { igdbId: 42, igdbRating: 81.5 }),
+			item('g2', 'Linked', { igdbId: 43, igdbRating: null }),
+			item('g3', 'Not on IGDB', { igdbId: 0, igdbRating: null }),
+			item('g4', 'Unlinked', {
+				igdbId: null,
+				igdbRating: null,
+				matchedOn: { field: 'genre', value: 'Puzzle' }
+			})
+		];
+		render(GlobalSearch, { open: true });
+
+		await typeAndWait('game');
+
+		const all = screen.getAllByRole('option', { hidden: true });
+		const options = ['Rated', 'Linked', 'Not on IGDB', 'Unlinked'].map((title) =>
+			all.find((o) => o.querySelector('.fw-semibold')?.textContent === title)!
+		);
+		const line = (o: HTMLElement) =>
+			o.querySelector('.bi-link-45deg')?.closest('div') as HTMLElement | undefined;
+		expect(line(options[0])!.textContent!.replace(/\s+/g, ' ').trim()).toBe('IGDB 82/100');
+		expect(line(options[0])!.className).toContain('small text-truncate');
+		expect(line(options[0])!.previousElementSibling!.textContent).toBe('Rated');
+		expect(
+			within(options[0]).getByRole('img', { name: 'Linked to IGDB', hidden: true })
+		).toBeTruthy();
+		expect(line(options[1])!.textContent!.trim()).toBe('IGDB');
+		expect(line(options[2])).toBeUndefined();
+		expect(line(options[3])).toBeUndefined();
+		expect(options[3].textContent).toContain('Genre: Puzzle');
 	});
 
 	describe('DLC and update matches (DLC B13)', () => {

@@ -314,20 +314,23 @@ public static class LibraryEndpoints
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // Admin actions R1.
-        api.MapPost("/jobs/igdb-sync", async (HttpContext ctx, JobRunner runner, IgdbSyncJob job, IIgdbGames igdb) =>
+        // AC7: ?all=true repulls every linked game's rating.
+        api.MapPost("/jobs/igdb-sync", async (bool? all, HttpContext ctx, JobRunner runner, IgdbSyncJob job, IIgdbGames igdb) =>
         {
             if (!igdb.Configured)
                 return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
                     "Refreshing ratings needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
+            job.All = all == true;
             return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
-        // Admin actions P1.
-        api.MapPost("/jobs/pull-covers", async (HttpContext ctx, JobRunner runner, PullCoversJob job, IIgdbGames igdb) =>
+        // Admin actions P1; AC7: ?retryMissing=true also retries games whose cover couldn't be pulled before.
+        api.MapPost("/jobs/pull-covers", async (bool? retryMissing, HttpContext ctx, JobRunner runner, PullCoversJob job, IIgdbGames igdb) =>
         {
             if (!igdb.Configured)
                 return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
                     "Pulling covers needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
+            job.RetryMissing = retryMissing == true;
             return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
@@ -362,7 +365,7 @@ public static class LibraryEndpoints
         if (SiteUserName(ctx) is { } username)
             game = game with
             {
-                SaveCount = (await repository.GetUserSaveCountsAsync(username, [id], ctx.RequestAborted)).GetValueOrDefault(id),
+                SaveCount = (await repository.GetUserSaveCountsAsync(username, [id], ctx.RequestAborted)).GetValueOrDefault(id)?.Saves ?? 0,
             };
         var romRows = await roms.ListByGameAsync(id, ctx.RequestAborted);
         var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
@@ -410,7 +413,8 @@ public static class LibraryEndpoints
 
     /// <summary>
     /// S1: each game's <c>ownSaveCount</c> is the viewer's own saves (Admins too); S7: for a Site user <c>saveCount</c>
-    /// becomes that count as well (0 without a row).
+    /// becomes that count as well (0 without a row). SV2: <c>ownStateSaveCount</c> is the viewer's own save states, null for
+    /// a row mirrored before the count existed, 0 without a row.
     /// </summary>
     internal static async Task<Page<GameListItem>> ForViewerAsync(Page<GameListItem> page, HttpContext ctx, IGameRepository repository)
     {
@@ -420,9 +424,12 @@ public static class LibraryEndpoints
         var site = SiteUserName(ctx) is not null;
         return page with
         {
-            Items = page.Items.Select(g => counts.GetValueOrDefault(g.Id) is var own
-                ? g with { OwnSaveCount = own, SaveCount = site ? own : g.SaveCount }
-                : g).ToList(),
+            Items = page.Items.Select(g =>
+            {
+                var row = counts.GetValueOrDefault(g.Id);
+                var own = row?.Saves ?? 0;
+                return g with { OwnSaveCount = own, SaveCount = site ? own : g.SaveCount, OwnStateSaveCount = row is null ? 0 : row.States };
+            }).ToList(),
         };
     }
 

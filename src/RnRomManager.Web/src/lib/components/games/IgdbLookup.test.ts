@@ -310,6 +310,11 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 
 			const table = document.querySelector('table')!;
 			expect(table.parentElement!.className).toContain('table-responsive');
+			// EM2: the fields scroll on their own; so do the matches.
+			expect(table.parentElement!.className).toContain('lookup-fields');
+			expect(screen.getByRole('group', { name: 'IGDB matches' }).className).toContain(
+				'lookup-matches'
+			);
 			expect(table.querySelector('caption')!.className).toContain('visually-hidden');
 			expect(table.querySelector('caption')!.textContent).toBe('Fields to copy from IGDB');
 			expect([...table.querySelectorAll('thead th')].map((th) => th.textContent!.trim())).toEqual([

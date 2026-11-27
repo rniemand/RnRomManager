@@ -45,6 +45,8 @@ export const icons: Record<string, string> = {
 	'report-new-games': 'bi bi-stars',
 	'report-missing-metadata': 'bi bi-card-checklist',
 	'report-missing-igdb': 'bi bi-link-45deg',
+	// GS2: a Global search result linked to IGDB.
+	'igdb-linked': 'bi bi-link-45deg',
 	'review-suggestions': 'bi bi-lightbulb',
 	'review-matched': 'bi bi-bullseye',
 	'review-attach': 'bi bi-paperclip',
@@ -109,8 +111,8 @@ export const icons: Record<string, string> = {
 	'os-android': 'bi bi-android2',
 	'os-ios': 'bi bi-apple',
 	// ROM Zip Config and Jobs Restyle R6, L3: storage icons and the legend's speed icons.
-	'storage-in-zip': 'bi bi-file-zip',
-	'storage-beside-zip': 'bi bi-files',
+	'storage-in-zip': 'bi bi-file-earmark-zip',
+	'storage-beside-zip': 'bi bi-folder2-open',
 	'speed-fast': 'bi bi-lightning-charge',
 	'speed-medium': 'bi bi-lightning',
 	'speed-slow': 'bi bi-hourglass-split',

@@ -44,7 +44,7 @@ public class SchemaMigrationTests
             "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
             "0019_release_versions", "0020_rom_files", "0021_publisher_logos", "0022_bundle_queues", "0023_game_save_count",
             "0024_fold_rom_manager", "0025_game_user_save_counts", "0026_discovery_logos", "0027_game_igdb_id", "0028_duplicate_dismissal_match",
-            "0029_game_actions",
+            "0029_game_actions", "0030_game_cover_checked", "0031_user_state_save_counts",
         }));
     }
 
@@ -53,7 +53,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 29L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 31L }));
     }
 
     [Test]
@@ -85,8 +85,8 @@ public class SchemaMigrationTests
     [TestCase("duplicate_dismissals", "match_kind varchar(8) ='title', system_id varchar(16), base_title varchar(255), games_key char(64), dismissed_by int(11) NULL, dismissed_at datetime(6)")]
     [TestCase("collections", "id char(36), user_id int(11), name varchar(100), notes text NULL, cover_format varchar(8) NULL, cover_updated_at datetime(6) NULL, created_at datetime(6), updated_at datetime(6)")]
     [TestCase("collection_games", "collection_id char(36), game_id char(36), added_at datetime(6)")]
-    [TestCase("game_user_save_counts", "game_id char(36), username varchar(64), save_count int(11)")]
-    [TestCase("game_actions", "game_id char(36), cover_image_pulled_at datetime(6) NULL, last_igdb_sync_at datetime(6) NULL, igdb_rating double NULL, igdb_rating_count int(11) NULL")]
+    [TestCase("game_user_save_counts", "game_id char(36), username varchar(64), save_count int(11), state_count int(11) NULL")]
+    [TestCase("game_actions", "game_id char(36), cover_image_pulled_at datetime(6) NULL, last_igdb_sync_at datetime(6) NULL, igdb_rating double NULL, igdb_rating_count int(11) NULL, cover_image_checked_at datetime(6) NULL")]
     [TestCase("bundle_queues", "id char(36), user_id int(11), name varchar(100), revision int(11), item_count int(11), entries mediumtext, created_at datetime(6), updated_at datetime(6)")]
     public async Task Columns_MatchSpec(string table, string expected)
     {

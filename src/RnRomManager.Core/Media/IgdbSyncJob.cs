@@ -5,9 +5,9 @@ using RnRomManager.Core.Library;
 namespace RnRomManager.Core.Media;
 
 /// <summary>
-/// Admin actions R1–R3, "Refresh IGDB Ratings": every IGDB-linked game's <c>total_rating</c> and vote count, read in
-/// batches and stored in <c>game_actions</c> only (never a ZIP). One job item per game; cancellable between batches; an
-/// IGDB read failure fails the job with its title.
+/// Admin actions R1–R3, "Refresh IGDB Ratings": the <c>total_rating</c> and vote count of every IGDB-linked game without a
+/// stored rating (AC6; every linked game when <see cref="All"/>), read in batches and stored in <c>game_actions</c> only
+/// (never a ZIP). One job item per game; cancellable between batches; an IGDB read failure fails the job with its title.
 /// </summary>
 public sealed class IgdbSyncJob(
     IGameRepository games,
@@ -19,12 +19,15 @@ public sealed class IgdbSyncJob(
     public const string NoRating = "NoRating";
     public const string NotFound = "NotFound";
 
+    /// <summary>AC6, "Repull ALL Ratings": every linked game, including ones that already have a rating.</summary>
+    public bool All { get; set; }
+
     public JobType Type => JobType.IgdbSync;
     public JobMode? Mode => null;
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {
-        var linked = await games.ListIgdbLinkedAsync(cancellationToken).ConfigureAwait(false);
+        var linked = await games.ListIgdbLinkedAsync(missingRatingOnly: !All, cancellationToken).ConfigureAwait(false);
         context.Progress.SetTotal(linked.Count);
         int updated = 0, noRating = 0, notFound = 0;
 

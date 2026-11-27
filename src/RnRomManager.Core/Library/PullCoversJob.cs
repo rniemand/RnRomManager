@@ -12,8 +12,10 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Core.Library;
 
 /// <summary>
-/// Admin actions P1–P5, "Pull Cover Images": the IGDB cover of every linked game without <c>cover_image_pulled_at</c>
-/// becomes its only cover, and <c>actions.coverImagePulled</c> records it. Runs under the lock <see cref="JobRunner"/>
+/// Admin actions P1–P5, "Pull Cover Images": the IGDB cover of every linked game not tried yet (AC4: neither
+/// <c>cover_image_pulled_at</c> nor <c>cover_image_checked_at</c>; without a pulled cover when <see cref="RetryMissing"/>)
+/// becomes its only cover, and <c>actions.coverImagePulled</c> records it; an IGDB-side failure records
+/// <c>actions.coverImageChecked</c> (AC5). Runs under the lock <see cref="JobRunner"/>
 /// holds, so it writes each ZIP itself as <see cref="GameMediaRetry"/> does (never through <see cref="LibraryEditor"/>).
 /// One job item per game; cancellable between games; an IGDB read failure or an open breaker fails the job.
 /// </summary>
@@ -40,12 +42,15 @@ public sealed class PullCoversJob(
     /// <summary>P5: the job's error when the cover downloads' breaker opens.</summary>
     public const string ImagesUnreachable = "IGDB images couldn't be reached.";
 
+    /// <summary>AC4, "Try Missing Images": also retries games whose IGDB cover couldn't be pulled before.</summary>
+    public bool RetryMissing { get; set; }
+
     public JobType Type => JobType.PullCovers;
     public JobMode? Mode => null;
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {
-        var candidates = await games.ListPullCoverCandidatesAsync(cancellationToken).ConfigureAwait(false);
+        var candidates = await games.ListPullCoverCandidatesAsync(includeChecked: RetryMissing, cancellationToken).ConfigureAwait(false);
         context.Progress.SetTotal(candidates.Count);
         var breaker = new CircuitBreaker();
         var counts = new Dictionary<string, int> { [Pulled] = 0, [NoCover] = 0, [ImageLimit] = 0, [Skipped] = 0, [Error] = 0 };
@@ -123,10 +128,17 @@ public sealed class PullCoversJob(
             return await MirrorAsync(new MirrorEntry(current, row.ZipPath, file.Length, file.LastWriteTimeUtc)).ConfigureAwait(false)
                 ?? new PullCoversJobOutcome(Skipped, Details: "The cover was already pulled.");
         }
+        if (!RetryMissing && current.Actions?.CoverImageChecked is not null)
+        {
+            // AC5: the database lost the check: the ZIP is the truth.
+            var file = new FileInfo(path);
+            return await MirrorAsync(new MirrorEntry(current, row.ZipPath, file.Length, file.LastWriteTimeUtc)).ConfigureAwait(false)
+                ?? new PullCoversJobOutcome(Skipped, Details: "The cover was already checked.");
+        }
         if (current.IgdbId is not > 0 || current.IgdbId != row.IgdbId)
             return new(Skipped, Details: "The ZIP's IGDB link differs from the database's.");
         if (!found.TryGetValue(current.IgdbId.Value, out var igdbGame) || igdbGame.CoverImageId is not { } imageId)
-            return new(NoCover);
+            return await CheckedAsync(row, current, existing, path, new(NoCover)).ConfigureAwait(false);
 
         var download = await igdb.DownloadCoverAsync(imageId, ct).ConfigureAwait(false);
         if (download.Status is null or >= 500)
@@ -134,9 +146,16 @@ public sealed class PullCoversJob(
         else if (download.Status == 200)
             breaker.RecordSuccess();
         if (download.Bytes is not { } bytes)
-            return new(Error, "DownloadFailed", download.Error);
+        {
+            PullCoversJobOutcome downloadFailed = new(Error, "DownloadFailed", download.Error);
+            // AC5: only an answer from IGDB (oversize 200 or 4xx) is recorded; a network error or 5xx may be an outage.
+            return download.Status is 200 or (>= 400 and < 500)
+                ? await CheckedAsync(row, current, existing, path, downloadFailed).ConfigureAwait(false)
+                : downloadFailed;
+        }
         if (ImageFormats.Read(bytes) is not var (format, width, height))
-            return new(Error, "ImageUnreadable", "The IGDB cover isn't a PNG or JPEG whose size can be read.");
+            return await CheckedAsync(row, current, existing, path,
+                new(Error, "ImageUnreadable", "The IGDB cover isn't a PNG or JPEG whose size can be read.")).ConfigureAwait(false);
 
         var now = time.GetUtcNow();
         var url = IgdbClient.CoverUrl(imageId);
@@ -170,7 +189,8 @@ public sealed class PullCoversJob(
                 DateAdded = now,
             });
             if (images.Count > GameImages.MaxImages)
-                return new(ImageLimit, Details: $"A game can have at most {GameImages.MaxImages} images.");
+                return await CheckedAsync(row, current, existing, path,
+                    new(ImageLimit, Details: $"A game can have at most {GameImages.MaxImages} images.")).ConfigureAwait(false);
             entries[LibraryZip.ImageEntry(fileName)] = () => new MemoryStream(bytes);
         }
 
@@ -184,12 +204,7 @@ public sealed class PullCoversJob(
         // Not cancellable once the write starts: a ZIP is never left half-applied.
         try
         {
-            var writer = new LibraryZipWriter(reader, zipSettings?.Compression(game.System) ?? ZipCompression.Med);
-            var changes = new LibraryZipChanges(game, entries);
-            if (LibraryTarget.NeedsCheck(systems, row.ZipPath, game.System))
-                await writer.WriteCheckedAsync(library, path, existing, changes).ConfigureAwait(false);
-            else
-                await writer.WriteAsync(path, existing, changes).ConfigureAwait(false);
+            await WriteAsync(row.ZipPath, path, existing, new LibraryZipChanges(game, entries)).ConfigureAwait(false);
         }
         catch (LibraryZipVerifyException ex)
         {
@@ -219,6 +234,50 @@ public sealed class PullCoversJob(
         }
         logger.LogInformation("IGDB cover of game {GameId} pulled ({ZipPath}): {Image}", row.Id, row.ZipPath, fileName);
         return new(Pulled);
+    }
+
+    private async Task WriteAsync(
+        string zipPath,
+        string path,
+        LibraryZip existing,
+        LibraryZipChanges changes)
+    {
+        var writer = new LibraryZipWriter(reader, zipSettings?.Compression(changes.Info.System) ?? ZipCompression.Med);
+        if (LibraryTarget.NeedsCheck(systems, zipPath, changes.Info.System))
+            await writer.WriteCheckedAsync(paths.Value.Roms, path, existing, changes).ConfigureAwait(false);
+        else
+            await writer.WriteAsync(path, existing, changes).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// AC5: records an IGDB-side failure as <c>actions.coverImageChecked</c> = now in the ZIP and the database, so default
+    /// runs skip the game. No audit event (nothing was fetched); a failed write is logged and the game tried next run.
+    /// </summary>
+    /// <returns><paramref name="outcome"/>, unchanged.</returns>
+    private async Task<PullCoversJobOutcome> CheckedAsync(
+        GameRow row,
+        InfoJsonGame current,
+        LibraryZip existing,
+        string path,
+        PullCoversJobOutcome outcome)
+    {
+        var now = time.GetUtcNow();
+        var game = current with
+        {
+            Actions = (current.Actions ?? new InfoJsonActions()) with { CoverImageChecked = InfoJsonActions.Format(now) },
+            Metadata = current.Metadata with { UpdatedAt = now, AppVersion = AppInfo.Version },
+        };
+        try
+        {
+            await WriteAsync(row.ZipPath, path, existing, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>())).ConfigureAwait(false);
+            var info = new FileInfo(path);
+            await mirror.ReplaceAsync(new MirrorEntry(game, row.ZipPath, info.Length, info.LastWriteTimeUtc), CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Recording the cover check of {ZipPath} failed", row.ZipPath);
+        }
+        return outcome;
     }
 
     /// <returns>null when mirrored, else the <c>DbWriteFailed</c> outcome.</returns>

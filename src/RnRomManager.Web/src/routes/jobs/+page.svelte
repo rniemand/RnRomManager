@@ -12,7 +12,7 @@
 	import Loading from '#lib/components/common/Loading.svelte';
 	import PageTitle from '#lib/components/layout/PageTitle.svelte';
 	import Pagination from '#lib/components/common/Pagination.svelte';
-	import { formatDateTime } from '#lib/format.js';
+	import { formatDateTime, formatDuration } from '#lib/format.js';
 	import { isCancellable, jobLabel, percent, statusClass } from '#lib/jobs.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
@@ -162,6 +162,7 @@
 					<th scope="col">Status</th>
 					<th scope="col">Started</th>
 					<th scope="col">Ended</th>
+					<th scope="col">Running time</th>
 					<th scope="col"><span class="visually-hidden">Details</span></th>
 				</tr>
 			{/snippet}
@@ -172,6 +173,11 @@
 					<td><span class="badge {statusClass(job.status)}">{job.status}</span></td>
 					<td>{formatDateTime(job.startedAt)}</td>
 					<td>{job.finishedAt ? formatDateTime(job.finishedAt) : '—'}</td>
+					<td>
+						{job.finishedAt
+							? formatDuration(Date.parse(job.finishedAt) - Date.parse(job.startedAt))
+							: '—'}
+					</td>
 					<td><a href={resolve('/jobs/[id]', { id: job.id })}>Details</a></td>
 				</tr>
 			{/snippet}

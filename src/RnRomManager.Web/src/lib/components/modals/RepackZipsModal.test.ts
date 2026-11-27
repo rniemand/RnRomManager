@@ -14,7 +14,7 @@ vi.mock('#lib/modal.js', () => ({ releaseModal: () => {} }));
 const { default: RepackZipsModal } = await import('./RepackZipsModal.svelte');
 
 describe('RepackZipsModal', () => {
-	it('warns about the repack; Repack again calls onconfirm; Cancel closes', async () => {
+	it('warns about the repack; Repack calls onconfirm; Cancel closes', async () => {
 		const onconfirm = vi.fn();
 		let open = true;
 		render(RepackZipsModal, {
@@ -31,7 +31,7 @@ describe('RepackZipsModal', () => {
 		const paragraphs = document.querySelectorAll('.modal-body p');
 		expect(paragraphs).toHaveLength(3);
 		expect(paragraphs[0].textContent).toContain('Every game ZIP of NES is rewritten');
-		await fireEvent.click(screen.getByRole('button', { name: 'Repack again', hidden: true }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Repack', hidden: true }));
 		expect(onconfirm).toHaveBeenCalledOnce();
 		await fireEvent.click(screen.getByRole('button', { name: 'Cancel', hidden: true }));
 		expect(open).toBe(false);

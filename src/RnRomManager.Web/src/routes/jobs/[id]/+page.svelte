@@ -104,14 +104,21 @@
 <svelte:head><title>Job · RnRomManager</title></svelte:head>
 
 <AdminOnly>
-	<p class="d-flex gap-3">
+	<!-- JB2: button-style links, as the game page's Back to Library. -->
+	<div class="d-flex flex-wrap gap-2 mb-3">
 		{#if job?.type === 'Integrity' || job?.type === 'MediaRetry'}
-			<a href={resolve('/integrity')}>← Integrity</a>
+			<Button variant="primary" outline size="sm" icon="back" href={resolve('/integrity')}
+				>Back to Integrity</Button
+			>
 		{:else}
-			<a href={resolve('/ingestion')}>← Ingestion</a>
+			<Button variant="primary" outline size="sm" icon="back" href={resolve('/ingestion')}
+				>Back to Ingestion</Button
+			>
 		{/if}
-		<a href={resolve('/jobs')}>All jobs</a>
-	</p>
+		<Button variant="primary" outline size="sm" icon="activity" href={resolve('/jobs')}
+			>All jobs</Button
+		>
+	</div>
 
 	{#if error}
 		<ErrorAlert {error} onretry={() => reload++} />

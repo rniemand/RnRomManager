@@ -34,16 +34,16 @@ public sealed class GameRepository : IGameRepository
             new CommandDefinition($"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken));
     }
 
-    public async Task<IReadOnlyDictionary<Guid, int>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds,
+    public async Task<IReadOnlyDictionary<Guid, UserSaveCount>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds,
         CancellationToken cancellationToken)
     {
         if (gameIds.Count == 0)
-            return new Dictionary<Guid, int>();
+            return new Dictionary<Guid, UserSaveCount>();
         await using var connection = _connections.Create();
-        return (await connection.QueryAsync<(Guid GameId, int SaveCount)>(new CommandDefinition(
-                "SELECT game_id, save_count FROM game_user_save_counts WHERE username = @username AND game_id IN @gameIds",
+        return (await connection.QueryAsync<(Guid GameId, int SaveCount, int? StateCount)>(new CommandDefinition(
+                "SELECT game_id, save_count, state_count FROM game_user_save_counts WHERE username = @username AND game_id IN @gameIds",
                 new { username, gameIds }, cancellationToken: cancellationToken)))
-            .ToDictionary(r => r.GameId, r => r.SaveCount);
+            .ToDictionary(r => r.GameId, r => new UserSaveCount(r.SaveCount, r.StateCount));
     }
 
     public async Task ClearIgdbSyncAsync(Guid gameId, CancellationToken cancellationToken)
@@ -54,11 +54,14 @@ public sealed class GameRepository : IGameRepository
             new { gameId }, cancellationToken: cancellationToken));
     }
 
-    public async Task<IReadOnlyList<GameRow>> ListIgdbLinkedAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<GameRow>> ListIgdbLinkedAsync(bool missingRatingOnly, CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
+        var missing = missingRatingOnly
+            ? " AND NOT EXISTS (SELECT 1 FROM game_actions a WHERE a.game_id = g.id AND a.igdb_rating IS NOT NULL)"
+            : "";
         return (await connection.QueryAsync<GameRow>(new CommandDefinition(
-            $"{Select} g WHERE g.igdb_id > 0 ORDER BY g.title, g.id", cancellationToken: cancellationToken))).AsList();
+            $"{Select} g WHERE g.igdb_id > 0{missing} ORDER BY g.title, g.id", cancellationToken: cancellationToken))).AsList();
     }
 
     public async Task SaveIgdbSyncAsync(
@@ -86,25 +89,32 @@ public sealed class GameRepository : IGameRepository
             """, new { gameId }, cancellationToken: cancellationToken));
     }
 
-    public async Task<IReadOnlyDictionary<Guid, DateTime>> ListCoverPulledAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<Guid, (DateTime? Pulled, DateTime? Checked)>> ListCoverActionsAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
-        return (await connection.QueryAsync<(Guid GameId, DateTime PulledAt)>(new CommandDefinition(
-                "SELECT game_id, cover_image_pulled_at FROM game_actions WHERE cover_image_pulled_at IS NOT NULL", cancellationToken: cancellationToken)))
-            .ToDictionary(r => r.GameId, r => DateTime.SpecifyKind(r.PulledAt, DateTimeKind.Utc));
+        return (await connection.QueryAsync<(Guid GameId, DateTime? PulledAt, DateTime? CheckedAt)>(new CommandDefinition("""
+                SELECT game_id, cover_image_pulled_at, cover_image_checked_at FROM game_actions
+                WHERE cover_image_pulled_at IS NOT NULL OR cover_image_checked_at IS NOT NULL
+                """, cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.GameId, r => (AsUtc(r.PulledAt), AsUtc(r.CheckedAt)));
+
+        static DateTime? AsUtc(DateTime? time) => time is { } t ? DateTime.SpecifyKind(t, DateTimeKind.Utc) : null;
     }
 
     public async Task<GameActionsSummary> GetActionsSummaryAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
-        var row = await connection.QuerySingleAsync<(long Linked, long Pending, DateTime? LastSync)>(new CommandDefinition("""
-            SELECT COUNT(*),
-                   CAST(COALESCE(SUM(a.cover_image_pulled_at IS NULL), 0) AS SIGNED),
-                   (SELECT MAX(last_igdb_sync_at) FROM game_actions)
-            FROM games g LEFT JOIN game_actions a ON a.game_id = g.id
-            WHERE g.igdb_id > 0
-            """, cancellationToken: cancellationToken));
-        return new GameActionsSummary((int)row.Linked, (int)row.Pending,
+        var row = await connection.QuerySingleAsync<(long Linked, long Pending, long Missing, long NoRating, DateTime? LastSync)>(
+            new CommandDefinition("""
+                SELECT COUNT(*),
+                       CAST(COALESCE(SUM(a.cover_image_pulled_at IS NULL AND a.cover_image_checked_at IS NULL), 0) AS SIGNED),
+                       CAST(COALESCE(SUM(a.cover_image_pulled_at IS NULL), 0) AS SIGNED),
+                       CAST(COALESCE(SUM(a.igdb_rating IS NULL), 0) AS SIGNED),
+                       (SELECT MAX(last_igdb_sync_at) FROM game_actions)
+                FROM games g LEFT JOIN game_actions a ON a.game_id = g.id
+                WHERE g.igdb_id > 0
+                """, cancellationToken: cancellationToken));
+        return new GameActionsSummary((int)row.Linked, (int)row.Pending, (int)row.Missing, (int)row.NoRating,
             row.LastSync is { } last ? DateTime.SpecifyKind(last, DateTimeKind.Utc) : null);
     }
 
@@ -251,6 +261,7 @@ public sealed class GameRepository : IGameRepository
                    (SELECT EXISTS(SELECT 1 FROM rom_files f WHERE f.rom_id = r.id) FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryHasFiles,
                    (SELECT JSON_EXTRACT(r.header, '$.encrypted') = 'true' FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryEncrypted,
                    g.rating AS Rating, g.favourite AS Favourite, g.save_count AS SaveCount, g.title AS Title, g.igdb_id AS IgdbId,
+                   (SELECT a.igdb_rating FROM game_actions a WHERE a.game_id = g.id) AS IgdbRating,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres,
                    {(words.Count == 0 ? "NULL" : AddOnNamesJson)} AS AddOns
             FROM {from} {filter}
@@ -261,7 +272,8 @@ public sealed class GameRepository : IGameRepository
         var items = rows.Items.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId, r.BoxArtSha1,
             r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns)),
-            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true, r.IgdbId)).ToList();
+            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true, r.IgdbId,
+            IgdbRating: r.IgdbRating)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, rows.Total);
     }
 
@@ -425,13 +437,14 @@ public sealed class GameRepository : IGameRepository
             """, cancellationToken: cancellationToken))).AsList();
     }
 
-    public async Task<IReadOnlyList<GameRow>> ListPullCoverCandidatesAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<GameRow>> ListPullCoverCandidatesAsync(bool includeChecked, CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
+        var handled = includeChecked ? "a.cover_image_pulled_at IS NOT NULL" : "(a.cover_image_pulled_at IS NOT NULL OR a.cover_image_checked_at IS NOT NULL)";
         return (await connection.QueryAsync<GameRow>(new CommandDefinition($"""
             {Select} g
             WHERE g.igdb_id > 0
-              AND NOT EXISTS (SELECT 1 FROM game_actions a WHERE a.game_id = g.id AND a.cover_image_pulled_at IS NOT NULL)
+              AND NOT EXISTS (SELECT 1 FROM game_actions a WHERE a.game_id = g.id AND {handled})
             ORDER BY g.title, g.id
             """, cancellationToken: cancellationToken))).AsList();
     }

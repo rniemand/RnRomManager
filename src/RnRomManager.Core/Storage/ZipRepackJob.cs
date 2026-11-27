@@ -36,7 +36,7 @@ public sealed class ZipRepackJob(
     /// <summary>The system whose ZIPs are repacked.</summary>
     public string SystemId { get; set; } = "";
 
-    /// <summary>The level to save first; null for Repack again.</summary>
+    /// <summary>The level to save first; null for Repack.</summary>
     public ZipCompression? Level { get; set; }
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)

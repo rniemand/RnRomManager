@@ -34,6 +34,8 @@ const game = (id: string, title: string, system: string, short: string): GameLis
 	dlcCount: 0,
 	saveCount: 0,
 	ownSaveCount: 0,
+	ownStateSaveCount: null,
+	igdbRating: null,
 	playRomId: null,
 	playRomFileName: null,
 	playDisc: false,
