@@ -26,7 +26,7 @@ Commodore Amiga (`amiga`, `AmigaHandler`, core `puae`) also ingests hard-disk im
 - **A5** Play needs no API change. These releases sit inside the ZIP, so `/download` serves them, and `canPlay` / `LibraryDtos.ToListItemDto`'s `playRomId` treat them like any `.adf` (only `.ipf` is refused). EmulatorJS 4.2.3 unpacks an `.hdz` by its ZIP magic and hands PUAE the HDF inside. It passes an `.lha` through unchanged, and PUAE's WHDLoad support boots it (`puae_use_whdload`: `disabled`/`files`/`hdfs`, default `files` in the vendored PUAE `2245d34`). No core option is set.
 
 ### Kickstart (K)
-- **K1** For every `puae` launch (one disk, a hard-disk image or a disk set), `play.js` GETs `kick34005.A500` and then `kick40068.A1200`, one after another, through `loadOptionalBios`. This happens after the `biosFor` check and before the content request. Exact sizes: 262,144 bytes (`kick34005.A500`) and 524,288 bytes (`kick40068.A1200`).
+- **K1** For every Amiga launch (`puae` with no `system`: one disk, a hard-disk image or a disk set), `play.js` GETs `kick34005.A500` and then `kick40068.A1200`, one after another, through `loadOptionalBios`. This happens after the CD32 (`isAmigaCd`) block and before the content request. A CD32 or CDTV disc (`system` set) keeps its own CD32 A7 Kickstarts and never runs this loop. Exact sizes: 262,144 bytes (`kick34005.A500`) and 524,288 bytes (`kick40068.A1200`).
   - A 404 skips a file.
   - A wrong size stops the launch with `amigaKickstartSizeError(name)`.
   - Any other failure stops it with `optionalBiosError`'s message.
@@ -35,22 +35,23 @@ Commodore Amiga (`amiga`, `AmigaHandler`, core `puae`) also ingests hard-disk im
 - **K4** Exact text (in `params.js`):
   - `amigaKickstartSizeError(name)`: `The Amiga Kickstart <name> in the BIOS folder (Paths:Bios) must be <256 KiB|512 KiB>: ask an Admin to replace it.`
   - `amigaHardDiskKickstartMissing`: `Amiga hard-disk games need a Kickstart: ask an Admin to put kick40068.A1200 in the BIOS folder (Paths:Bios).`
-- **K5** Admin → BIOS info gets a group after `Arcade (FinalBurn Neo)`: `new("Commodore Amiga", Need.Optional, [Exact("kick34005.A500", 256 * KiB), Exact("kick40068.A1200", 512 * KiB)], "Without them PUAE uses its built-in AROS Kickstart; hard-disk games (.hdf, .hdz, .lha) need kick40068.A1200.")`. The tab renders the catalog generically, so nothing changes in the SPA. Both names pass `EmulatorEndpoints.IsBiosName`.
+- **K5** Admin → BIOS info gets a group just before `Commodore Amiga CD32` (`Cd32Group`), so `Arcade (FinalBurn Neo)` stays last: `new("Commodore Amiga", Need.Optional, [Exact("kick34005.A500", 256 * KiB), Exact("kick40068.A1200", 512 * KiB)], "Without them PUAE uses its built-in AROS Kickstart; hard-disk games (.hdf, .hdz, .lha) need kick40068.A1200.")`. The tab renders the catalog generically, so nothing changes in the SPA. Both names pass `EmulatorEndpoints.IsBiosName`. `kick34005.A500` is also in the `Commodore CDTV` group; `BiosInfo.Check`'s `known` is a set, so it still isn't listed under Other files.
 - **K6** `contentFileName` gets no rename rule for `puae`. No stored Amiga release can end in `.A500` or `.A1200`.
 
 ## Changes
 | Area | File(s) | Change |
 |---|---|---|
-| Core | `src/RnRomManager.Systems.Commodore/AmigaHandler.cs` | A1, A3 and A4. The class summary also names the new types, says they always go to Review (A2) and that hard-disk play needs `kick40068.A1200`. |
+| Core | `src/RnRomManager.Systems.Commodore/AmigaHandler.cs` | A1, A3 and A4. The class summary also names the new types, says they always go to Review (A2) and that hard-disk play needs `kick40068.A1200`. The `BrowserCore` summary becomes "PUAE, vendored; it uses `kick34005.A500`/`kick40068.A1200` from the BIOS folder when present and its built-in AROS replacement otherwise." |
 | Api | `src/RnRomManager.Api/Endpoints/BiosInfo.cs` | K5 catalog entry. |
 | Web | `src/RnRomManager.Web/static/emulator/params.js` | Adds `amigaKickstarts` (`[{ name: 'kick34005.A500', bytes: 262144 }, { name: 'kick40068.A1200', bytes: 524288 }]`), `amigaHardDiskExtensions` (`['.hdf', '.hdz', '.lha']`), `isAmigaHardDisk(name)`, `amigaKickstartSizeError(name)` and `amigaHardDiskKickstartMissing` (K1, K3, K4). |
-| Web | `src/RnRomManager.Web/static/emulator/play.js` | K1–K3. Adds `const isAmiga = params.core === 'puae'` beside the other `is*` flags, an `amigaFirmware` loop after the TurboGrafx-CD block, and `if (isAmiga && Object.keys(amigaFirmware).length > 0) ejs.EJS_externalFiles = amigaFirmware;` beside the other assignments. |
+| Web | `src/RnRomManager.Web/static/emulator/play.js` | K1–K3. Adds `const isAmiga = params.core === 'puae' && params.system === null;` after `isAmigaCd`, an `amigaFirmware` loop after the `isAmigaCd` Kickstart block, and `if (isAmiga && Object.keys(amigaFirmware).length > 0) ejs.EJS_externalFiles = amigaFirmware;` after the `if (isAmigaCd)` assignment. The `isAmigaCd` comment's "an Amiga floppy (no `system`) boots PUAE's built-in AROS" becomes "an Amiga floppy or hard disk (no `system`) loads the optional Kickstarts (Amiga K1)". |
 | Tests | `tests/RnRomManager.Api.Tests/BrowserCoreExtensionsTests.cs` | Removes the `(NoDat, ["puae"], [".hdf", ".hdz", ".lha", ".fdi", ".raw", ".dms"])` `NotIngested` entry, which is now stale. |
 | Docs | `README.md` | Step 1: the Commodore Amiga row's Formats cell follows A1's order (`SupportedSystemsTableTests`). Step 2: in the **Game detail** bullet, "Amiga boots PUAE's built-in AROS Kickstart and plays `.adf` disks (an `.ipf` is library-only)" becomes "Amiga plays `.adf`, `.dms`, `.fdi` and `.raw` disks and `.hdf`, `.hdz` and WHDLoad `.lha` hard-disk games (an `.ipf` is library-only), using `kick34005.A500` and `kick40068.A1200` from `data/bios/` when you supply them and PUAE's built-in AROS Kickstart otherwise; hard-disk games need `kick40068.A1200`". |
-| Docs | `docs/features.md` | Ingest paragraph (Commodore Amiga), step 1: <ul><li>"(`.adf`, gzipped `.adz`, SPS `.ipf`, or archives of them)" becomes "(`.adf`, gzipped `.adz`, SPS `.ipf`, `.dms`, `.fdi`, `.raw`, hard-disk `.hdf`/`.hdz` or WHDLoad `.lha`, or archives of them)".</li><li>The size list's "256 KiB–4 MiB for Commodore Amiga" becomes "1 KiB–64 MiB for Commodore Amiga".</li><li>"`.dms`, `.hdf` and WHDLoad `.lha` aren't supported." becomes "A `.dms`, `.fdi`, `.raw`, `.hdf`, `.hdz` or `.lha` is never in the TOSEC DAT, so it always goes to Review, which keeps its extension; an `.hdz` or `.lha` isn't unpacked."</li></ul> Play paragraph (Commodore Amiga), step 2: <ul><li>"boots its built-in AROS Kickstart (no BIOS, fair compatibility)" becomes "uses `kick34005.A500` and `kick40068.A1200` from the BIOS folder when present (optional) and its built-in AROS Kickstart otherwise".</li><li>"Each release's Play loads one `.adf` (an `.ipf` has no Play)" becomes "Each release's Play loads one disk or hard-disk image (an `.ipf` has no Play); a `.hdf`, `.hdz` or WHDLoad `.lha` needs `kick40068.A1200`, and some WHDLoad games also need `kick34005.A500` (booting a real hard-disk game hasn't been verified)".</li></ul> |
+| Docs | `docs/features.md` | Ingest paragraph (Commodore Amiga), step 1: <ul><li>"Drop Commodore Amiga floppy images" becomes "Drop Commodore Amiga floppy and hard-disk images".</li><li>"(`.adf`, gzipped `.adz`, SPS `.ipf`, or archives of them)" becomes "(`.adf`, gzipped `.adz`, SPS `.ipf`, `.dms`, `.fdi`, `.raw`, hard-disk `.hdf`/`.hdz` or WHDLoad `.lha`, or archives of them)".</li><li>The size list's "256 KiB–4 MiB for Commodore Amiga" becomes "1 KiB–64 MiB for Commodore Amiga".</li><li>"`.dms`, `.hdf` and WHDLoad `.lha` aren't supported." becomes "A `.dms`, `.fdi`, `.raw`, `.hdf`, `.hdz` or `.lha` is never in the TOSEC DAT, so it always goes to Review, which keeps its extension; an `.hdz` or `.lha` isn't unpacked."</li></ul> Play paragraph (Commodore Amiga), step 2: <ul><li>"boots its built-in AROS Kickstart (no BIOS, fair compatibility)" becomes "uses `kick34005.A500` and `kick40068.A1200` from the BIOS folder when present (optional) and its built-in AROS Kickstart otherwise".</li><li>"Each release's Play loads one `.adf` (an `.ipf` has no Play)" becomes "Each release's Play loads one disk or hard-disk image (an `.ipf` has no Play); a `.hdf`, `.hdz` or WHDLoad `.lha` needs `kick40068.A1200`, and some WHDLoad games also need `kick34005.A500` (booting a real hard-disk game hasn't been verified)".</li></ul> |
 | Docs | `docs/deployment.md` | Step 1: in the `/app/ingest` row, `ingest/amiga/` (Commodore Amiga: `.adf` or gzipped `.adz`) also lists `.ipf`, `.dms`, `.fdi`, `.raw`, `.hdf`, `.hdz` and `.lha`. Step 2: the `/app/bios` row adds "the optional 256 KiB `kick34005.A500` and 512 KiB `kick40068.A1200` for Commodore Amiga (hard-disk games need `kick40068.A1200`)". The upgrade section "Upgrading to the release that adds Commodore Amiga" gains a bullet in the existing pattern: "**For Commodore Amiga hard-disk browser play,** copy the 512 KiB `kick40068.A1200` (and optionally the 256 KiB `kick34005.A500`, which floppies and some WHDLoad games use) into `/app/bios`. The app doesn't include any Kickstart." |
 | Docs | `docs/zip-format.md` | The `amiga/` line lists the new stored extensions. |
 | Docs | `docs/configuration.md` | `Paths:Bios` lists `kick34005.A500` (256 KiB) and `kick40068.A1200` (512 KiB) for Commodore Amiga, optional, with the latter needed for hard-disk games. |
+| Docs | `docs/adding-a-system.md` | Step 2: "`amiga` returns `puae` (vendored; it boots its built-in AROS Kickstart, so no BIOS)" becomes "`amiga` returns `puae` (vendored; optional `kick34005.A500`/`kick40068.A1200`, else its built-in AROS Kickstart)". |
 | Docs | `docs/development.md` | **Browser emulators** gets an **Amiga Kickstart** bullet: K1–K3, and that `EJS_externalFiles` uses the content root as for PlayStation. |
 
 No migration or config key changes. Existing data is untouched. Raising the limit only admits files that used to fail `TooLarge`.
@@ -61,14 +62,14 @@ No migration or config key changes. Existing data is untouched. Raising the limi
 - **Two extra requests:** every Amiga launch now sends two BIOS GETs, which are 404s on a deployment without Kickstarts.
 - **Saves:** WHDLoad writes its saves under `/data/saves` (persisted per browser). **Save … to library** may report `empty` for a hard-disk game, which is the existing behaviour for a core with no SRAM.
 - **WHDLoad Kickstarts:** many OCS/ECS WHDLoad installs also need `kick34005.A500` (WHDLoad's kickemu copies it into the helper image). Without it some boot to an error. The docs say "some WHDLoad games also need `kick34005.A500`".
-- **Overlap:** spec `amiga-cd32-cdtv` (branch `dev/amiga-cd32-cdtv`) also touches `puae` in `play.js`, `BiosInfo` and `NotIngested`. Whichever lands second merges by adding its own entries.
+- **Overlap:** spec `amiga-cd32-cdtv` is already on `main` (#213) and shares `puae`. K1's `system === null` gate keeps its discs off this loop; its `play page Amiga CD32 and CDTV (CD32 A7, A8)` tests assert exact `urls()` and must pass unchanged.
 
 ## Steps
 - [ ] **1. Ingest the new Amiga types**: A1–A4. Files: `src/RnRomManager.Systems.Commodore/AmigaHandler.cs`, `tests/RnRomManager.Systems.Commodore.Tests/AmigaHandlerTests.cs`, `tests/RnRomManager.Api.Tests/BrowserCoreExtensionsTests.cs`, `tests/RnRomManager.Api.Tests/Integration/IngestPipelineTests.cs`, `README.md` (table row), `docs/features.md` (ingest paragraph), `docs/zip-format.md`, `docs/deployment.md` (`/app/ingest` row). Tests:
   - `IngestPipelineTests` gets three new cases beside the existing `Amiga_Adz_IsInflated_AndStoredAsTheDatsAdf`:
-    - `Amiga_Hdz_IsStoredWhole_AndGoesToReview`: an `orbit.hdz` (a `PK\x03\x04…` buffer) dropped in `ingest/amiga/` is not unpacked, is `(IngestOutcome.Review, "NoDatMatch")` with `SystemId` `amiga`, and its bytes are unchanged.
-    - `Amiga_ManualResolve_KeepsTheHdzExtension`: resolving that Review item stores the release as `<title>.hdz`, as `TitleDbIngestTests.Manual_KeepsTheXciExtension` does.
-    - `Amiga_OverTheMaximum_IsTooLarge`: a 64 MiB + 1 byte `.hdf` fails `(IngestOutcome.Failed, IngestFailures.TooLarge)`.
+    - `Amiga_Hdz_IsStoredWhole_AndGoesToReview`: an `orbit.hdz` (a 4 KiB buffer starting `PK\x03\x04`, over `MinRomSizeBytes`) dropped in `ingest/amiga/` is not unpacked, is `(IngestOutcome.Review, "NoDatMatch")` with `SystemId` `amiga`, and its bytes are unchanged.
+    - `Amiga_ManualResolve_KeepsTheHdzExtension`: resolving that Review item manually stores the release as `<title>.hdz`, using the same review-then-resolve pattern as `GameGear_UnmatchedSms_ManualIsStoredAsGg` (`GameGearReviewAsync`/`ResolveGameGearAsync`).
+    - `Amiga_LooseOverTheMaximum_IsTooLarge_WithoutReadingIt`: a sparse 64 MiB + 1 byte `huge.hdf` (`SetLength`, as `Ds_LooseOverTheMaximum_IsTooLarge_WithoutReadingIt` does) fails `(IngestOutcome.Failed, IngestFailures.TooLarge)` and is moved to `_failed/`.
   - `AmigaHandlerTests.Amiga_Contract` asserts the new `RomExtensions` and `(1024L, 64L * 1024 * 1024)`.
   - `Review_KeepsOnlyAnIpfsExtension` is renamed `Review_KeepsEveryExtensionButAdfAndAdz`, with cases `.ipf`, `.IPF`, `.hdf`, `.HDZ`, `.lha`, `.dms`, `.fdi` and `.raw` true, and `.adf`, `.ADF` and `.adz` false.
   - `NormalizeForHashing_KeepsACorruptOrOversizedGzip`'s bomb becomes `Gzip(new byte[Handler.MaxRomSizeBytes + 1])`.
@@ -76,10 +77,10 @@ No migration or config key changes. Existing data is untouched. Raising the limi
   - Run `BrowserCoreExtensionsTests` and `SupportedSystemsTableTests`.
   
   Done when:
-  - those tests and the three `IngestPipelineTests` cases pass (`dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~IngestPipelineTests.Amiga"`);
+  - `dotnet test tests/RnRomManager.Systems.Commodore.Tests --filter "FullyQualifiedName~AmigaHandlerTests"` and `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~IngestPipelineTests.Amiga|FullyQualifiedName~BrowserCoreExtensionsTests|FullyQualifiedName~SupportedSystemsTableTests"` pass;
   - `NotIngested` has no `puae` NoDat entry;
-  - the README row, `features.md`'s ingest paragraph and `deployment.md`'s `/app/ingest` row list the new types, with the 1 KiB–64 MiB size.
-- [ ] **2. Kickstart for browser play**: K1–K6. Files: `src/RnRomManager.Api/Endpoints/BiosInfo.cs`, `src/RnRomManager.Web/static/emulator/params.js`, `src/RnRomManager.Web/static/emulator/play.js`, `src/RnRomManager.Web/src/lib/emulatorParams.test.ts`, `src/RnRomManager.Web/src/lib/emulatorPlay.test.ts`, `tests/RnRomManager.Api.Tests/Integration/EmulatorEndpointsTests.BiosInfo.cs`, `docs/features.md` (Play paragraph), `docs/configuration.md`, `docs/development.md`, `README.md` (Game detail bullet), `docs/deployment.md` (`/app/bios` row and the Amiga upgrade bullet). Tests:
+  - the `AmigaHandler` class and `BrowserCore` summaries match Changes; the README row, `features.md`'s ingest paragraph and `deployment.md`'s `/app/ingest` row list the new types, with the 1 KiB–64 MiB size.
+- [ ] **2. Kickstart for browser play**: K1–K6. Files: `src/RnRomManager.Api/Endpoints/BiosInfo.cs`, `docs/adding-a-system.md`, `src/RnRomManager.Web/static/emulator/params.js`, `src/RnRomManager.Web/static/emulator/play.js`, `src/RnRomManager.Web/src/lib/emulatorParams.test.ts`, `src/RnRomManager.Web/src/lib/emulatorPlay.test.ts`, `tests/RnRomManager.Api.Tests/Integration/EmulatorEndpointsTests.BiosInfo.cs`, `docs/features.md` (Play paragraph), `docs/configuration.md`, `docs/development.md`, `README.md` (Game detail bullet), `docs/deployment.md` (`/app/bios` row and the Amiga upgrade bullet). Tests:
   - `emulatorParams.test.ts`: `isAmigaHardDisk` (`x.hdf`, `X.LHA` and `x.hdz` true; `x.adf` and `x.m3u` false), both `amigaKickstartSizeError` texts, and `amigaHardDiskKickstartMissing`.
   - `emulatorPlay.test.ts` has a new `describe('play page Amiga Kickstart (Amiga K1–K3)')`:
     - an `.adf` with both 404 sends `[kickA500, kickA1200, romUrl]` and sets no `EJS_externalFiles`;
@@ -88,13 +89,14 @@ No migration or config key changes. Existing data is untouched. Raising the limi
     - a 500 stops with `Couldn't load the BIOS (HTTP 500).`;
     - an `.lha` without `kick40068.A1200` stops with `amigaHardDiskKickstartMissing`, and `urls()` equals `[kickA500, kickA1200]` (no ROM request);
     - an `.hdf` with it loads.
-  - The two `play page Amiga disk sets (Amiga F7)` tests serve both Kickstart URLs as 404. The first expects `urls()` to be `[kickA500, kickA1200, setUrl]` instead of `[setUrl]`.
+  - The two `play page Amiga disk sets (Amiga F7)` puae tests serve both Kickstart URLs as 404. The first expects `urls()` to be `[kickA500, kickA1200, setUrl]` instead of `[setUrl]`, and its comment "a floppy set loads no Kickstart and sets no model" becomes "a floppy set loads only the optional Kickstarts and sets no model". The Plus/4 test in that block is unchanged.
+  - The `play page Amiga CD32 and CDTV (CD32 A7, A8)` tests pass unchanged (no `kick40068.A1200` request for a disc).
   - `EmulatorEndpointsTests.BiosInfo_reports_valid_wrong_size_missing_and_other_files` also writes a 262,144-byte `kick34005.A500` and asserts the `Commodore Amiga` group is Valid/Missing and `ok`.
   
   Done when:
-  - `npm run lint`, `npm run check` and `npx vitest run src/lib/emulatorParams.test.ts src/lib/emulatorPlay.test.ts` pass;
+  - `npm run lint`, `npm run check` and `npx vitest run src/lib/emulatorParams.test.ts src/lib/emulatorPlay.test.ts` pass, the CD32/CDTV block included;
   - `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~EmulatorEndpointsTests"` passes;
-  - `features.md`, `configuration.md`, `development.md`, the README Game detail bullet and `deployment.md` (`/app/bios` row and the upgrade bullet) describe K1–K5 with the exact wording in Changes.
+  - `features.md`, `configuration.md`, `development.md`, `adding-a-system.md`, the README Game detail bullet and `deployment.md` (`/app/bios` row and the upgrade bullet) describe K1–K5 with the exact wording in Changes.
 
 No Playwright change: no e2e plays Amiga, and synthetic images don't boot.
 
@@ -119,6 +121,7 @@ No Playwright change: no e2e plays Amiga, and synthetic images don't boot.
   (reviewer)
 
 - 2026-11-27 Kickstart support for hard-disk play? → Load optional `kick34005.A500`/`kick40068.A1200` for every Amiga launch and require `kick40068.A1200` for `.hdf`/`.hdz`/`.lha`, as drafted (user)
+- 2026-11-27 Deep review against `main` after #213 (CD32/CDTV) merged: `isAmiga` gated on `system === null` so discs keep their own Kickstarts; loop and assignment placed after the `isAmigaCd` ones; K5 group placed before `Commodore Amiga CD32`; Overlap risk updated; `adding-a-system.md`, the `BrowserCore` summary, the `isAmigaCd` and F7 test comments and the features "floppy images" wording added; `.hdz` test buffer sized over 1 KiB; TooLarge test follows the sparse-file `Ds_` pattern; manual-resolve test follows the GameGear helpers (code)
 
 ## Kickoff prompt
 ```text
