@@ -2,6 +2,7 @@
 	import Button from '#lib/components/forms/Button.svelte';
 	import IconButton from '#lib/components/forms/IconButton.svelte';
 	import EmptyState from '#lib/components/common/EmptyState.svelte';
+	import DropZone from '#lib/components/common/DropZone.svelte';
 	import DeleteImageModal from '#lib/components/modals/DeleteImageModal.svelte';
 	import SuggestImagesModal from '#lib/components/modals/SuggestImagesModal.svelte';
 	import UploadImageModal from '#lib/components/modals/UploadImageModal.svelte';
@@ -37,12 +38,19 @@
 
 	type Section = 'covers' | 'screenshots';
 	const sections = {
-		covers: { title: 'Covers', type: 'BoxArt', empty: 'No covers yet.', query: coverSearchQuery },
+		covers: {
+			title: 'Covers',
+			type: 'BoxArt',
+			empty: 'No covers yet.',
+			query: coverSearchQuery,
+			hint: 'Drop images here to upload as box art'
+		},
 		screenshots: {
 			title: 'Screenshots',
 			type: 'Snap',
 			empty: 'No screenshots yet.',
-			query: screenshotSearchQuery
+			query: screenshotSearchQuery,
+			hint: 'Drop images here to upload as screenshots'
 		}
 	} as const;
 	const split = $derived(splitImages(game.images));
@@ -92,6 +100,50 @@
 		return run(
 			() => api.post<GameDetail>(`${base}/${image.id}/cover`),
 			`${image.fileName} is now the cover.`
+		);
+	}
+
+	/** Same limit as the API (I1a) and `UploadImageModal`; a bigger file isn't sent. */
+	const maxUploadBytes = 8 * 1024 * 1024;
+	const tooBig = 'The image must be at most 8 MiB.';
+
+	/** IM5: dropped images upload one at a time, in drop order, with the section's type. */
+	async function uploadDropped(files: File[], type: 'BoxArt' | 'Snap'): Promise<void> {
+		busy = true;
+		try {
+			for (const file of files) {
+				if (file.size > maxUploadBytes) {
+					toasts.show(`${file.name}: ${tooBig}`, 'danger');
+					continue;
+				}
+				const form = new FormData();
+				form.append('file', file);
+				form.append('type', type);
+				try {
+					onchanged(await api.post<GameDetail>(base, form));
+					toasts.show(`${file.name} uploaded.`, 'success');
+				} catch (e) {
+					if (isApiError(e, 'ValidationFailed'))
+						toasts.show(
+							`${file.name}: ${e.errors.file?.[0] ?? e.errors.type?.[0] ?? e.title}`,
+							'danger'
+						);
+					else if (isApiError(e) && e.status === 413)
+						toasts.show(`${file.name}: ${tooBig}`, 'danger');
+					else failed(e);
+					// The rest would all fail while a job holds the lock.
+					if (isApiError(e, 'JobRunning')) break;
+				}
+			}
+		} finally {
+			busy = false;
+		}
+	}
+
+	function rejectDropped(files: File[]): void {
+		toasts.show(
+			`Only image files can be uploaded; skipped ${formatCount(files.length)} file(s).`,
+			'warning'
 		);
 	}
 
@@ -222,9 +274,22 @@
 <section class="mb-4" aria-labelledby="images-heading">
 	<!-- I1: the tab names the panel; the heading stays for the outline only. -->
 	<h2 class="visually-hidden" id="images-heading">Images</h2>
-	{@render imageSection('covers', split.covers)}
-	<hr />
-	{@render imageSection('screenshots', split.screenshots)}
+	{#each ['covers', 'screenshots'] as const as kind, i (kind)}
+		{#if i}<hr />{/if}
+		{@const images = kind === 'covers' ? split.covers : split.screenshots}
+		{#if auth.isAdmin}
+			<!-- IM5: a mouse shortcut beside the section's Upload Image button. -->
+			<DropZone
+				hint={sections[kind].hint}
+				disabled={busy}
+				accept={(file) => file.type.startsWith('image/')}
+				ondrop={(files) => uploadDropped(files, sections[kind].type)}
+				onreject={rejectDropped}>{@render imageSection(kind, images)}</DropZone
+			>
+		{:else}
+			{@render imageSection(kind, images)}
+		{/if}
+	{/each}
 </section>
 
 {#if auth.isAdmin}

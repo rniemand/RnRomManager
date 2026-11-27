@@ -218,7 +218,7 @@ describe('game images', () => {
 		expect(covers.compareDocumentPosition(hr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(hr.compareDocumentPosition(shots) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		const grid = screen.getAllByRole('button', { name: /full size/ })[0].closest('.row')!;
-		expect(grid.nextElementSibling).toBe(hr);
+		expect(grid.compareDocumentPosition(hr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		// IM3: an empty subsection says so.
 		expect(screen.getByText('No screenshots yet.')).toBeTruthy();
 		expect(screen.queryByText('No covers yet.')).toBeNull();
@@ -1021,5 +1021,154 @@ describe('Suggest Images (IGDB suggestions S11–S13)', () => {
 		(await take('/from-url')).resolve(problem(502, 'ImageDownloadFailed', 'HTTP 404.'));
 
 		await vi.waitFor(() => expect(toasts.items.map((t) => t.text)).toContain('HTTP 404.'));
+	});
+
+	describe('drop upload (IM5)', () => {
+		const pngFile = (name: string, size = 3) =>
+			new File([new Uint8Array(size)], name, { type: 'image/png' });
+		const zone = (kind: 'Covers' | 'Screenshots') =>
+			screen.getByRole('heading', { level: 3, name: new RegExp(`^${kind}`) }).parentElement!
+				.parentElement!;
+		const drop = (kind: 'Covers' | 'Screenshots', files: File[]) =>
+			fireEvent.drop(zone(kind), {
+				dataTransfer: { types: ['Files'], files } as unknown as DataTransfer
+			});
+		let posts: { name: string; type: string }[];
+		let replies: { status: number; body?: unknown }[];
+
+		beforeEach(() => {
+			posts = [];
+			replies = [];
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+				if (url === '/api/auth/antiforgery')
+					return Promise.resolve(new Response(null, { status: 204 }));
+				const form = init?.body as FormData;
+				posts.push({ name: (form.get('file') as File).name, type: form.get('type') as string });
+				const reply = replies.shift() ?? { status: 200, body: game(placeholderAndSnap()) };
+				return Promise.resolve(
+					new Response(reply.body === undefined ? null : JSON.stringify(reply.body), {
+						status: reply.status,
+						headers: { 'Content-Type': 'application/problem+json' }
+					})
+				);
+			});
+		});
+		const texts = () => toasts.items.map((t) => [t.text, t.kind]);
+
+		it('shows each hint; Covers uploads each image in order as BoxArt, Screenshots as Snap', async () => {
+			const onchanged = vi.fn();
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged });
+			expect(screen.getByText('Drop images here to upload as box art')).toBeTruthy();
+			expect(screen.getByText('Drop images here to upload as screenshots')).toBeTruthy();
+
+			await drop('Covers', [pngFile('a.png'), pngFile('b.png')]);
+			await vi.waitFor(() => expect(posts).toHaveLength(2));
+			expect(posts).toEqual([
+				{ name: 'a.png', type: 'BoxArt' },
+				{ name: 'b.png', type: 'BoxArt' }
+			]);
+			await vi.waitFor(() => expect(onchanged).toHaveBeenCalledTimes(2));
+			expect(texts()).toEqual([
+				['a.png uploaded.', 'success'],
+				['b.png uploaded.', 'success']
+			]);
+
+			await drop('Screenshots', [pngFile('c.png')]);
+			await vi.waitFor(() => expect(posts).toHaveLength(3));
+			expect(posts[2]).toEqual({ name: 'c.png', type: 'Snap' });
+		});
+
+		it('one failure shows its mapped message and the rest still upload', async () => {
+			replies = [{ status: 409, body: { code: 'DuplicateImage', title: 'Duplicate' } }];
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+			await drop('Covers', [pngFile('a.png'), pngFile('b.png')]);
+			await vi.waitFor(() => expect(texts()).toHaveLength(2));
+			expect(posts.map((p) => p.name)).toEqual(['a.png', 'b.png']);
+			expect(texts()).toEqual([
+				['The game already has this image.', 'danger'],
+				['b.png uploaded.', 'success']
+			]);
+		});
+
+		it('ValidationFailed and 413 name the file', async () => {
+			replies = [
+				{
+					status: 400,
+					body: { code: 'ValidationFailed', title: 'Bad', errors: { file: ['Not an image.'] } }
+				},
+				{ status: 413 }
+			];
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+			await drop('Covers', [pngFile('a.png'), pngFile('b.png')]);
+			await vi.waitFor(() => expect(texts()).toHaveLength(2));
+			expect(texts()).toEqual([
+				['a.png: Not an image.', 'danger'],
+				['b.png: The image must be at most 8 MiB.', 'danger']
+			]);
+		});
+
+		it('a JobRunning failure stops the remaining uploads', async () => {
+			replies = [{ status: 409, body: { code: 'JobRunning', title: 'Busy' } }];
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+			await drop('Covers', [pngFile('a.png'), pngFile('b.png')]);
+			await vi.waitFor(() => expect(texts()).toHaveLength(1));
+			await new Promise((r) => setTimeout(r, 20));
+			expect(posts.map((p) => p.name)).toEqual(['a.png']);
+			expect(texts()[0][1]).toBe('warning');
+		});
+
+		it('a file over 8 MiB is skipped with a toast and never posted', async () => {
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+			await drop('Covers', [pngFile('big.png', 8 * 1024 * 1024 + 1), pngFile('a.png')]);
+			await vi.waitFor(() => expect(texts()).toHaveLength(2));
+			expect(posts.map((p) => p.name)).toEqual(['a.png']);
+			expect(texts()[0]).toEqual(['big.png: The image must be at most 8 MiB.', 'danger']);
+		});
+
+		it('non-images toast the skipped count; the images in the drop still upload', async () => {
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+			await drop('Covers', [
+				pngFile('a.png'),
+				new File(['x'], 'notes.txt', { type: 'text/plain' }),
+				new File(['x'], 'b.zip', { type: 'application/zip' })
+			]);
+			await vi.waitFor(() => expect(posts).toHaveLength(1));
+			expect(texts()).toContainEqual([
+				'Only image files can be uploaded; skipped 2 file(s).',
+				'warning'
+			]);
+		});
+
+		it('the zone is disabled while busy', async () => {
+			let release!: () => void;
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+				if (url === '/api/auth/antiforgery')
+					return Promise.resolve(new Response(null, { status: 204 }));
+				posts.push({ name: ((init?.body as FormData).get('file') as File).name, type: '' });
+				return new Promise<Response>((resolve) => {
+					release = () =>
+						resolve(new Response(JSON.stringify(game(placeholderAndSnap())), { status: 200 }));
+				});
+			});
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+			await drop('Covers', [pngFile('a.png')]);
+			await vi.waitFor(() => expect(posts).toHaveLength(1));
+			await drop('Covers', [pngFile('b.png')]);
+			await new Promise((r) => setTimeout(r, 20));
+			expect(posts).toHaveLength(1);
+			release();
+		});
+
+		it('a Site user gets no drop zone', () => {
+			auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+			expect(screen.queryByText(/^Drop images here/)).toBeNull();
+		});
 	});
 });
