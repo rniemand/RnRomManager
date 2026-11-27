@@ -93,6 +93,7 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 - `GET /api/ingest/pending` Admin
 - `GET /api/ingest/failed` Admin
 - `GET /api/ingest/removed` Admin
+- `GET /api/ingest/duplicates` Admin
 - `POST /api/ingest/delete` Admin
 - `POST /api/ingest/restore` Admin
 

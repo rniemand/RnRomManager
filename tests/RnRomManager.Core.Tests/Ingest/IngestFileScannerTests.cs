@@ -85,6 +85,23 @@ public class IngestFileScannerTests
         Assert.That(result[1].Files.Select(f => (f.Name, f.SizeBytes)), Is.EqualTo(new[] { ("c.nsp", 2L) }));
     }
 
+    [Test]
+    public void ScanDuplicates_ListsTopLevelFiles_OnlySystemsWithFiles()
+    {
+        Write("gb/_duplicates/b.gb", "12");
+        Write("gb/_duplicates/a.gb");
+        Write("gb/_duplicates/Thumbs.db");
+        Write("gb/_duplicates/sub/deep.gb");
+        Write("gb/_removed/r.gb");
+        Write("ext/_duplicates/c.nsp", "123");
+
+        var result = _scanner.ScanDuplicates();
+
+        Assert.That(result.Select(s => s.SystemId), Is.EqualTo(new[] { "gb", "ext" }));
+        Assert.That(result[0].Files.Select(f => (f.Name, f.SizeBytes)), Is.EqualTo(new[] { ("a.gb", 1L), ("b.gb", 2L) }));
+        Assert.That(result[1].Files.Select(f => (f.Name, f.SizeBytes)), Is.EqualTo(new[] { ("c.nsp", 3L) }));
+    }
+
     // --- external systems (spec G4) ---
 
     private IReadOnlyList<FailedFile> ExtFailed() => _scanner.ScanFailed().Single(s => s.SystemId == "ext").Files;

@@ -118,6 +118,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/ingest/failed"] = Role.Admin,
         ["POST /api/ingest/delete"] = Role.Admin,
         ["GET /api/ingest/removed"] = Role.Admin,
+        ["GET /api/ingest/duplicates"] = Role.Admin,
         ["POST /api/ingest/restore"] = Role.Admin,
         ["POST /api/jobs/ingest"] = Role.Admin,
         ["POST /api/jobs/integrity"] = Role.Admin,

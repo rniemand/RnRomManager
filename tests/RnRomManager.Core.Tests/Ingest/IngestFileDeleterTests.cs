@@ -60,7 +60,12 @@ public class IngestFileDeleterTests
     [Test]
     public void Validate_AcceptsPendingFailedAndRemovedEntries() =>
         Assert.That(Validate(new("gb", "pending", "a.gb"), new("gb", "failed", "b.gb"), new("gb", "removed", "c.gb (2).gb"),
-            new("gb", "removed", "d.error.txt")), Is.Empty);
+            new("gb", "removed", "d.error.txt"), new("gb", "duplicates", "e.gb")), Is.Empty);
+
+    [Test]
+    public void Validate_UnknownFolder_NamesAllFourFolders() =>
+        Assert.That(Validate(new IngestDeleteRef("gb", "trash", "a.gb"))["files"],
+            Is.EqualTo(new[] { "files[0]: folder must be 'pending', 'failed', 'removed' or 'duplicates'." }));
 
     [TestCase(null, "pending", "a.gb")]
     [TestCase("nes", "pending", "a.gb")]
@@ -151,6 +156,21 @@ public class IngestFileDeleterTests
         await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
         var row = Recorded().Single();
         Assert.That((row.Action, row.Path, row.Details), Is.EqualTo(("IngestFileDeleted", (string?)"ingest/gb/_removed/a.gb", (string?)"removed")));
+    }
+
+    [Test]
+    public async Task Duplicates_DeletesFile_AuditsDuplicates_WithoutTouchingReviews()
+    {
+        Directory.CreateDirectory(Path.Combine(_paths.Ingest, "gb", "_duplicates"));
+        var path = Write("gb", "_duplicates", "a.gb");
+
+        var result = await _deleter.DeleteAsync([new("gb", "duplicates", "a.gb")], Actor, default);
+
+        Assert.That(result.Deleted, Is.EqualTo(1));
+        Assert.That(File.Exists(path), Is.False);
+        await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
+        var row = Recorded().Single();
+        Assert.That((row.Action, row.Path, row.Details), Is.EqualTo(("IngestFileDeleted", (string?)"ingest/gb/_duplicates/a.gb", (string?)"duplicates")));
     }
 
     [Test]

@@ -130,10 +130,11 @@ public class IngestDeleteEndpointsTests
 
         using var get = await user.GetAsync("/api/ingest/failed");
         using var removed = await user.GetAsync("/api/ingest/removed");
+        using var duplicates = await user.GetAsync("/api/ingest/duplicates");
         using var post = await user.PostAsync("/api/ingest/delete", new { files = new[] { new { system = "gb", folder = "pending", name = "a.gb" } } });
 
-        Assert.That((get.StatusCode, removed.StatusCode, post.StatusCode),
-            Is.EqualTo((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden, HttpStatusCode.Forbidden)));
+        Assert.That((get.StatusCode, removed.StatusCode, duplicates.StatusCode, post.StatusCode),
+            Is.EqualTo((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden, HttpStatusCode.Forbidden, HttpStatusCode.Forbidden)));
     }
 
     [TestCase("[]")]
@@ -218,6 +219,57 @@ public class IngestDeleteEndpointsTests
             Is.EqualTo(new[] { ("IngestFileDeleted", (string?)"gb", (string?)"ingest/gb/_removed/Tetris (World).gb", (string?)"removed") }));
         using var empty = await _admin.GetAsync("/api/ingest/removed");
         Assert.That((await AuthClient.JsonAsync(empty)).GetArrayLength(), Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task Duplicates_ListsOnlySystemsWithFiles_AndPermanentDeleteIsAudited()
+    {
+        Directory.CreateDirectory(Ingest("gb", "_duplicates"));
+        var duplicate = Ingest("gb", "_duplicates", "Tetris (World).gb");
+        File.WriteAllBytes(duplicate, [1, 2]);
+
+        using var list = await _admin.GetAsync("/api/ingest/duplicates");
+
+        Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var systems = (await AuthClient.JsonAsync(list)).EnumerateArray().ToList();
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb" }));
+        var file = systems[0].GetProperty("files").EnumerateArray().Single();
+        Assert.That((file.GetProperty("name").GetString(), file.GetProperty("sizeBytes").GetInt64()), Is.EqualTo(("Tetris (World).gb", 2L)));
+        Assert.That(file.TryGetProperty("modifiedAt", out _), Is.True);
+
+        using var response = await Delete(new { system = "gb", folder = "duplicates", name = "Tetris (World).gb" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(File.Exists(duplicate), Is.False);
+        Assert.That(await DeleteAuditRows(),
+            Is.EqualTo(new[] { ("IngestFileDeleted", (string?)"gb", (string?)"ingest/gb/_duplicates/Tetris (World).gb", (string?)"duplicates") }));
+        using var empty = await _admin.GetAsync("/api/ingest/duplicates");
+        Assert.That((await AuthClient.JsonAsync(empty)).GetArrayLength(), Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task UnknownFolder_Is400_NamingTheFourFolders()
+    {
+        using var response = await Delete(new { system = "gb", folder = "trash", name = "a.gb" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("files")[0].GetString(),
+            Is.EqualTo("files[0]: folder must be 'pending', 'failed', 'removed' or 'duplicates'."));
+    }
+
+    [Test]
+    public async Task Duplicates_WhileAJobHoldsTheLock_Is409JobRunning()
+    {
+        var keep = Ingest("gb", "_duplicates", "a.gb");
+        Directory.CreateDirectory(Path.GetDirectoryName(keep)!);
+        File.WriteAllBytes(keep, [1]);
+        using var held = Service<JobLock>().TryAcquire("test");
+
+        using var response = await Delete(new { system = "gb", folder = "duplicates", name = "a.gb" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("JobRunning"));
+        Assert.That(File.Exists(keep), Is.True);
     }
 
     [Test]
