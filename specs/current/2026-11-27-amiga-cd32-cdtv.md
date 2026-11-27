@@ -210,7 +210,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
       - CDTV: requests go `kick34005.A500` → `kick34005.CDTV` → play-disc, and `puae_model` is `'CDTV'`. A 404 on either shows `cdtvBiosMissing`. A 128 KiB `kick34005.CDTV` shows `cdtvBiosSizeError('kick34005.CDTV')`.
       - The existing Amiga disk-set cases pass unchanged: no Kickstart request, `Downloading disks…`, no `puae_model`.
   - Done when: `npm run lint`, `npm run check`, `npx vitest run src/lib/emulatorParams.test.ts src/lib/emulatorPlay.test.ts` and the `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests` and `dotnet test tests/RnRomManager.Systems.Commodore.Tests` runs pass.
-- [ ] **7. Enable CD32/CDTV Play** (A6's `playUrl` part, A10): the API's and SPA's external and play-disc core sets, the lone `.bin` rule, `playUrl`'s `system`, and its callers.
+- [x] **7. Enable CD32/CDTV Play** (A6's `playUrl` part, A10): the API's and SPA's external and play-disc core sets, the lone `.bin` rule, `playUrl`'s `system`, and its callers.
   - Files: `LibraryEndpoints.cs`, `LibraryDtos.cs`, `emulator.ts`, `EmulatorModal.svelte`, `GameResults.svelte`, `GameSaves.svelte`, `routes/games/[id]/+page.svelte`, and the tests below.
   - Tests:
     - `LibraryEndpointsTests`:

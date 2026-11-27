@@ -35,8 +35,8 @@ public static class LibraryDtos
         var core = systems.ById(game.SystemId)?.BrowserCore;
         var playable = core is not null && game.PrimaryRomId is not null
             && (!game.PrimaryIsExternal || LibraryEndpoints.ExternalBrowserCores.Contains(core))
-            // TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, and (PC-FX X6) Beetle PC-FX can't open one, so only a cue set's .bin plays.
-            && !(core is "mednafen_pce" or "mednafen_pcfx" && game.PrimaryIsExternal && !game.PrimaryHasFiles
+            // TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, and (PC-FX X6) Beetle PC-FX can't open one, so only a cue set's .bin plays, and (CD32 A10) PUAE has cue generation off, so a lone CD32/CDTV .bin never plays.
+            && !(core is "mednafen_pce" or "mednafen_pcfx" or "puae" && game.PrimaryIsExternal && !game.PrimaryHasFiles
                  && game.PrimaryRomFileName?.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) == true)
             // Amiga: PUAE's WebAssembly build has no capsimg, so an .ipf never plays.
             && !(core == "puae" && game.PrimaryRomFileName?.EndsWith(".ipf", StringComparison.OrdinalIgnoreCase) == true)

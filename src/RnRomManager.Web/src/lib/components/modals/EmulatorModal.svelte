@@ -32,6 +32,8 @@
 		 * saves use. The page never passes `save` with it, and state saves aren't offered.
 		 */
 		discSet?: string | null;
+		/** CD32 A6: the game's system, which tells the play page an Amiga CD32 or CDTV disc from an Amiga floppy. */
+		system?: string | null;
 		/** Saves B19: called after each successful "save to library". */
 		onsaved?: () => void;
 		/** E2: called after a screenshot was saved as a Snap. */
@@ -46,6 +48,7 @@
 		disc,
 		save = null,
 		discSet = null,
+		system = null,
 		onsaved,
 		onimagesaved
 	}: Props = $props();
@@ -423,7 +426,7 @@
 				bind:this={frame}
 				title="Emulator: {discSet ?? rom.fileName}"
 				allow="fullscreen; gamepad; autoplay"
-				src={playUrl(gameId, rom, core, disc || discSet !== null, playSave, discSet)}
+				src={playUrl(gameId, rom, core, disc || discSet !== null, playSave, discSet, system)}
 			></iframe>
 			{#if preview && shown}
 				<!-- E2: over the game, inside the emulator modal (not a second Bootstrap modal). -->

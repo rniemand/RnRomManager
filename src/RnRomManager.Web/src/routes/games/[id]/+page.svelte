@@ -479,6 +479,7 @@
 		rom={playRom}
 		disc={playRom != null && game.browserCore != null && usesPlayDisc(game.browserCore, playRom)}
 		discSet={playSet}
+		system={game.system}
 		onsaved={() => {
 			savesVersion++;
 			void refreshGame();

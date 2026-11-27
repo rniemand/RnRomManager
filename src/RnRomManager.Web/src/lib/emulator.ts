@@ -22,7 +22,8 @@ export const externalBrowserCores: readonly string[] = [
 	'azahar',
 	'mame2003_plus',
 	'fbneo',
-	'mednafen_pcfx'
+	'mednafen_pcfx',
+	'puae'
 ];
 
 /** S8: the cores whose external releases load through play-disc; DeSmuME loads an external DS ROM from `/download`. */
@@ -33,7 +34,8 @@ export const playDiscCores: readonly string[] = [
 	'genesis_plus_gx',
 	'opera',
 	'mednafen_pce',
-	'mednafen_pcfx'
+	'mednafen_pcfx',
+	'puae'
 ];
 
 /** S8: whether the play URL carries `disc=1`: an external release of a play-disc core. */
@@ -64,7 +66,8 @@ export function opensInNewTab(core: string | null): boolean {
  * GameCube…) don't. Browser play format gaps N5: a Saturn .nrg plays (play-disc sends a generated cue). CHD B5: a standalone .chd plays like an .iso (PlayStation, Saturn, Sega CD).
  * TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so on `mednafen_pce` an external .bin plays only with its
  * set files (the cue); the API's quick play applies the same rule. PC-FX X6: Beetle PC-FX can't open a lone .bin
- * either, so `mednafen_pcfx` follows the same rule. Jaguar: see `jaguarRomLoads`. Amiga: PUAE's
+ * either, so `mednafen_pcfx` follows the same rule. CD32 A10: PUAE (Amiga CD32 and CDTV) follows the same rule; Amiga
+ * floppies are never external. Jaguar: see `jaguarRomLoads`. Amiga: PUAE's
  * WebAssembly build has no capsimg, so an .ipf never plays (the API's quick play agrees). 3DS P3: see `azaharRomLoads`.
  */
 export function canPlay(
@@ -77,7 +80,9 @@ export function canPlay(
 		game.browserCore !== null &&
 		(external === null || externalBrowserCores.includes(game.browserCore)) &&
 		!(
-			(game.browserCore === 'mednafen_pce' || game.browserCore === 'mednafen_pcfx') &&
+			(game.browserCore === 'mednafen_pce' ||
+				game.browserCore === 'mednafen_pcfx' ||
+				game.browserCore === 'puae') &&
 			(external?.endsWith('.bin') ?? false) &&
 			!rom.files?.length
 		) &&
@@ -121,6 +126,7 @@ export function azaharRomLoads(fileName: string, header: Record<string, unknown>
  * B4: the play page's URL (PSP B3: the isolated PSP page for PPSSPP); params.js validates it on the other side.
  * Sega CD B6: `disc` (an external release) adds `&disc=1`, so a core shared by cartridges and discs loads from play-disc.
  * Multi-disc M5: `setName` (a PlayStation disc set's playlist) becomes the `name` and adds `&set=1`; `rom` stays Disc 1.
+ * CD32 A6: `system` `cd32` or `cdtv` adds `&system=`, so the play page loads that system's Kickstarts and model.
  */
 export function playUrl(
 	gameId: string,
@@ -128,13 +134,15 @@ export function playUrl(
 	core: string,
 	disc: boolean,
 	save: PlaySave | null = null,
-	setName: string | null = null
+	setName: string | null = null,
+	system: string | null = null
 ): string {
 	const page = opensInNewTab(core) ? isolatedPages[core] : 'play.html';
 	const name = setName ?? rom.fileName;
 	let url = `/emulator/${page}?game=${gameId}&rom=${rom.id}&core=${core}&name=${encodeURIComponent(name)}`;
 	if (disc) url += '&disc=1';
 	if (setName !== null) url += '&set=1';
+	if (system === 'cd32' || system === 'cdtv') url += `&system=${system}`;
 	// Saves B17: the library save the play page loads at game start.
 	return save ? `${url}&save=${save.saveId}&saveKind=${save.saveKind}` : url;
 }

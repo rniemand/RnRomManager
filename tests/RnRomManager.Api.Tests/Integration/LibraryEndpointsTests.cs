@@ -556,6 +556,7 @@ public partial class LibraryEndpointsTests
     [TestCase("3do", true, true, "opera")]
     [TestCase("tgcd", true, true, "mednafen_pce")]
     [TestCase("pcfx", true, true, "mednafen_pcfx")]
+    [TestCase("cd32", true, true, "puae")]
     [TestCase("c64", false, true, "vice_x64sc")]
     [TestCase("pet", false, true, "vice_xpet")]
     [TestCase("vic20", false, true, "vice_xvic")]
@@ -608,6 +609,10 @@ public partial class LibraryEndpointsTests
     [TestCase("pcfx", "mednafen_pcfx", "x.bin", null, false)]
     [TestCase("pcfx", "mednafen_pcfx", "x.BIN", null, false)]
     [TestCase("pcfx", "mednafen_pcfx", "x.chd", null, true)]
+    [TestCase("cd32", "puae", "x.bin", "x.cue", true)]
+    [TestCase("cd32", "puae", "x.bin", null, false)]
+    [TestCase("cd32", "puae", "x.BIN", null, false)]
+    [TestCase("cd32", "puae", "x.chd", null, true)]
     public Task Games_QuickPlay_DiscOnlyCores_ALoneBinIsNotPlayable(
         string system,
         string core,
@@ -813,6 +818,8 @@ public partial class LibraryEndpointsTests
     [TestCase("tg16", "mednafen_pce")]
     [TestCase("tgcd", "mednafen_pce")]
     [TestCase("pcfx", "mednafen_pcfx")]
+    [TestCase("cd32", "puae")]
+    [TestCase("cdtv", "puae")]
     [TestCase("ngp", "mednafen_ngp")]
     [TestCase("ngpc", "mednafen_ngp")]
     [TestCase("ws", "mednafen_wswan")]
