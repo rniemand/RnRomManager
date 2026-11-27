@@ -162,7 +162,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
   - `Cd32_AdfInItsFolder_IsUnsupportedType_AndMovedToFailed` (new, copying `Pcfx_PceInItsFolder_IsUnsupportedType_AndMovedToFailed`) with an `.adf`.
   - `Cd32_DatMatchedCueSetInCdtvFolder_GoesToReviewAsThreeNoDatMatchItems` (new): the same three files in `ingest/cdtv/` give three `(Review, "NoDatMatch")` items with `SystemId` `cdtv`, asserted with `RunIngestJobWithItemsAsync`.
   - Done when: `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~IngestPipelineTests"` passes.
-- [ ] **4. CD32/CDTV play-disc** (A5): `BrowserCore` stays null.
+- [x] **4. CD32/CDTV play-disc** (A5): `BrowserCore` stays null.
   - Files: `PlayDisc.cs`, `LibraryEndpointsTests.PlayDisc.cs`.
   - Tests (`LibraryEndpointsTests.PlayDisc`), with `Cd32Game` and `CdtvGame` helpers (new) beside `PcfxGame`, as `DiscGame(PlayDisc.Cd32SystemId, …)` / `CdtvSystemId`:
     - `PlayDisc_ACd32CueSet_IsAStoredZip_WithThePlaybackCue` (new, copying `PlayDisc_APcfxCueSet_IsAStoredZip_WithThePlaybackCue`).

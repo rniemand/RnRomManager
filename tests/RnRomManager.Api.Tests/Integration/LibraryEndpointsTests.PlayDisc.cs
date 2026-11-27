@@ -643,6 +643,10 @@ public partial class LibraryEndpointsTests
     [TestCase("tgcd", "Chd Solo (Japan).chd")]
     [TestCase("tgcd", "Chd Solo (Japan).CHD")]
     [TestCase("pcfx", "Chd Solo (Japan).chd")]
+    [TestCase("cd32", "Chd Solo (Europe).chd")]
+    [TestCase("cdtv", "Chd Solo (Europe).chd")]
+    [TestCase("cd32", "Chd Solo (Europe).iso")]
+    [TestCase("cdtv", "Chd Solo (Europe).iso")]
     [TestCase("saturn", "Chd Solo (USA).iso")]
     [TestCase("psx", "Chd Solo (USA).pbp")]
     [TestCase("psx", "Chd Solo (USA).PBP")]
@@ -932,6 +936,70 @@ public partial class LibraryEndpointsTests
         AssertNotOpen(Path.Combine(folder, name));
     }
 
+    // CD32 A5: PUAE opens cue|ccd|nrg|mds|iso|chd and never gets a generated cue for a lone .bin.
+
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> Cd32Game(string title, InfoJsonRom[] roms,
+        params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.Cd32SystemId, title, roms, onDisk);
+
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> CdtvGame(string title, InfoJsonRom[] roms,
+        params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.CdtvSystemId, title, roms, onDisk);
+
+    [Test]
+    public async Task PlayDisc_ACd32CueSet_IsAStoredZip_WithThePlaybackCue()
+    {
+        var cue = PsxCue("Chick Run (Europe) (Track 01).bin", "Chick Run (Europe) (Track 02).bin");
+        var (id, _, ids) = await Cd32Game("Chick Run",
+            [PsxSolo("Chick Run (Europe) (Track 01).bin", PsxTrack1) with
+            {
+                Files = [SetFile("Chick Run (Europe).cue", cue), SetFile("Chick Run (Europe) (Track 02).bin", PsxTrack2)],
+            }],
+            ("Chick Run (Europe) (Track 01).bin", PsxTrack1), ("Chick Run (Europe).cue", cue), ("Chick Run (Europe) (Track 02).bin", PsxTrack2));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Chick Run (Europe).cue", "track-01.bin", "track-02.bin" }));
+        Assert.That(zip.Entries.Select(e => e.CompressedLength == e.Length), Has.All.True, "stored, not deflated");
+        Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(PsxTrack1));
+        Assert.That(ReadEntry(zip, "track-02.bin"), Is.EqualTo(PsxTrack2));
+    }
+
+    [Test]
+    public async Task PlayDisc_ACd32Nrg_StreamsACueAndTrack01WithoutTheFooter()
+    {
+        const string name = "Nero Chick (Europe).nrg";
+        var (id, folder, ids) = await Cd32Game("Nero Chick", [PsxSolo(name, NeroImage)], (name, NeroImage));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Nero Chick (Europe).cue", "track-01.bin" }));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Nero Chick (Europe).cue")), Does.StartWith("FILE \"track-01.bin\" BINARY\n  TRACK 01 MODE1/2352\n"));
+        Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(NeroImage[..(30 * 2352)]));
+        AssertNotOpen(Path.Combine(folder, name));
+    }
+
+    [TestCase("cd32", "Solo (Europe).bin")]
+    [TestCase("cd32", "Solo (Europe).BIN")]
+    [TestCase("cd32", "Solo (Europe).img")]
+    [TestCase("cdtv", "Solo (Europe).bin")]
+    public async Task PlayDisc_AnAmigaCdSingleFileThatCantPlay_Is409InvalidPlayDisc(string system, string name)
+    {
+        var (id, folder, ids) = await DiscGame(system, "Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(await ProblemTitle(response, HttpStatusCode.Conflict, PlayDisc.InvalidPlayDisc), Is.EqualTo(
+            $"The disc can't be played: a {(system == "cd32" ? "CD32" : "CDTV")} disc must be a .cue with its .bin tracks, or an .iso, .chd or .nrg."));
+        AssertNotOpen(Path.Combine(folder, name));
+    }
+
     [Test]
     public async Task PlayDisc_ATurboGrafxCdSetWithTwoCues_Is409InvalidPlayDisc()
     {
@@ -1056,6 +1124,19 @@ public partial class LibraryEndpointsTests
         Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Clone Fox (USA).cue", "track-01.img", "Clone Fox (USA).sub" }));
     }
 
+    [Test]
+    public async Task PlayDisc_ACd32CloneCdDisc_Plays()
+    {
+        var (id, _, ids) = await CloneCdGame(PlayDisc.Cd32SystemId, "Clone Fox", PsxTrack1, CloneCcd(), CloneSub);
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Clone Fox (USA).cue", "track-01.img", "Clone Fox (USA).sub" }));
+    }
+
     // File type gaps D11–D12: a cue generated from the .toc or .mds and the aliased tracks; the stored sheet is never sent.
 
     private static readonly byte[] MdsOneTrack = SyntheticMdsBuilder.OneTrack();
@@ -1107,6 +1188,7 @@ public partial class LibraryEndpointsTests
     [TestCase("psx")]
     [TestCase("tgcd")]
     [TestCase("pcfx")]
+    [TestCase("cd32")]
     public async Task PlayDisc_ATocSet_IsTheGeneratedCueAndTheAliasedBins_AndNoToc(string system)
     {
         var (id, _, ids) = await TocGame(system, "Toc Star", TocOf("Toc Star (USA) (Track 1).bin", "Toc Star (USA) (Track 2).bin"));
