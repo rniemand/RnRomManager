@@ -14,9 +14,15 @@ public class MegaDriveHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("md", "Mega Drive / Genesis", "MD", "megadrive", "Sega - Mega Drive - Genesis")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".md", ".bin", ".gen", ".smd" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".md", ".bin", ".gen", ".smd", ".68k", ".sgd", ".mdx" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((8192L, 16777216L + 512)));
     }
+
+    [TestCase(".mdx", true)]
+    [TestCase(".MDX", true)]
+    [TestCase(".68k", false)]
+    [TestCase(".md", false)]
+    public void KeepsExtension_OnlyForMdx(string extension, bool keeps) => Assert.That(Handler.KeepsExtension(extension), Is.EqualTo(keeps));
 
     [Test]
     public void BrowserCore_IsGenesisPlusGx_WithEmbeddedRoms()

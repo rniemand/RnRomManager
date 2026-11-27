@@ -1,21 +1,29 @@
+using System.Buffers.Binary;
+using System.Text;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Systems.Nes;
 
 /// <summary>
-/// Reads the 16-byte iNES / NES 2.0 header of a headered <c>.nes</c> dump (nesdev "iNES" and "NES 2.0", N4). Never
-/// throws; only files shorter than the header return null. iNES has no title, so suggestions use the file name.
+/// Reads the 16-byte iNES / NES 2.0 header of a headered <c>.nes</c> dump (nesdev "iNES" and "NES 2.0", N4), or a UNIF
+/// file's chunks. Never throws; only files shorter than the header return null. iNES has no title, so suggestions use the
+/// file name; UNIF's title is its <c>NAME</c> chunk.
 /// </summary>
 public static class NesHeaderReader
 {
     public const string NesId = "nes";
     public const int HeaderSize = 16;
 
+    /// <summary>UNIF: the <c>UNIF</c> magic, a revision and padding to 32 bytes, then the chunks.</summary>
+    private const int UnifHeaderSize = 32;
+
     /// <returns>null when <paramref name="rom"/> is shorter than 16 bytes.</returns>
     public static RomHeader? Read(ReadOnlySpan<byte> rom)
     {
         if (rom.Length < HeaderSize)
             return null;
+        if (rom.Length >= UnifHeaderSize && rom[..4].SequenceEqual("UNIF"u8))
+            return ReadUnif(rom);
 
         var headerValid = rom[0] == 0x4E && rom[1] == 0x45 && rom[2] == 0x53 && rom[3] == 0x1A;
         var fields = new Dictionary<string, object?>
@@ -51,6 +59,43 @@ public static class NesHeaderReader
         }
 
         return new RomHeader(NesId, null, headerValid, fields);
+    }
+
+    /// <summary>Walks the chunks (4-byte id, little-endian uint32 length, data) for the first <c>NAME</c> and <c>MAPR</c>.</summary>
+    private static RomHeader ReadUnif(ReadOnlySpan<byte> rom)
+    {
+        string? name = null, board = null;
+        var offset = UnifHeaderSize;
+        while (rom.Length - offset >= 8)
+        {
+            var id = rom.Slice(offset, 4);
+            long length = BinaryPrimitives.ReadUInt32LittleEndian(rom.Slice(offset + 4, 4));
+            if (length > rom.Length - offset - 8)
+                break;
+            var data = rom.Slice(offset + 8, (int)length);
+            if (name is null && id.SequenceEqual("NAME"u8))
+                name = ChunkString(data);
+            else if (board is null && id.SequenceEqual("MAPR"u8))
+                board = ChunkString(data);
+            offset += 8 + (int)length;
+        }
+
+        var fields = new Dictionary<string, object?>
+        {
+            ["headerValid"] = true,
+            ["format"] = "UNIF",
+            ["board"] = board,
+            ["romSizeBytes"] = rom.Length,
+        };
+        return new RomHeader(NesId, name, true, fields);
+    }
+
+    /// <summary>UTF-8 up to the first NUL, trimmed; empty is null.</summary>
+    private static string? ChunkString(ReadOnlySpan<byte> data)
+    {
+        var nul = data.IndexOf((byte)0);
+        var text = Encoding.UTF8.GetString(nul < 0 ? data : data[..nul]).Trim();
+        return text.Length == 0 ? null : text;
     }
 
     /// <summary>NES 2.0 size: the MSB nibble above the LSB byte, in units; nibble 0xF is the exponent form, not decoded.</summary>

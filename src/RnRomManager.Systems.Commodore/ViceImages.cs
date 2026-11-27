@@ -6,7 +6,7 @@ internal static class ViceImages
     // libretro-vice treats every one of these as a floppy, and VICE probes the image type (so a gzipped .d80 stored as .d81 still attaches).
     private static readonly Dictionary<string, string> Gzipped = new(StringComparer.Ordinal)
     {
-        [".d6z"] = ".d64", [".d7z"] = ".d71", [".d8z"] = ".d81", [".g6z"] = ".g64", [".x6z"] = ".x64",
+        [".d6z"] = ".d64", [".d7z"] = ".d71", [".d8z"] = ".d81", [".g6z"] = ".g64", [".x6z"] = ".x64", [".g4z"] = ".g41",
     };
 
     /// <summary>

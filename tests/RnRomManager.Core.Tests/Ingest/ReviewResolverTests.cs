@@ -197,6 +197,7 @@ public class ReviewResolverTests
     [TestCase("extset", "Game.mdf", false, false)]
     [TestCase("psx", "Game.mdf", true, false)]
     [TestCase("psx", "Game.cbn", false, true)]
+    [TestCase("psx", "Game.exe", false, true)]
     public void IsDismissible_CloneCdB7(
         string systemId,
         string fileName,

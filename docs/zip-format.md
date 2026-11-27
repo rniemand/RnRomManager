@@ -19,7 +19,7 @@ roms/
   3ds/                  Nintendo 3DS (external: .3ds, .cci, .cia files next to the ZIP)
   nds/                  Nintendo DS (external by default: .nds or iQue .ids files next to the ZIP; an Admin can store them
                         inside instead, and the storage job moves games between the two)
-  nes/                  Nintendo Entertainment System (headered .nes, header included)
+  nes/                  Nintendo Entertainment System (headered .nes, header included; an unmatched UNIF .unf/.unif keeps its extension)
   fds/                  Famicom Disk System (headerless .fds, fwNES header stripped)
   snes/                 Super Nintendo Entertainment System (stored as .sfc, copier header stripped)
   satellaview/          Satellaview (.bs BS-X memory packs)
@@ -31,15 +31,15 @@ roms/
   lynx/                 Atari Lynx (.lnx, .lyx or .bll, as the DAT names it)
   jaguar/               Atari Jaguar (.j64, .jag, .rom, .abs or .cof, as the DAT names it)
   coleco/               ColecoVision (.col)
-  c128/                 Commodore 128 (.d64, .d71, .d81, .g64, .t64, .tap, .prg, .p00, .crt)
-  c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin, .d71, .d81, .x64, .p00, .d80, .d82, .nbz, .d2m, .d4m, .tcrt)
-  pet/                  Commodore PET (.prg, .d64, .tap, .t64, .g64, .d80, .d82)
+  c128/                 Commodore 128 (.d64, .d71, .d81, .g64, .g41, .t64, .tap, .prg, .p00, .crt)
+  c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .g41, .t64, .prg, .bin, .d71, .d81, .x64, .p00, .d80, .d82, .nbz, .d2m, .d4m, .tcrt)
+  pet/                  Commodore PET (.prg, .d64, .tap, .t64, .g64, .g41, .d80, .d82)
   plus4/                Commodore Plus/4 (.d64, .t64, .tap, .prg, .crt, .bin)
-  vic20/                Commodore VIC-20 (.a0, .20, .40, .60, .bin, .prg, .d64, .tap, .t64, .crt)
+  vic20/                Commodore VIC-20 (.a0, .20, .40, .60, .bin, .prg, .d64, .tap, .t64, .crt, .g41)
   amiga/                Commodore Amiga (.adf, or .ipf as the DAT names it)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)
-  md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it)
+  md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it; an unmatched .mdx keeps its extension)
   s32x/                 32X (.32x, .bin)
   tg16/                 TurboGrafx-16 / PC Engine (.pce)
   sgx/                  PC Engine SuperGrafx (.sgx)
@@ -49,13 +49,13 @@ roms/
       Orbit Expedition.[0100000000010000][v0].nsp
       Orbit Expedition.[0100000000010800][v65536].nsp
       Orbit Expedition.[0100000000010800][v0][1.1.0].nsp
-  psx/                  PlayStation (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .bin/.iso/.chd/.img/.pbp/.cbn)
+  psx/                  PlayStation (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .bin/.iso/.chd/.img/.pbp/.cbn/.exe)
     D/
       Disc Runner.zip
       Disc Runner (USA) (Track 1).bin     the release's main file (the data track the DAT lists)
       Disc Runner (USA).cue               its files: the cue, then the other tracks
       Disc Runner (USA) (Track 2).bin
-  psp/                  PlayStation Portable (external, exact names: .iso, .cso, .pbp, .chd)
+  psp/                  PlayStation Portable (external, exact names: .iso, .cso, .pbp, .chd, .elf, .prx)
   gc/                   GameCube (external, exact names: .iso, .gcm)
   wii/                  Wii (external, exact names: .iso)
   x360/                 Xbox 360 (external, exact names: .iso)
@@ -224,7 +224,7 @@ Game Boy Advance `header`: `title` (12 chars at 0xA0), `gameCode` (4 chars at 0x
 
 Nintendo 64 `header`, read after the ROM is converted to big-endian (so it can't tell which byte order the dump came in): `title` (20 chars at 0x20), `gameCode` (4 chars at 0x3B, null unless A–Z/0–9), `mediaType` (from the game code's 1st char: `Cartridge`, `Cartridge (expandable)`, `64DD disk`, `64DD expansion`, `Aleck64` or `Unknown (X)`), `destination` (from its 4th char: `Asia`, `Brazil`, `China`, `Germany`, `USA`, `France`, `Netherlands`, `Italy`, `Japan`, `Korea`, `Canada`, `Europe`, `Spain`, `Australia`, `Scandinavia` or `Unknown (X)`), `version` (0x3F), `crc1` and `crc2` (0x10 and 0x14) and `bootAddress` (0x08) as `0xHHHHHHHH`, `headerValid` (byte 0 is 0x80), `romSizeBytes` (the file length).
 
-Nintendo Entertainment System `header`, from the 16-byte iNES / NES 2.0 header (the ROM is stored and hashed with it): `headerValid` (bytes 0–3 are `NES` + 0x1A), `format` (`NES 2.0` when byte 7 bits 2–3 are `10`, else `iNES`), `mapper` (byte 6 high nibble, byte 7 high nibble, and for NES 2.0 byte 8's low nibble as bits 8–11), `prgRomSizeBytes` (byte 4 × 16 KiB; NES 2.0 adds byte 9's low nibble as the high byte, null in the exponent form), `chrRomSizeBytes` (byte 5 × 8 KiB; NES 2.0 adds byte 9's high nibble, null in the exponent form), `mirroring` (`Four-screen`, `Vertical` or `Horizontal`), `battery`, `trainer`, `tvSystem` (iNES: `NTSC` or `PAL` from byte 9; NES 2.0: `NTSC`, `PAL`, `Multi-region` or `Dendy` from byte 12), `romSizeBytes` (the file length). Without the magic only `headerValid` (false) and `romSizeBytes` are set; the rest are null. iNES has no title.
+Nintendo Entertainment System `header`, from the 16-byte iNES / NES 2.0 header (the ROM is stored and hashed with it): `headerValid` (bytes 0–3 are `NES` + 0x1A), `format` (`NES 2.0` when byte 7 bits 2–3 are `10`, else `iNES`), `mapper` (byte 6 high nibble, byte 7 high nibble, and for NES 2.0 byte 8's low nibble as bits 8–11), `prgRomSizeBytes` (byte 4 × 16 KiB; NES 2.0 adds byte 9's low nibble as the high byte, null in the exponent form), `chrRomSizeBytes` (byte 5 × 8 KiB; NES 2.0 adds byte 9's high nibble, null in the exponent form), `mirroring` (`Four-screen`, `Vertical` or `Horizontal`), `battery`, `trainer`, `tvSystem` (iNES: `NTSC` or `PAL` from byte 9; NES 2.0: `NTSC`, `PAL`, `Multi-region` or `Dendy` from byte 12), `romSizeBytes` (the file length). Without the magic only `headerValid` (false) and `romSizeBytes` are set; the rest are null. iNES has no title. A UNIF file's `header` is `headerValid` (true), `format` (`UNIF`), `board` (the `MAPR` chunk, or null) and `romSizeBytes`; its title is the `NAME` chunk. Only the first 1 MiB is read.
 
 Super Nintendo Entertainment System `header`, read after a copier header is stripped (so it doesn't say whether the dump had one): the internal header is looked for as LoROM at 0x7FC0, HiROM at 0xFFC0 and ExHiROM at 0x40FFC0 (ExHiROM first for ROMs over 4 MiB); the first location with a valid checksum/complement pair wins, else the first with a printable 21-byte title and a map mode that fits the location. `headerValid` (a location was chosen), `title` (21 chars, ASCII up to the first NUL, other bytes as `?`), `mapping` (`LoROM`, `HiROM` or `ExHiROM`), `fastRom` (map mode bit 0x10), `romType` (the chipset byte, as a number), `romSizeKiB` (2^byte, null when 0 or over 13), `sramSizeKiB` (0, or 2^byte up to 10, else null), `region` (`Japan`, `USA`, `Europe`, `Sweden`, `Finland`, `Denmark`, `France`, `Netherlands`, `Spain`, `Germany`, `Italy`, `China`, `Indonesia`, `Korea`, `Canada`, `Brazil`, `Australia`, else null), `version`, `checksum` (4 upper-case hex digits), `checksumValid`, `romSizeBytes` (the stored length). With no location chosen only `headerValid` (false) and `romSizeBytes` are set; the rest are null.
 

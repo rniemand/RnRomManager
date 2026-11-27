@@ -23,7 +23,7 @@ public class NesHandlerTests
         Assert.That(Handler.ShortName, Is.EqualTo("NES"));
         Assert.That((Handler.Id, Handler.DisplayName, Handler.Family, Handler.DatName),
             Is.EqualTo(("nes", "Nintendo Entertainment System", "nes", "Nintendo - Nintendo Entertainment System")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".nes" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".nes", ".unf", ".unif" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((4112L, 16L + 512 + 64L * 1024 * 1024)));
     }
 
@@ -43,6 +43,11 @@ public class NesHandlerTests
         var header = Handler.ReadHeader(new SyntheticNesRomBuilder { Seed = 2, Mapper = 4 }.Build())!;
         Assert.That((header.ClassifiedSystemId, header.Title, header.IsPlausible, header.Fields["mapper"]), Is.EqualTo(("nes", (string?)null, true, 4)));
     }
+
+    [TestCase(".unf", true)]
+    [TestCase(".UNIF", true)]
+    [TestCase(".nes", false)]
+    public void KeepsExtension_OnlyForUnif(string extension, bool keeps) => Assert.That(Handler.KeepsExtension(extension), Is.EqualTo(keeps));
 
     [Test]
     public void NormalizeForHashing_ReturnsTheBytesUnchanged()

@@ -6,7 +6,7 @@ namespace RnRomManager.Systems.Commodore;
 /// <summary>
 /// Commodore 128 (spec B1–B7). libretro has no C128 DAT (<see cref="DatSource.None"/>), so every file goes to Review, as
 /// on MS-DOS. Each extension names a distinct format (disk image, tape, program, cartridge), so Review keeps the source
-/// extension. <see cref="ReadHeader"/> reuses <see cref="C64Header"/> (C64-signature <c>.crt</c>, <c>.tap</c>, <c>.g64</c>);
+/// extension. <see cref="ReadHeader"/> reuses <see cref="C64Header"/> (C64-signature <c>.crt</c>, <c>.tap</c>, <c>.g64</c>/<c>.g41</c>);
 /// a native <c>C128 CARTRIDGE</c> <c>.crt</c> gets none. 256 B floor (small programs), 8 MiB cap (tapes), as on VIC-20.
 /// </summary>
 public sealed class C128Handler : ISystemHandler
@@ -19,7 +19,7 @@ public sealed class C128Handler : ISystemHandler
     public string Family => Id;
 
     /// <summary><c>[0]</c> is never used for a rename: Review keeps the source's own (<see cref="KeepsSourceExtension"/>).</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".d64", ".d71", ".d81", ".g64", ".t64", ".tap", ".prg", ".p00", ".crt"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".d64", ".d71", ".d81", ".g64", ".t64", ".tap", ".prg", ".p00", ".crt", ".g41"];
 
     public long MinRomSizeBytes => 256;
     public long MaxRomSizeBytes => 8 * 1024 * 1024;

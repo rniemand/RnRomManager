@@ -14,7 +14,7 @@ public class C64HandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("c64", "Commodore 64", "C64", "c64", "Commodore - 64")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".crt", ".tap", ".nib", ".d64", ".g64", ".t64", ".prg", ".bin", ".d71", ".d81", ".x64", ".p00", ".d80", ".d82", ".d6z", ".d7z", ".d8z", ".g6z", ".x6z", ".gz", ".nbz", ".d2m", ".d4m", ".tcrt" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".crt", ".tap", ".nib", ".d64", ".g64", ".t64", ".prg", ".bin", ".d71", ".d81", ".x64", ".p00", ".d80", ".d82", ".d6z", ".d7z", ".d8z", ".g6z", ".x6z", ".gz", ".nbz", ".d2m", ".d4m", ".tcrt", ".g41", ".g4z" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((1024L, 8L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.DatSource, Handler.DatFolder), Is.EqualTo((true, DatSource.Libretro, DatKind.NoIntro)));
         Assert.That(Handler.MetadatKinds, Is.Empty);
@@ -29,6 +29,8 @@ public class C64HandlerTests
     [TestCase("Game.d7z", ".d71")]
     [TestCase("Game.d8z", ".d81")]
     [TestCase("Game.g6z", ".g64")]
+    [TestCase("Game.g4z", ".g41")]
+    [TestCase("Game.g41.gz", ".g41")]
     [TestCase("Game.x6z", ".x64")]
     [TestCase("Game.D6Z", ".d64")]
     [TestCase("Game.d64.gz", ".d64")]

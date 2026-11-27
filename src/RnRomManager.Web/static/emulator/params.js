@@ -446,7 +446,7 @@ export function discError(status, code, core = 'pcsx_rearmed', set = false) {
 			: 'This disc is larger than 2 GiB, too large to play in the browser.';
 	if (code === 'InvalidPlayDisc')
 		return psp
-			? "This UMD image can't be played in the browser: it must be one non-empty .iso, .cso, .pbp or .chd whose name matches the release."
+			? "This UMD image can't be played in the browser: it must be one non-empty .iso, .cso, .pbp, .chd, .elf or .prx whose name matches the release."
 			: "This disc can't be played in the browser: its cue sheet or files are invalid or don't match.";
 	return status === null ? "Couldn't load the disc." : `Couldn't load the disc (HTTP ${status}).`;
 }

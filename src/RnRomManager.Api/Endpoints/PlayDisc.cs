@@ -10,7 +10,7 @@ namespace RnRomManager.Api.Endpoints;
 /// copy of the cue (<see cref="CueSheet.ForPlayback"/>) and the tracks as <c>track-NN.bin</c>. CHD B4: a standalone
 /// <c>.chd</c> (or a PlayStation <c>.img</c>) streams unchanged like an <c>.iso</c>. Every member is opened
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
-/// Portable release streams its standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
+/// Portable release streams its standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c>, <c>.chd</c>, <c>.elf</c> or <c>.prx</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
 /// shapes; TurboGrafx-CD and PC-FX take their cue sets and a standalone <c>.chd</c> only. All these systems share the same cap (<see cref="MaxBytes"/>).
 /// CloneCD B8: a CloneCD disc (<c>.img</c>, <c>.ccd</c>, optional <c>.sub</c>) on any of the five disc systems streams as a ZIP
 /// holding a cue generated from the <c>.ccd</c> (<see cref="CloneCdSheet.ForPlayback"/>), the <c>.img</c> and the <c>.sub</c>;
@@ -367,8 +367,8 @@ public static class PlayDisc
     private static bool IsBin(string name) => name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c>, <c>.pbp</c> or <c>.cbn</c>), or one cue with 1–99 BINs (the main file among
-    /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c>.
+    /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c>, <c>.pbp</c>, <c>.cbn</c> or <c>.exe</c>), or one cue with 1–99 BINs (the main file among
+    /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c>, <c>.chd</c>, <c>.elf</c> or <c>.prx</c>.
     /// TurboGrafx-CD B4: Beetle PCE boots only a cue or a <c>.chd</c> as a CD (a bare <c>.bin</c> would run as a HuCard), so
     /// a single file must be a <c>.chd</c>. CloneCD B8: or a CloneCD disc on any of the five disc systems (<see cref="IsCloneCd"/>).
     /// D11: or an MDS disc (<see cref="IsMds"/>), and a <c>.toc</c> takes the cue's place in a set. Browser play format gaps
@@ -381,8 +381,8 @@ public static class PlayDisc
         if (members.FirstOrDefault(m => CueSheet.NameProblem(m.Name) is not null) is { } bad)
             return $"'{bad.Name}' is not a portable file name";
         if (psp)
-            return members is [var umd] && Path.GetExtension(umd.Name).ToLowerInvariant() is ".iso" or ".cso" or ".pbp" or ".chd"
-                ? null : "a PSP disc must be a single .iso, .cso, .pbp or .chd";
+            return members is [var umd] && Path.GetExtension(umd.Name).ToLowerInvariant() is ".iso" or ".cso" or ".pbp" or ".chd" or ".elf" or ".prx"
+                ? null : "a PSP disc must be a single .iso, .cso, .pbp, .chd, .elf or .prx";
         if (members.Select(m => m.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != members.Count)
             return "two disc files have the same name ignoring case";
         if (members.Count == 1 && systemId is TurboGrafxCdSystemId or PcfxSystemId)
@@ -394,6 +394,7 @@ public static class PlayDisc
                 || members[0].Name.EndsWith(".img", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".pbp", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".cbn", StringComparison.OrdinalIgnoreCase)
+                || (systemId == SystemId && members[0].Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                 || HasExtension(members[0].Name, ".nrg")
                 ? null : "a single-file disc must be a .bin, .iso, .chd, .img, .pbp, .cbn or .nrg";
         if (IsCloneCd(members) || IsMds(members))

@@ -4,7 +4,7 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Systems.Sony;
 
 /// <summary>
-/// Sony PlayStation Portable: one <c>.iso</c> per UMD, or a compressed <c>.cso</c> or <c>.chd</c> (chdman <c>createdvd</c>), or an <c>EBOOT</c>-style <c>.pbp</c>.
+/// Sony PlayStation Portable: one <c>.iso</c> per UMD, or a compressed <c>.cso</c> or <c>.chd</c> (chdman <c>createdvd</c>), or an <c>EBOOT</c>-style <c>.pbp</c>, or a homebrew <c>.elf</c>/<c>.prx</c> executable.
 /// Stored outside the ZIP under exact names (disc systems B4, B5); the redump DAT has no metadat, and there is no header.
 /// </summary>
 public sealed class PlayStationPortableHandler : ISystemHandler
@@ -16,8 +16,8 @@ public sealed class PlayStationPortableHandler : ISystemHandler
     public string ShortName => "PSP";
     public string Family => "psp";
 
-    /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.cso</c>, <c>.pbp</c> or <c>.chd</c> never matches the DAT (Redump lists the <c>.iso</c>).</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".iso", ".cso", ".pbp", ".chd"];
+    /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.cso</c>, <c>.pbp</c>, <c>.chd</c>, <c>.elf</c> or <c>.prx</c> never matches the DAT (Redump lists the <c>.iso</c>).</summary>
+    public IReadOnlyList<string> RomExtensions { get; } = [".iso", ".cso", ".pbp", ".chd", ".elf", ".prx"];
 
     public long MinRomSizeBytes => 16;
 
@@ -39,7 +39,7 @@ public sealed class PlayStationPortableHandler : ISystemHandler
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
-    /// <summary>PSP B1: PPSSPP, in the isolated PSP tab; the external <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c> streams through play-disc.</summary>
+    /// <summary>PSP B1: PPSSPP, in the isolated PSP tab; the external <c>.iso</c>, <c>.cso</c>, <c>.pbp</c>, <c>.chd</c>, <c>.elf</c> or <c>.prx</c> streams through play-disc.</summary>
     public string BrowserCore => "ppsspp";
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
