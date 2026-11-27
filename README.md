@@ -40,7 +40,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin`, `.cv` | No-Intro | `gearcoleco` |
 | Commodore 128 | `c128` | In ZIP | `.d64`, `.d71`, `.d81`, `.g64`, `.t64`, `.tap`, `.prg`, `.p00`, `.crt`, `.g41` | None | `vice_x128` |
 | Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin`, `.d71`, `.d81`, `.x64`, `.p00`, `.d80`, `.d82`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz`, `.nbz`, `.d2m`, `.d4m`, `.tcrt`, `.g41`, `.g4z` | No-Intro | `vice_x64sc` |
-| Commodore Amiga | `amiga` | In ZIP | `.adf`, `.adz`, `.ipf` | TOSEC | `puae` |
+| Commodore Amiga | `amiga` | In ZIP | `.adf`, `.adz`, `.ipf`, `.hdf`, `.hdz`, `.lha`, `.dms`, `.fdi`, `.raw` | TOSEC | `puae` |
 | Commodore Amiga CD32 | `cd32` | Next to ZIP | `.bin`, `.cue`, `.nrg`, `.chd`, `.iso`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `puae` |
 | Commodore CDTV | `cdtv` | Next to ZIP | `.bin`, `.cue`, `.nrg`, `.chd`, `.iso`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `puae` |
 | Commodore PET | `pet` | In ZIP | `.prg`, `.d64`, `.tap`, `.t64`, `.g64`, `.d80`, `.d82`, `.d71`, `.d81`, `.x64`, `.p00`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz`, `.g41`, `.g4z` | TOSEC | `vice_xpet` |

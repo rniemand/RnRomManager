@@ -180,7 +180,6 @@ public class BrowserCoreExtensionsTests
         (NewSystem, ["picodrive"], [".sc"]),
         (NotAGame, Vice, [".vsf", ".cmd", ".vfl"]),
         (NotAGame, ["puae"], [".uae", ".info", ".slave"]),
-        (NoDat, ["puae"], [".hdf", ".hdz", ".lha", ".fdi", ".raw", ".dms"]),
         ("a ProSystem cartridge description: a text file naming a separate ROM (and BupChip sample) file, not a ROM; a release is one file", ["prosystem"], [".cdf"]),
         ("the DS DAT's .bin entries are save data and seminar demos, which DatStore would match (D1)", ["desmume"], [".bin"]),
         (OtherCommodore, ["vice_xpet"], [".crt", ".bin", ".tcrt", ".nib", ".nbz", ".d2m", ".d4m"]),

@@ -36,7 +36,7 @@ roms/
   pet/                  Commodore PET (.prg, .d64, .tap, .t64, .g64, .g41, .d80, .d82)
   plus4/                Commodore Plus/4 (.d64, .t64, .tap, .prg, .crt, .bin)
   vic20/                Commodore VIC-20 (.a0, .20, .40, .60, .bin, .prg, .d64, .tap, .t64, .crt, .g41)
-  amiga/                Commodore Amiga (.adf, or .ipf as the DAT names it)
+  amiga/                Commodore Amiga (.adf, or .ipf as the DAT names it; .hdf, .hdz, .lha, .dms, .fdi or .raw from Review)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)
   md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it; an unmatched .mdx keeps its extension)

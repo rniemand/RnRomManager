@@ -15,8 +15,8 @@ public class AmigaHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("amiga", "Commodore Amiga", "Amiga", "amiga", "Commodore - Amiga")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".adf", ".adz", ".ipf" }));
-        Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((1024L, 4L * 1024 * 1024)));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".adf", ".adz", ".ipf", ".hdf", ".hdz", ".lha", ".dms", ".fdi", ".raw" }));
+        Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((1024L, 64L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.DatSource, Handler.DatFolder), Is.EqualTo((true, DatSource.Libretro, DatKind.Tosec)));
         Assert.That(Handler.MetadatKinds, Is.Empty);
         Assert.That((Handler.FileSets, Handler.LegacyEmbeddedRoms, Handler.KeepsSourceExtension), Is.EqualTo((false, false, false)));
@@ -25,9 +25,16 @@ public class AmigaHandlerTests
 
     [TestCase(".ipf", true)]
     [TestCase(".IPF", true)]
+    [TestCase(".hdf", true)]
+    [TestCase(".HDZ", true)]
+    [TestCase(".lha", true)]
+    [TestCase(".dms", true)]
+    [TestCase(".fdi", true)]
+    [TestCase(".raw", true)]
     [TestCase(".adf", false)]
+    [TestCase(".ADF", false)]
     [TestCase(".adz", false)]
-    public void Review_KeepsOnlyAnIpfsExtension(string extension, bool keeps) =>
+    public void Review_KeepsEveryExtensionButAdfAndAdz(string extension, bool keeps) =>
         Assert.That(Handler.KeepsExtension(extension), Is.EqualTo(keeps));
 
     [Test]
@@ -58,10 +65,18 @@ public class AmigaHandlerTests
     public void NormalizeForHashing_KeepsACorruptOrOversizedGzip()
     {
         byte[] corrupt = [0x1F, 0x8B, 0x08, 0x00, 1, 2, 3, 4, 5, 6, 7, 8];
-        var bomb = Gzip(new byte[4 * 1024 * 1024 + 1]);
+        var bomb = Gzip(new byte[Handler.MaxRomSizeBytes + 1]);
 
         HandlerAsserts.AssertNormalizeIsIdentity(Handler, corrupt);
         HandlerAsserts.AssertNormalizeIsIdentity(Handler, bomb);
+    }
+
+    [Test]
+    public void NormalizeForHashing_KeepsAZippedHdz()
+    {
+        byte[] hdz = [(byte)'P', (byte)'K', 3, 4, .. new byte[4092]];
+
+        HandlerAsserts.AssertNormalizeIsIdentity(Handler, hdz);
     }
 
     [Test]
