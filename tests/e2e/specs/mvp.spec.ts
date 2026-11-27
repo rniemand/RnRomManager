@@ -673,7 +673,7 @@ test("game detail + downloads + ROM playback progress", async () => {
   const items = page.locator(".dropdown-menu.show .dropdown-item");
   await expect(items).toHaveCount(3);
   await expect(items.first()).toHaveText(
-    /^Orbit Blocks \(World\) \(Rev 1\)\.gb — .*KiB$/,
+    /^Orbit Blocks \(World\) \(Rev 1\)\.gb\s*[\d.]+ KiB$/,
   );
   const rom = page.waitForEvent("download");
   await items.first().click();
