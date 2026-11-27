@@ -5,7 +5,9 @@ namespace RnRomManager.Systems.Sega;
 /// <summary>
 /// Sega Mega Drive / Genesis (spec D1–D3). The header at <c>0x100</c> is optional: a file without <c>SEGA</c> in the
 /// system-type field is not invalid, so an unmatched file goes to Review. Raw dumps are already big-endian, so hashing
-/// uses the file as-is, except an interleaved <c>.smd</c> copier dump, which is deinterleaved first (so it's stored as <c>.md</c>).
+/// uses the file as-is, except an interleaved <c>.smd</c> copier dump, which is deinterleaved first (so it's stored as <c>.md</c>). <c>.68k</c> and <c>.sgd</c> are
+/// aliases stored as <c>.md</c>; an XOR-encoded <c>.mdx</c> never matches the DAT and keeps its extension, since Genesis Plus GX
+/// decodes it only by that name.
 /// </summary>
 public sealed class MegaDriveHandler : ISystemHandler
 {
@@ -17,7 +19,10 @@ public sealed class MegaDriveHandler : ISystemHandler
     public string Family => "megadrive";
 
     /// <summary><c>[0]</c> (<c>.md</c>) is what a file resolved through Review without a DAT entry is stored as.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".md", ".bin", ".gen", ".smd"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".md", ".bin", ".gen", ".smd", ".68k", ".sgd", ".mdx"];
+
+    /// <summary>An <c>.mdx</c> is stored as <c>.mdx</c>: Genesis Plus GX decodes it only when the name says so.</summary>
+    public bool KeepsExtension(string extension) => extension.Equals(".mdx", StringComparison.OrdinalIgnoreCase);
 
     public long MinRomSizeBytes => 8192;
     /// <summary>16 MiB plus an <c>.smd</c> header; checked before <see cref="NormalizeForHashing"/> strips it.</summary>

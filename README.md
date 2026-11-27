@@ -36,7 +36,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Atari 5200 | `a5200` | In ZIP | `.a52`, `.bin` | No-Intro | `a5200` |
 | Atari 7800 | `a7800` | In ZIP | `.a78`, `.bin` | No-Intro | `prosystem` |
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
-| Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx`, `.bll` | No-Intro | `handy` |
+| Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx`, `.bll`, `.o` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin`, `.cv` | No-Intro | `gearcoleco` |
 | Commodore 128 | `c128` | In ZIP | `.d64`, `.d71`, `.d81`, `.g64`, `.t64`, `.tap`, `.prg`, `.p00`, `.crt` | None | `vice_x128` |
 | Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin`, `.d71`, `.d81`, `.x64`, `.p00`, `.d80`, `.d82`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz`, `.nbz`, `.d2m`, `.d4m`, `.tcrt` | No-Intro | `vice_x64sc` |
@@ -45,13 +45,13 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Commodore Plus/4 | `plus4` | In ZIP | `.d64`, `.t64`, `.tap`, `.prg`, `.crt`, `.bin` | No-Intro | `vice_xplus4` |
 | Commodore VIC-20 | `vic20` | In ZIP | `.a0`, `.20`, `.40`, `.60`, `.bin`, `.prg`, `.d64`, `.tap`, `.t64`, `.crt`, `.b0`, `.rom`, `.d71`, `.d81`, `.g64`, `.x64`, `.p00`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz` | No-Intro | `vice_xvic` |
 | Famicom Disk System | `fds` | In ZIP | `.fds` | No-Intro | `fceumm` |
-| Game Boy | `gb` | In ZIP | `.gb`, `.dmg` | No-Intro | `gambatte` |
+| Game Boy | `gb` | In ZIP | `.gb`, `.dmg`, `.sgb` | No-Intro | `gambatte` |
 | Game Boy Advance | `gba` | In ZIP | `.gba` | No-Intro | `mgba` |
 | Game Boy Color | `gbc` | In ZIP | `.gbc` | No-Intro | `gambatte` |
 | Game Gear | `gg` | In ZIP | `.gg`, `.sms`, `.bin`, `.rom` | No-Intro | `smsplus` |
 | GameCube | `gc` | Next to ZIP | `.iso`, `.gcm` | Redump | — |
-| Master System | `sms` | In ZIP | `.sms`, `.sg`, `.bin`, `.rom` | No-Intro | `smsplus` |
-| Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen`, `.smd` | No-Intro | `genesis_plus_gx` |
+| Master System | `sms` | In ZIP | `.sms`, `.sg`, `.bin`, `.rom`, `.bms` | No-Intro | `smsplus` |
+| Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen`, `.smd`, `.68k`, `.sgd`, `.mdx` | No-Intro | `genesis_plus_gx` |
 | MS-DOS | `dos` | Next to ZIP | `.dosz`, `.zip` | None | `dosbox_pure` |
 | Neo Geo Pocket | `ngp` | In ZIP | `.ngp` | No-Intro | `mednafen_ngp` |
 | Neo Geo Pocket Color | `ngpc` | In ZIP | `.ngc`, `.ngpc`, `.npc` | No-Intro | `mednafen_ngp` |

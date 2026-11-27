@@ -39,7 +39,7 @@ roms/
   amiga/                Commodore Amiga (.adf, or .ipf as the DAT names it)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)
-  md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it)
+  md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it; an unmatched .mdx keeps its extension)
   s32x/                 32X (.32x, .bin)
   tg16/                 TurboGrafx-16 / PC Engine (.pce)
   sgx/                  PC Engine SuperGrafx (.sgx)
