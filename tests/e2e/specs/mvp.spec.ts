@@ -3251,7 +3251,7 @@ test("ROM Zip Config: DS moves into its ZIP and back, the ROM downloading byte-e
     const row = (name: string) =>
       page.getByRole("row").filter({ hasText: name });
     await expect(
-      row("Game Boy Advance").getByRole("button", { name: /^Store (in|beside) ZIP$/ }),
+      row("Game Boy Advance").getByRole("button", { name: /^Switch Game Boy Advance to/ }),
     ).toHaveCount(0);
     await expectAccessible(page, "ROM Zip Config");
     await row("Nintendo DS").getByRole("button", { name: button }).click();
@@ -3277,7 +3277,7 @@ test("ROM Zip Config: DS moves into its ZIP and back, the ROM downloading byte-e
     await expectAccessible(page, "jobs");
     await page.goto("/admin/rom-storage");
     await expect(
-      // Cells: System, Folder, Games, Default, Configured.
+      // Cells: System, Folder, Games, Size, Storage; the configured icon's name contains the storage.
       row("Nintendo DS")
         .getByRole("cell")
         .nth(4)
@@ -3285,11 +3285,11 @@ test("ROM Zip Config: DS moves into its ZIP and back, the ROM downloading byte-e
     ).toBeVisible();
   };
 
-  await toggle("Store in ZIP", "Stored in ZIP");
+  await toggle("Switch Nintendo DS to in ZIP", "Stored in ZIP");
   expect(await downloadsExact()).toBeNull();
 
   // Back beside its ZIP, as later tests expect.
-  await toggle("Store beside ZIP", "Beside ZIP");
+  await toggle("Switch Nintendo DS to beside ZIP", "Beside ZIP");
   expect(await downloadsExact()).not.toBeNull();
 });
 
@@ -3315,7 +3315,8 @@ test("ZIP compression: GBA repacks to Store and back, its ROM downloading byte-e
       page.getByRole("heading", { name: "ZIP compression levels" }),
     ).toBeVisible();
     await row("Game Boy Advance")
-      .getByRole("button", { name: "Edit ZIP compression of Game Boy Advance" })
+      // The level in the name changes between the two runs.
+      .getByRole("button", { name: /^Change ZIP compression of Game Boy Advance/ })
       .click();
     await dialog().getByLabel("Compression level").selectOption(value);
     await dialog().getByRole("button", { name: "Change and repack" }).click();

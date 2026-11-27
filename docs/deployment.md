@@ -377,9 +377,9 @@ DS dumps reach 512 MiB. They are stored as files next to the game's ZIP (see [Ex
 
 ## ZIP compression repack
 
-Changing a system's ZIP compression on **Admin → ROM Zip Config** (or **Repack again**) starts the `ZipRepack` job, which rewrites every game ZIP of that system, one at a time: each ROM is read, re-compressed, verified (size and SHA-1) and the ZIP replaced atomically. Plan for it like a storage move:
+Changing a system's ZIP compression on **Admin → ROM Zip Config** (or **Repack**) starts the `ZipRepack` job, which rewrites every game ZIP of that system, one at a time: each ROM is read, re-compressed, verified (size and SHA-1) and the ZIP replaced atomically. Plan for it like a storage move:
 
-- **Time:** it's bound by disk speed and CPU; a DS library of several hundred games at **High** can take hours, **Store** is the fastest. The job holds the job lock throughout, so ingest, integrity, DAT refresh, edits and save uploads wait (or get "Another job is running") until it ends; cancel it from the Jobs page if needed, and use **Repack again** later.
+- **Time:** it's bound by disk speed and CPU; a DS library of several hundred games at **High** can take hours, **Store** is the fastest. The job holds the job lock throughout, so ingest, integrity, DAT refresh, edits and save uploads wait (or get "Another job is running") until it ends; cancel it from the Jobs page if needed, and use **Repack** later.
 - **Disk:** each game needs free space on the library volume of about its uncompressed ROMs plus its current ZIP plus 64 MiB while it's rewritten (a game without it is skipped with `InsufficientSpace`). Going to **Store** also grows the library by roughly what compression saved.
 - **Interrupted runs:** a cancel, crash or restart leaves some ZIPs at the old level; all stay readable. A leftover `*.zip.tmp` is removed at the next start.
 
