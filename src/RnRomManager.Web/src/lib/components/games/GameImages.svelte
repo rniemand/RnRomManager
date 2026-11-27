@@ -1,13 +1,16 @@
 <script lang="ts">
 	import Button from '#lib/components/forms/Button.svelte';
+	import IconButton from '#lib/components/forms/IconButton.svelte';
+	import EmptyState from '#lib/components/common/EmptyState.svelte';
 	import DeleteImageModal from '#lib/components/modals/DeleteImageModal.svelte';
 	import SuggestImagesModal from '#lib/components/modals/SuggestImagesModal.svelte';
 	import UploadImageModal from '#lib/components/modals/UploadImageModal.svelte';
 	import ViewImageModal from '#lib/components/modals/ViewImageModal.svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import { gameSearchQuery, googleImagesUrl } from '#lib/googleSearch.js';
-	import { imageTypeLabels } from '#lib/imageResolutions.js';
+	import { coverSearchQuery, googleImagesUrl, screenshotSearchQuery } from '#lib/googleSearch.js';
+	import { imageTypeLabels, splitImages } from '#lib/imageResolutions.js';
+	import { formatCount } from '#lib/format.js';
 	import type { GameDetail, ImageInfo } from '#lib/types/index.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -29,6 +32,26 @@
 
 	let uploadOpen = $state(false);
 	let suggestOpen = $state(false);
+	/** IM4: the type the next opened modal starts on, from the section that opened it. */
+	let modalType = $state<'BoxArt' | 'Snap'>('BoxArt');
+
+	type Section = 'covers' | 'screenshots';
+	const sections = {
+		covers: { title: 'Covers', type: 'BoxArt', empty: 'No covers yet.', query: coverSearchQuery },
+		screenshots: {
+			title: 'Screenshots',
+			type: 'Snap',
+			empty: 'No screenshots yet.',
+			query: screenshotSearchQuery
+		}
+	} as const;
+	const split = $derived(splitImages(game.images));
+
+	function openModal(which: 'upload' | 'suggest', type: 'BoxArt' | 'Snap'): void {
+		modalType = type;
+		if (which === 'upload') uploadOpen = true;
+		else suggestOpen = true;
+	}
 
 	const base = $derived(`/api/games/${encodeURIComponent(game.id)}/images`);
 
@@ -82,118 +105,143 @@
 	}
 </script>
 
-<section class="mb-4" aria-labelledby="images-heading">
-	<!-- I1: the tab names the panel; the heading stays for the outline only. -->
-	<h2 class="visually-hidden" id="images-heading">Images</h2>
+<!-- IM6: one image tile; Download for every user, then the Admin's Use as cover and Delete. -->
+{#snippet tile(image: ImageInfo)}
+	<div class="col">
+		<!-- B10: the tile lifts on hover or keyboard focus. -->
+		<!-- P6: the cover's card stands out. -->
+		<div
+			class="card h-100 image-tile"
+			class:border-primary={image.isCover}
+			class:border-2={image.isCover}
+		>
+			<!-- B10: the size badge sits over the thumbnail, outside its button. -->
+			<div class="position-relative">
+				<Button
+					class="btn p-0 border-0 w-100"
+					aria-label="View {image.fileName} full size"
+					onclick={() => view(image)}
+					><img
+						class="card-img-top object-fit-contain bg-body-tertiary thumb"
+						src={image.url}
+						alt="{game.displayTitle} {imageTypeLabels[image.type].toLowerCase()}"
+						loading="lazy"
+					/></Button
+				>
+				<span class="badge text-bg-light border position-absolute top-0 end-0 m-1"
+					><FileSize bytes={image.sizeBytes} /></span
+				>
+			</div>
+			<div class="card-body p-2 small" class:bg-primary-subtle={image.isCover}>
+				<div class="d-flex flex-wrap gap-1 mb-1">
+					<span class="badge text-bg-secondary">{imageTypeLabels[image.type]}</span>
+					{#if image.isCover}<span class="badge text-bg-primary">Cover</span>{/if}
+					{#if image.isDefault}<span class="badge text-bg-light border">Placeholder</span>{/if}
+				</div>
+				<div class="text-body-secondary text-nowrap">{image.width}×{image.height}</div>
+				<div class="d-flex gap-2 mt-2">
+					<IconButton
+						icon="download"
+						label="Download {image.fileName}"
+						tooltip="Download"
+						href="/api/games/{encodeURIComponent(game.id)}/images/{image.id}?download=true"
+						download
+					/>
+					{#if auth.isAdmin}
+						{#if !image.isCover}
+							<IconButton
+								icon="cover"
+								tone="primary"
+								label="Use as cover: {image.fileName}"
+								tooltip="Use as cover"
+								disabled={busy}
+								onclick={() => setCover(image)}
+							/>
+						{/if}
+						{#if !image.isDefault}
+							<IconButton
+								icon="delete"
+								tone="danger"
+								label="Delete {image.fileName}"
+								tooltip="Delete"
+								disabled={busy}
+								onclick={() => {
+									deleting = image;
+									deleteOpen = true;
+								}}
+							/>
+						{/if}
+					{/if}
+				</div>
+			</div>
+		</div>
+	</div>
+{/snippet}
+
+<!-- IM1: Covers then Screenshots, each with its own Admin toolbar on the heading row. -->
+{#snippet imageSection(kind: Section, images: ImageInfo[])}
+	{@const s = sections[kind]}
 	<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+		<h3 class="h6 mb-0">{s.title} ({formatCount(images.length)})</h3>
 		{#if auth.isAdmin}
 			<!-- IGDB suggestions S11: before Google Images, and the start of the right-aligned group. -->
 			<Button
 				icon="suggest-images"
 				class="btn btn-outline-secondary btn-sm ms-auto"
-				onclick={() => (suggestOpen = true)}>Suggest Images</Button
+				aria-label="Suggest Images ({kind})"
+				onclick={() => openModal('suggest', s.type)}>Suggest Images</Button
 			>
 			<!-- B8: an external search, not an app page. -->
 			<!-- eslint-disable svelte/no-navigation-without-resolve -->
 			<Button
 				icon="google"
 				class="btn btn-outline-secondary btn-sm"
-				href={googleImagesUrl(gameSearchQuery(game))}
+				href={googleImagesUrl(s.query(game))}
 				target="_blank"
-				rel="noopener noreferrer">Google Images</Button
+				rel="noopener noreferrer"
+				aria-label="Google Images ({kind})">Google Images</Button
 			>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			<Button
 				icon="upload"
 				class="btn btn-outline-primary btn-sm"
-				onclick={() => (uploadOpen = true)}>Upload Image</Button
+				aria-label="Upload Image ({kind})"
+				onclick={() => openModal('upload', s.type)}>Upload Image</Button
 			>
 		{/if}
 	</div>
-	<div class="row row-cols-2 row-cols-sm-3 row-cols-lg-5 g-3 mb-3">
-		{#each game.images as image (image.id)}
-			<div class="col">
-				<!-- B10: the tile lifts on hover or keyboard focus. -->
-				<!-- P6: the cover's card stands out. -->
-				<div
-					class="card h-100 image-tile"
-					class:border-primary={image.isCover}
-					class:border-2={image.isCover}
-				>
-					<!-- B10: the size badge sits over the thumbnail, outside its button. -->
-					<div class="position-relative">
-						<Button
-							class="btn p-0 border-0 w-100"
-							aria-label="View {image.fileName} full size"
-							onclick={() => view(image)}
-							><img
-								class="card-img-top object-fit-contain bg-body-tertiary thumb"
-								src={image.url}
-								alt="{game.displayTitle} {imageTypeLabels[image.type].toLowerCase()}"
-								loading="lazy"
-							/></Button
-						>
-						<span class="badge text-bg-light border position-absolute top-0 end-0 m-1"
-							><FileSize bytes={image.sizeBytes} /></span
-						>
-					</div>
-					<div class="card-body p-2 small" class:bg-primary-subtle={image.isCover}>
-						<div class="d-flex flex-wrap gap-1 mb-1">
-							<span class="badge text-bg-secondary">{imageTypeLabels[image.type]}</span>
-							{#if image.isCover}<span class="badge text-bg-primary">Cover</span>{/if}
-							{#if image.isDefault}<span class="badge text-bg-light border">Placeholder</span>{/if}
-						</div>
-						<div class="text-body-secondary text-nowrap">{image.width}×{image.height}</div>
-						<!-- B10: Download for every user, then the Admin's Use as cover and Delete. -->
-						<div class="d-flex flex-wrap gap-1 mt-2">
-							<!-- eslint-disable svelte/no-navigation-without-resolve -- an API download, not a page -->
-							<Button
-								variant="secondary"
-								outline
-								size="sm"
-								icon="download"
-								href="/api/games/{encodeURIComponent(game.id)}/images/{image.id}?download=true"
-								download
-								aria-label="Download {image.fileName}"
-							/>
-							<!-- eslint-enable svelte/no-navigation-without-resolve -->
-							{#if auth.isAdmin}
-								{#if !image.isCover}
-									<Button
-										variant="primary"
-										outline
-										size="sm"
-										aria-label="Use as cover: {image.fileName}"
-										disabled={busy}
-										onclick={() => setCover(image)}>Use as cover</Button
-									>
-								{/if}
-								{#if !image.isDefault}
-									<Button
-										variant="danger"
-										outline
-										size="sm"
-										icon="delete"
-										aria-label="Delete {image.fileName}"
-										disabled={busy}
-										onclick={() => {
-											deleting = image;
-											deleteOpen = true;
-										}}
-									/>
-								{/if}
-							{/if}
-						</div>
-					</div>
-				</div>
-			</div>
-		{/each}
-	</div>
+	{#if images.length}
+		<div class="row row-cols-2 row-cols-sm-3 row-cols-lg-5 g-3 mb-3">
+			{#each images as image (image.id)}{@render tile(image)}{/each}
+		</div>
+	{:else}
+		<EmptyState message={s.empty} />
+	{/if}
+{/snippet}
+
+<section class="mb-4" aria-labelledby="images-heading">
+	<!-- I1: the tab names the panel; the heading stays for the outline only. -->
+	<h2 class="visually-hidden" id="images-heading">Images</h2>
+	{@render imageSection('covers', split.covers)}
+	<hr />
+	{@render imageSection('screenshots', split.screenshots)}
 </section>
 
 {#if auth.isAdmin}
-	<UploadImageModal bind:open={uploadOpen} gameId={game.id} {onchanged} onfailed={failed} />
-	<SuggestImagesModal bind:open={suggestOpen} gameId={game.id} {onchanged} onfailed={failed} />
+	<UploadImageModal
+		bind:open={uploadOpen}
+		gameId={game.id}
+		initialType={modalType}
+		{onchanged}
+		onfailed={failed}
+	/>
+	<SuggestImagesModal
+		bind:open={suggestOpen}
+		gameId={game.id}
+		initialType={modalType}
+		{onchanged}
+		onfailed={failed}
+	/>
 {/if}
 
 <ViewImageModal bind:open={viewOpen} image={viewing} gameTitle={game.displayTitle} />

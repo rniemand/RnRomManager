@@ -134,19 +134,20 @@ describe('game images', () => {
 			.getAllByRole('button', { name: /full size/ })
 			.map((b) => b.closest('.card')!);
 		expect(cards).toHaveLength(2);
-		expect(within(cards[0] as HTMLElement).getByText('Box art')).toBeTruthy();
-		expect(within(cards[0] as HTMLElement).getByText('Placeholder')).toBeTruthy();
-		expect(within(cards[1] as HTMLElement).getByText('Screenshot')).toBeTruthy();
-		expect(within(cards[1] as HTMLElement).getByText('Cover').className).toContain(
+		// IM2: both are in Covers (the placeholder is box art, the screenshot is the cover), cover first.
+		expect(within(cards[1] as HTMLElement).getByText('Box art')).toBeTruthy();
+		expect(within(cards[1] as HTMLElement).getByText('Placeholder')).toBeTruthy();
+		expect(within(cards[0] as HTMLElement).getByText('Screenshot')).toBeTruthy();
+		expect(within(cards[0] as HTMLElement).getByText('Cover').className).toContain(
 			'text-bg-primary'
 		);
 		// P6: only the cover's card is highlighted.
-		expect([...cards[1]!.classList]).toEqual(
+		expect([...cards[0]!.classList]).toEqual(
 			expect.arrayContaining(['border-primary', 'border-2'])
 		);
-		expect(cards[1]!.querySelector('.card-body')!.classList).toContain('bg-primary-subtle');
-		expect(cards[0]!.classList).not.toContain('border-primary');
-		expect(cards[0]!.querySelector('.card-body')!.classList).not.toContain('bg-primary-subtle');
+		expect(cards[0]!.querySelector('.card-body')!.classList).toContain('bg-primary-subtle');
+		expect(cards[1]!.classList).not.toContain('border-primary');
+		expect(cards[1]!.querySelector('.card-body')!.classList).not.toContain('bg-primary-subtle');
 		// B10: the caption keeps the dimensions; the size is a badge over the thumbnail.
 		const caption = cards[1]!.querySelector('.card-body .text-body-secondary')!;
 		expect(caption.textContent!.trim()).toBe('160×144');
@@ -155,7 +156,7 @@ describe('game images', () => {
 		expect(size.className).toBe('badge text-bg-light border position-absolute top-0 end-0 m-1');
 		expect(size.closest('button')).toBeNull();
 		expect(screen.queryByLabelText('Upload an image')).toBeNull();
-		expect(screen.queryByRole('button', { name: 'Upload Image' })).toBeNull();
+		expect(screen.queryByRole('button', { name: /^Upload Image/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: /Use as cover/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: /^Delete / })).toBeNull();
 	});
@@ -167,10 +168,10 @@ describe('game images', () => {
 
 		const links = screen.getAllByRole('link', { name: /^Download / });
 		expect(links.map((a) => a.getAttribute('aria-label'))).toEqual(
-			detail.images.map((i) => `Download ${i.fileName}`)
+			[detail.images[1], detail.images[0]].map((i) => `Download ${i.fileName}`)
 		);
 		expect(links[0].getAttribute('href')).toBe(
-			`/api/games/g1/images/${detail.images[0].id}?download=true`
+			`/api/games/g1/images/${detail.images[1].id}?download=true`
 		);
 		expect(links[0].hasAttribute('download')).toBe(true);
 	});
@@ -188,24 +189,103 @@ describe('game images', () => {
 		expect(download.closest('.card')!.classList).toContain('image-tile');
 	});
 
-	it('Suggest Images, Google Images and Upload Image sit right-aligned on their own row before the grid; the heading is visually hidden (G3, I1, B8, S11)', () => {
+	it('Covers and Screenshots each have a heading with a count and a right-aligned toolbar; the panel heading is visually hidden (IM1, IM4, S11)', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
-		const upload = screen.getByRole('button', { name: 'Upload Image' });
-		const google = screen.getByRole('link', { name: 'Google Images' });
-		const suggest = screen.getByRole('button', { name: 'Suggest Images' });
-		const heading = screen.getByRole('heading', { name: 'Images' });
+		const heading = screen.getByRole('heading', { level: 2, name: 'Images' });
 		expect(heading.className).toBe('visually-hidden');
-		expect([...upload.parentElement!.children]).toEqual([suggest, google, upload]);
-		expect(suggest.classList.contains('ms-auto')).toBe(true);
-		expect(suggest.querySelector('i')!.classList.contains('bi-magic')).toBe(true);
-		expect(google.classList.contains('ms-auto')).toBe(false);
-		expect(upload.classList.contains('ms-auto')).toBe(false);
+		const covers = screen.getByRole('heading', { level: 3, name: 'Covers (2)' });
+		const shots = screen.getByRole('heading', { level: 3, name: 'Screenshots (0)' });
+		expect(covers.className).toBe('h6 mb-0');
+		for (const [kind, h] of [
+			['covers', covers],
+			['screenshots', shots]
+		] as const) {
+			const upload = screen.getByRole('button', { name: `Upload Image (${kind})` });
+			const google = screen.getByRole('link', { name: `Google Images (${kind})` });
+			const suggest = screen.getByRole('button', { name: `Suggest Images (${kind})` });
+			const row = h.parentElement!;
+			expect(row.className).toBe('d-flex flex-wrap align-items-center gap-2 mb-2');
+			expect([...row.children]).toEqual([h, suggest, google, upload]);
+			expect(suggest.classList.contains('ms-auto')).toBe(true);
+			expect(suggest.querySelector('i')!.classList.contains('bi-magic')).toBe(true);
+			expect(suggest.textContent!.trim()).toBe('Suggest Images');
+			expect(google.textContent!.trim()).toBe('Google Images');
+			expect(upload.textContent!.trim()).toBe('Upload Image');
+		}
+		// The two subsections are split by a rule; Covers' grid sits between its heading and it.
+		const hr = covers.closest('section')!.querySelector('hr')!;
+		expect(covers.compareDocumentPosition(hr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(hr.compareDocumentPosition(shots) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		const grid = screen.getAllByRole('button', { name: /full size/ })[0].closest('.row')!;
-		expect(upload.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-		expect(grid.nextElementSibling).toBeNull();
+		expect(grid.nextElementSibling).toBe(hr);
+		// IM3: an empty subsection says so.
+		expect(screen.getByText('No screenshots yet.')).toBeTruthy();
+		expect(screen.queryByText('No covers yet.')).toBeNull();
 	});
 
+	it('splits box art and screenshots, with the non-box-art cover first in Covers (IM2)', () => {
+		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
+		const images = [
+			image(1, 'BoxArt'),
+			image(2, 'Snap'),
+			image(3, 'Snap', { isCover: true, fileName: 'snap-03.png' }),
+			image(4, 'TitleScreen', { fileName: 'title-04.png' })
+		];
+		render(GameImages, { game: game(images), onchanged: () => {} });
+
+		const shots = screen.getByRole('heading', { level: 3, name: 'Screenshots (2)' });
+		expect(screen.getByRole('heading', { level: 3, name: 'Covers (2)' })).toBeTruthy();
+		const names = screen
+			.getAllByRole('button', { name: /full size/ })
+			.map((b) => [
+				b.getAttribute('aria-label')!.replace(/^View | full size$/g, ''),
+				!!(shots.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+			]);
+		expect(names).toEqual([
+			['snap-03.png', false],
+			['boxart-01.png', false],
+			['snap-02.png', true],
+			['title-04.png', true]
+		]);
+		expect(screen.queryByText('No covers yet.')).toBeNull();
+	});
+
+	it('no images: both empty states (IM3)', () => {
+		render(GameImages, { game: game([]), onchanged: () => {} });
+		expect(screen.getByText('No covers yet.')).toBeTruthy();
+		expect(screen.getByText('No screenshots yet.')).toBeTruthy();
+	});
+
+	it('each section opens Upload and Suggest preset to its type (IM4)', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (screenshots)' }));
+		expect((screen.getByLabelText('Screenshot') as HTMLInputElement).checked).toBe(true);
+		await fireEvent.click(
+			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
+		expect((screen.getByLabelText('Box art') as HTMLInputElement).checked).toBe(true);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Suggest Images (screenshots)' }));
+		await vi.waitFor(() =>
+			expect(calls.map((c) => c.key)).toContain('GET /api/games/g1/image-suggestions?type=Snap')
+		);
+	});
+
+	it('tile actions are icon buttons (IM6)', () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		const cover = screen.getByRole('button', { name: 'Use as cover: boxart-01.png' });
+		expect(cover.className).toBe('btn btn-sm btn-link text-primary-emphasis p-0');
+		expect(cover.querySelector('i.bi-image')).toBeTruthy();
+		expect(cover.textContent!.trim()).toBe('');
+		const del = screen.getByRole('button', { name: 'Delete snap-01.png' });
+		expect(del.className).toBe('btn btn-sm btn-link text-danger-emphasis p-0');
+		const download = screen.getByRole('link', { name: 'Download snap-01.png' });
+		expect(download.className).toBe('btn btn-sm btn-link text-body-secondary p-0');
+		expect(download.parentElement!.className).toBe('d-flex gap-2 mt-2');
+	});
 	it('editors get Use as cover on non-covers and Delete on everything but the placeholder', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
@@ -245,35 +325,41 @@ describe('game images', () => {
 
 		expect(uploadModal().classList.contains('show')).toBe(false);
 		expect(uploadModal().querySelector('.modal-title')!.textContent).toBe('Upload Image');
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 		expect(uploadModal().classList.contains('show')).toBe(true);
 	});
 
 	it('Google Images opens Google Images for the header query in a new tab (B8)', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
-		const google = screen.getByRole('link', { name: 'Google Images' });
+		const google = screen.getByRole('link', { name: 'Google Images (covers)' });
 		expect(google.getAttribute('href')).toBe(
-			`https://www.google.com/search?udm=2&q=${encodeURIComponent('"Tetris" Game Boy')}`
+			`https://www.google.com/search?udm=2&q=${encodeURIComponent('"Tetris" Game Boy box art')}`
 		);
 		expect(google.getAttribute('target')).toBe('_blank');
 		expect(google.getAttribute('rel')).toBe('noopener noreferrer');
 		expect(google.className).toBe('btn btn-outline-secondary btn-sm');
 		expect(google.querySelector('i')!.className).toContain('bi-google');
+		// IM4: the Screenshots section searches for screenshots.
+		expect(
+			screen.getByRole('link', { name: 'Google Images (screenshots)' }).getAttribute('href')
+		).toBe(
+			`https://www.google.com/search?udm=2&q=${encodeURIComponent('"Tetris" Game Boy screenshot')}`
+		);
 	});
 
 	it('a Site user gets no Google Images button (B8)', () => {
 		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
-		expect(screen.queryByRole('link', { name: 'Google Images' })).toBeNull();
-		expect(screen.queryByRole('button', { name: 'Suggest Images' })).toBeNull();
+		expect(screen.queryByRole('link', { name: /^Google Images/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: /^Suggest Images/ })).toBeNull();
 	});
 
 	it('the Image URL input gets focus each time the dialog has opened (B6)', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 		uploadModal().dispatchEvent(new Event('shown.bs.modal'));
 		expect(document.activeElement).toBe(screen.getByLabelText('Image URL'));
 	});
@@ -288,7 +374,7 @@ describe('game images', () => {
 			return Promise.resolve(new Response(null, { status: 204 }));
 		});
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 		const input = screen.getByLabelText('Image URL');
 		await fireEvent.input(input, { target: { value: 'https://example.com/a.png' } });
 
@@ -304,7 +390,7 @@ describe('game images', () => {
 
 	it('Enter on the source radios does not submit (B7)', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 
 		await fireEvent.keyDown(screen.getByLabelText('URL'), { key: 'Enter' });
 		await new Promise((r) => setTimeout(r, 10));
@@ -319,7 +405,7 @@ describe('game images', () => {
 		const onchanged = vi.fn();
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 		await choose(png());
 		await fireEvent.click(typeRadio('Screenshot'));
 		await confirmUpload();
@@ -337,7 +423,7 @@ describe('game images', () => {
 	it('an empty submit shows the file error, keeps the modal open, and reopening clears it', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 		await fireEvent.click(screen.getByLabelText('File'));
 		await confirmUpload();
 
@@ -348,7 +434,7 @@ describe('game images', () => {
 		await fireEvent.click(
 			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
 		);
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 		expect(screen.queryByText('Choose an image file.')).toBeNull();
 	});
 
@@ -359,14 +445,14 @@ describe('game images', () => {
 	const fallback = 'Download the image and upload the file instead.';
 
 	async function openUrlMode(url: string): Promise<void> {
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 		await fireEvent.click(urlRadio());
 		await fireEvent.input(urlInput(), { target: { value: url } });
 	}
 
 	it('opens on URL, listed before File; File mode shows the file input and hides the URL field (U6, I2)', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 
 		const source = screen.getByRole('group', { name: 'Image source', hidden: true });
 		expect([...source.querySelectorAll('label')].map((l) => l.textContent)).toEqual([
@@ -392,7 +478,7 @@ describe('game images', () => {
 
 	it('Type is a Box art / Screenshot radio group after the inputs, Box art by default (I2)', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 
 		const group = screen.getByRole('group', { name: 'Image type', hidden: true });
 		expect(group.className).toBe('btn-group');
@@ -532,13 +618,13 @@ describe('game images', () => {
 		await fireEvent.click(
 			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
 		);
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 
 		await fireEvent.click(fileRadio());
 		await fireEvent.click(
 			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
 		);
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 
 		expect(urlRadio().checked).toBe(true);
 		expect(typeRadio('Box art').checked).toBe(true);
@@ -566,7 +652,7 @@ describe('game images', () => {
 		async function openWithFileInput(): Promise<HTMLInputElement> {
 			vi.stubGlobal('DataTransfer', FakeDataTransfer);
 			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
-			await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 			const input = screen.getByLabelText('Upload an image') as HTMLInputElement;
 			picked = undefined;
 			Object.defineProperty(input, 'files', {
@@ -624,7 +710,7 @@ describe('game images', () => {
 			await fireEvent.click(
 				within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
 			);
-			await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 			expect(screen.queryByText(/Only one image/)).toBeNull();
 		});
 
@@ -649,7 +735,7 @@ describe('game images', () => {
 		const big = new File(['x'], 'big.png', { type: 'image/png' });
 		Object.defineProperty(big, 'size', { value: 8 * 1024 * 1024 + 1 });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 		await choose(big);
 		await confirmUpload();
 
@@ -665,7 +751,7 @@ describe('game images', () => {
 		const onchanged = vi.fn();
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image (covers)' }));
 		await choose(png());
 		await confirmUpload();
 
@@ -736,7 +822,8 @@ describe('Suggest Images (IGDB suggestions S11–S13)', () => {
 	const inDialog = () => within(dialog());
 	const results = () => dialog().querySelector('[aria-live="polite"]') as HTMLElement;
 	const tile = (name: string) => inDialog().getByRole('button', { name, hidden: true });
-	const open = () => fireEvent.click(screen.getByRole('button', { name: 'Suggest Images' }));
+	const open = () =>
+		fireEvent.click(screen.getByRole('button', { name: 'Suggest Images (covers)' }));
 	const close = () =>
 		fireEvent.click(
 			inDialog()

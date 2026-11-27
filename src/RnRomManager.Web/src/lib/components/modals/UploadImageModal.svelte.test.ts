@@ -15,12 +15,13 @@ vi.mock('#lib/api/client.js', () => ({ api: { post } }));
 
 const { default: UploadImageModal } = await import('./UploadImageModal.svelte');
 
-function setup() {
+function setup(initialType?: 'BoxArt' | 'Snap') {
 	const state = $state({ open: false });
 	const onchanged = vi.fn();
 	const onfailed = vi.fn();
 	render(UploadImageModal, {
 		gameId: 'g 1',
+		initialType,
 		onchanged,
 		onfailed,
 		get open() {
@@ -36,6 +37,20 @@ function setup() {
 }
 
 describe('UploadImageModal', () => {
+	it('initialType Snap opens on Screenshot, each time it opens (IM4)', () => {
+		const { state } = setup('Snap');
+		const shot = () =>
+			screen.getByRole('radio', { name: 'Screenshot', hidden: true }) as HTMLInputElement;
+		expect(shot().checked).toBe(true);
+		(screen.getByRole('radio', { name: 'Box art', hidden: true }) as HTMLInputElement).click();
+		flushSync();
+		state.open = false;
+		flushSync();
+		state.open = true;
+		flushSync();
+		expect(shot().checked).toBe(true);
+	});
+
 	it('opens on URL and Box art; an empty URL is an error and nothing is sent', async () => {
 		setup();
 		expect(

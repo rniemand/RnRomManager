@@ -63,3 +63,16 @@ export const readSavedImageResolutionFilter = filter.read;
 
 /** Saves `search` (removes the key when empty); ignored when storage is unavailable. */
 export const saveImageResolutionFilter = filter.save;
+
+/** IM2: Covers (box art plus the cover whatever its type, cover first) and Screenshots, each in the server's order. */
+export function splitImages(images: ImageInfo[]): {
+	covers: ImageInfo[];
+	screenshots: ImageInfo[];
+} {
+	const isCover = (i: ImageInfo) => i.isCover || i.type === 'BoxArt';
+	const covers = images.filter(isCover);
+	return {
+		covers: [...covers.filter((i) => i.isCover), ...covers.filter((i) => !i.isCover)],
+		screenshots: images.filter((i) => !isCover(i))
+	};
+}
