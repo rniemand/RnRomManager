@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (SG-1000 / SC-3000). Made for this project; MIT licensed like the rest of the repo.
+       Exported to sg1000.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e9ecef"/>
+  <!-- console body: flat white box with a dark top deck -->
+  <rect x="46" y="226" width="420" height="120" rx="8" fill="#f8f9fa" stroke="#343a40" stroke-width="4"/>
+  <rect x="46" y="226" width="420" height="44" rx="8" fill="#343a40"/>
+  <rect x="66" y="300" width="160" height="10" fill="#c8102e"/>
+  <!-- cartridge slot with a cart -->
+  <rect x="170" y="168" width="172" height="64" rx="4" fill="#212529"/>
+  <rect x="184" y="120" width="144" height="100" rx="4" fill="#495057"/>
+  <text x="256" y="182" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="28" font-weight="800" fill="#ffffff">SG-1000</text>
+  <!-- joystick port and power switch -->
+  <circle cx="400" cy="305" r="14" fill="#343a40"/>
+  <rect x="300" y="296" width="44" height="18" rx="3" fill="#adb5bd"/>
+</svg>
