@@ -1,6 +1,6 @@
 ---
 title: Admin, Jobs and search polish
-status: ready
+status: in-progress
 created: 2026-11-26
 ---
 
