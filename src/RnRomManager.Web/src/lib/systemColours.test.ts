@@ -61,6 +61,11 @@ describe('systemColour', () => {
 		expect(systemColour('wsc')).toEqual({ name: 'wsc', foreground: '#000' });
 	});
 
+	it('gives PC Engine SuperGrafx violet with white text and Pocket Challenge V2 lavender with black text', () => {
+		expect(systemColour('sgx')).toEqual({ name: 'sgx', foreground: '#fff' });
+		expect(systemColour('pc2')).toEqual({ name: 'pc2', foreground: '#000' });
+	});
+
 	it('gives 3DO its own olive with black text (3DO B2)', () => {
 		expect(systemColour('3do')).toEqual({ name: '3do', foreground: '#000' });
 	});

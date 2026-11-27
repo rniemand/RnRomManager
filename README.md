@@ -60,9 +60,11 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds`, `.ids` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz`, `.hdf` | titledb | — |
+| PC Engine SuperGrafx | `sgx` | In ZIP | `.sgx` | No-Intro | `mednafen_pce` |
 | PC-FX | `pcfx` | Next to ZIP | `.bin`, `.cue`, `.chd`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `mednafen_pcfx` |
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd`, `.img`, `.pbp`, `.ccd`, `.sub`, `.mds`, `.mdf`, `.toc`, `.cbn` | Redump | `pcsx_rearmed` |
 | PlayStation Portable | `psp` | Next to ZIP | `.iso`, `.cso`, `.pbp`, `.chd` | Redump | `ppsspp` |
+| Pocket Challenge V2 | `pc2` | In ZIP | `.pc2` | No-Intro | `mednafen_wswan` |
 | Satellaview | `satellaview` | In ZIP | `.bs` | No-Intro | `snes9x` |
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg`, `.chd`, `.iso`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `yabause` |
 | Sega CD | `segacd` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `genesis_plus_gx` |

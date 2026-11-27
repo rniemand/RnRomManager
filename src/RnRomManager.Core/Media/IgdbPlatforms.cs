@@ -34,6 +34,8 @@ public static class IgdbPlatforms
         ["nes"] = 18,
         ["ngp"] = 119,
         ["ngpc"] = 120,
+        // Pocket Challenge V2: IGDB has no platform of its own; searches as WonderSwan
+        ["pc2"] = 57,
         ["pcfx"] = 274,
         ["pet"] = 90,
         ["plus4"] = 94,
@@ -42,6 +44,7 @@ public static class IgdbPlatforms
         ["s32x"] = 30,
         ["saturn"] = 32,
         ["segacd"] = 78,
+        ["sgx"] = 128,
         ["sms"] = 64,
         // Satellaview and Sufami Turbo: the SNES platform (spec B7), the fallback for a system whose own IGDB platform
         // wasn't looked up; IgdbPlatformsTests names them as the only repeated ids.
