@@ -1,6 +1,6 @@
 ---
 title: Play core parity test
-status: ready
+status: in-progress
 created: 2026-11-27
 ---
 
