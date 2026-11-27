@@ -101,6 +101,44 @@ describe('integrity page', () => {
 		);
 	});
 
+	it('duplicate issues show the plain path and an Open game link; others link the path (IN1)', async () => {
+		const issue = (id: number, type: string, zipPath: string) => ({
+			id,
+			type,
+			severity: 'Error',
+			systemId: 'gb',
+			zipPath,
+			gameId: 'g1',
+			entryName: null,
+			details: 'detail text',
+			status: 'Open',
+			detectedAt: '2026-11-04T03:00:00Z',
+			lastSeenAt: '2026-11-04T03:00:00Z'
+		});
+		fixed['GET /api/integrity/issues?page=1&pageSize=50&status=Open'] = {
+			...empty,
+			total: 3,
+			items: [
+				issue(1, 'DuplicateGameId', 'gb/T/Tetris (2).zip'),
+				issue(2, 'DuplicateSha1', 'gb/B/Beta.zip'),
+				issue(3, 'ZipUnreadable', 'gb/Z/Zelda.zip')
+			]
+		};
+		render(IntegrityPage);
+
+		const links = await screen.findAllByRole('link', { name: 'Open game' });
+		expect(links).toHaveLength(2);
+		expect(links.map((a) => [a.getAttribute('href'), a.className])).toEqual([
+			['/games/g1', 'ms-2'],
+			['/games/g1', 'ms-2']
+		]);
+		expect(screen.queryByRole('link', { name: 'gb/T/Tetris (2).zip' })).toBeNull();
+		expect(links[0].closest('td')!.textContent).toContain('gb/T/Tetris (2).zip');
+		expect(screen.getByRole('link', { name: 'gb/Z/Zelda.zip' }).getAttribute('href')).toBe(
+			'/games/g1'
+		);
+	});
+
 	it('Run deep starts an integrity job in Deep mode', async () => {
 		render(IntegrityPage);
 

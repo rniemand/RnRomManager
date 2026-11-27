@@ -91,7 +91,7 @@ public sealed class DbSync(
         {
             var where = string.Join(", ", group.Select(f => f.ZipPath + (f.Entry is null ? "" : $" (updatedAt {f.Entry.Info.Metadata.UpdatedAt:O})")));
             foreach (var f in group)
-                skipped.Add(new DbSyncSkipItem(DbSyncSkip.DuplicateGameId, f.ZipPath, $"gameId {group.Key} at {where}"));
+                skipped.Add(new DbSyncSkipItem(DbSyncSkip.DuplicateGameId, f.ZipPath, $"gameId {group.Key} at {where}", GameId: group.Key));
             kept.Add(group.Key);
         }
 
@@ -107,7 +107,7 @@ public sealed class DbSync(
             var clash = f.Sha1s.Select(s => (Sha1: s, Owner: owner.GetValueOrDefault(s))).FirstOrDefault(c => c.Owner.Path is not null && c.Owner.Id != f.Id);
             if (clash.Owner.Path is not null)
             {
-                skipped.Add(new DbSyncSkipItem(DbSyncSkip.DuplicateSha1, f.ZipPath, $"SHA1 {clash.Sha1} is also in {clash.Owner.Path}"));
+                skipped.Add(new DbSyncSkipItem(DbSyncSkip.DuplicateSha1, f.ZipPath, $"SHA1 {clash.Sha1} is also in {clash.Owner.Path}", GameId: clash.Owner.Id));
                 kept.Add(f.Id);
                 continue;
             }

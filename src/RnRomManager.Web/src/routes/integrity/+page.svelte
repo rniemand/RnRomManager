@@ -288,7 +288,13 @@
 						<td><span class="badge {severityClass(issue.severity)}">{issue.severity}</span></td>
 						<td>{issue.type}</td>
 						<td class="text-break">
-							{#if issue.gameId}
+							{#if issue.gameId && (issue.type === 'DuplicateGameId' || issue.type === 'DuplicateSha1')}
+								<!-- IN1: the path names the skipped ZIP, not the linked game's. -->
+								{issue.zipPath ?? '—'}<a
+									class="ms-2"
+									href={resolve('/games/[id]', { id: issue.gameId })}>Open game</a
+								>
+							{:else if issue.gameId}
 								<a href={resolve('/games/[id]', { id: issue.gameId })}>{issue.zipPath ?? 'Game'}</a>
 							{:else}
 								{issue.zipPath ?? '—'}

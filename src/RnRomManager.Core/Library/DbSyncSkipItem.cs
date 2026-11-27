@@ -4,8 +4,12 @@ namespace RnRomManager.Core.Library;
 /// Nothing at this path was opened or entered (an unsafe or unreadable path, or a ZIP path the database equates with
 /// another, spec G4/E4); integrity reports it and keeps the path's issues, as no check of it ran.
 /// </param>
+/// <param name="GameId">
+/// IN1: for <c>DuplicateGameId</c> the duplicated id; for <c>DuplicateSha1</c> the library game that owns the SHA1.
+/// </param>
 public sealed record DbSyncSkipItem(
     DbSyncSkip Reason,
     string ZipPath,
     string? Details,
-    bool NotChecked = false);
+    bool NotChecked = false,
+    Guid? GameId = null);

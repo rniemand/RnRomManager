@@ -13,7 +13,7 @@ namespace RnRomManager.Core.Integrity;
 
 /// <summary>
 /// The <c>Integrity</c> job (spec §12). First the DB auto-repair through <see cref="DbSync"/> (recorded as
-/// <c>AutoRepaired</c> issues, plus <c>DuplicateGameId</c>/<c>DuplicateSha1</c>), then every file under <c>roms/</c>:
+/// <c>AutoRepaired</c> issues, plus <c>DuplicateGameId</c>/<c>DuplicateSha1</c> carrying the duplicated or owning game id, IN1), then every file under <c>roms/</c>:
 /// files in the root and under unregistered folders are <c>OrphanFile</c> (never opened); under a registered system
 /// folder every non-ZIP is an orphan and every <c>.zip</c> is checked. Quick opens a ZIP only when its DB row (as it was
 /// before the repair) differs in size or whole-second mtime, else it checks just the location; Deep opens every ZIP and
@@ -87,7 +87,7 @@ public sealed class IntegrityJob(
             _ => DbRowDeleted,
         }, c.ZipPath, SystemId: SystemOf(systems, c.ZipPath), GameId: c.GameId)).ToList();
         foreach (var skip in sync.Skipped.Where(s => s.Reason is DbSyncSkip.DuplicateGameId or DbSyncSkip.DuplicateSha1))
-            Add(new IntegrityFinding(skip.Reason.ToString(), skip.ZipPath, SystemId: SystemOf(systems, skip.ZipPath), Details: skip.Details));
+            Add(new IntegrityFinding(skip.Reason.ToString(), skip.ZipPath, SystemId: SystemOf(systems, skip.ZipPath), GameId: skip.GameId, Details: skip.Details));
         // G4/E4: a path nothing could be opened at (unsafe, ambiguous, or equal to another ZIP for the database) is
         // reported once, never opened, and keeps its issues.
         var notChecked = sync.Skipped.Where(s => s.NotChecked).ToList();
