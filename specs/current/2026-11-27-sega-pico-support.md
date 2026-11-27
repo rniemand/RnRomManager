@@ -62,7 +62,7 @@ No migrations (`system_id` is a `VARCHAR`) and no config keys. API: `GET /api/sy
 ## Steps
 Steps 2–4 run integration tests (category `Integration`), which need Docker.
 
-- [ ] **1. Handler and box art** (P1 without `BrowserCore`, P2): `SegaPicoHandler`, `pico.svg`/`pico.png`, box-art README (both lists gain `pico.svg`/`pico.png`). `BrowserCore` stays null; not registered yet.
+- [x] **1. Handler and box art** (P1 without `BrowserCore`, P2): `SegaPicoHandler`, `pico.svg`/`pico.png`, box-art README (both lists gain `pico.svg`/`pico.png`). `BrowserCore` stays null; not registered yet.
   - Files: `src/RnRomManager.Systems.Sega/SegaPicoHandler.cs`, `Resources/boxart/*`, `tests/RnRomManager.Systems.Sega.Tests/SegaPicoHandlerTests.cs`.
   - Tests: `SegaPicoHandlerTests` (new, as `Sega32xHandlerTests`, builder `SyntheticMegaDriveRomBuilder { Seed = 1971, Size = 524288, SystemType = "SEGA PICO" }`): `SegaPico_Contract` (every P1 value), `BrowserCore_IsNull_WithEmbeddedRoms` (renamed to `BrowserCore_IsPicodrive_WithEmbeddedRoms` in step 4), `ReadHeader_ReadsTheMegaDriveFields_ClassifiedPico` (`systemType` `SEGA PICO`), `ReadHeader_MegaDriveSystemType_IsStillClassifiedPico`, `ReadHeader_NoSegaOrTooShort_IsNull`, `NormalizeForHashing_ReturnsTheInputUnchanged`, `DefaultBoxArt_IsA512x512Png_DifferentFromMegaDrives`.
   - Done when: `dotnet test tests/RnRomManager.Systems.Sega.Tests` passes and `dotnet build` passes with warnings as errors.

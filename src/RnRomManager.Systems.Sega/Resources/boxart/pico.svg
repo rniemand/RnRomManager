@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Sega Pico). Made for this project; MIT licensed like the rest of the repo.
+       Exported to pico.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#eef8d9"/>
+  <!-- clamshell base with the picture-book slot -->
+  <rect x="72" y="180" width="368" height="240" rx="40" fill="#2f9e44" stroke="#1f6e30" stroke-width="6"/>
+  <rect x="216" y="216" width="200" height="168" rx="12" fill="#ffffff" stroke="#c0eb75" stroke-width="8"/>
+  <path d="M316 228 L316 372" stroke="#c0eb75" stroke-width="4"/>
+  <!-- D-pad and red button -->
+  <rect x="112" y="268" width="72" height="24" rx="6" fill="#1b1b20"/>
+  <rect x="136" y="244" width="24" height="72" rx="6" fill="#1b1b20"/>
+  <circle cx="148" cy="360" r="18" fill="#e03131"/>
+  <!-- the pen on its cord -->
+  <path d="M200 160 Q150 120 180 90" fill="none" stroke="#1b1b20" stroke-width="5"/>
+  <rect x="196" y="60" width="28" height="120" rx="12" transform="rotate(35 210 120)" fill="#fab005" stroke="#1b1b20" stroke-width="4"/>
+  <text x="316" y="140" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="64" font-weight="800" fill="#1f6e30">PICO</text>
+</svg>
