@@ -46,7 +46,7 @@ public class AdminEndpointsTests
     {
         using (var empty = await _admin.GetAsync("/api/admin/actions"))
             Assert.That((await AuthClient.JsonAsync(empty)).GetRawText(),
-                Is.EqualTo("""{"igdbConfigured":true,"igdbLinked":0,"coversPending":0,"lastIgdbSyncAt":null}"""));
+                Is.EqualTo("""{"igdbConfigured":true,"igdbLinked":0,"coversPending":0,"coversMissing":0,"ratingsMissing":0,"lastIgdbSyncAt":null}"""));
 
         var mirror = _factory.Services.GetRequiredService<RnRomManager.Core.Library.ILibraryMirror>();
         var ids = new List<Guid>();
@@ -65,7 +65,7 @@ public class AdminEndpointsTests
         using var response = await _admin.GetAsync("/api/admin/actions");
 
         Assert.That((await AuthClient.JsonAsync(response)).GetRawText(),
-            Is.EqualTo("""{"igdbConfigured":true,"igdbLinked":2,"coversPending":1,"lastIgdbSyncAt":"2026-11-21T11:30:00Z"}"""));
+            Is.EqualTo("""{"igdbConfigured":true,"igdbLinked":2,"coversPending":1,"coversMissing":1,"ratingsMissing":2,"lastIgdbSyncAt":"2026-11-21T11:30:00Z"}"""));
     }
 
     [Test]

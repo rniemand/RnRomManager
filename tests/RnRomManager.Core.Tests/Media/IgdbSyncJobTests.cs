@@ -32,11 +32,22 @@ public class IgdbSyncJobTests
         new MirrorEntry(Game(title, Rom($"{title}.gb", RomBytes(igdbId))) with { IgdbId = igdbId }, $"gb/{title[0]}/{title}.zip", 1, DateTime.UtcNow)
             .ToRows().Game;
 
-    private async Task<string> Run(CancellationToken ct, params GameRow[] linked)
+    private async Task<string> Run(CancellationToken ct, params GameRow[] linked) => await Run(false, ct, linked);
+
+    private async Task<string> Run(bool all, CancellationToken ct, params GameRow[] linked)
     {
         _games.ListIgdbLinkedAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(linked);
-        var job = new IgdbSyncJob(_games, _igdb, _items, new FakeTimeProvider(Now));
+        var job = new IgdbSyncJob(_games, _igdb, _items, new FakeTimeProvider(Now)) { All = all };
         return JsonSerializer.Serialize(await job.RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), ct));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task All_ListsEveryLinkedGame_ElseOnlyThoseWithoutARating(bool all)
+    {
+        await Run(all, CancellationToken.None);
+
+        await _games.Received(1).ListIgdbLinkedAsync(!all, Arg.Any<CancellationToken>());
     }
 
     [Test]

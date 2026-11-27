@@ -472,8 +472,8 @@ public class GameQueryTests
 
         var summary = await _games.GetActionsSummaryAsync(default);
 
-        Assert.That(summary, Is.EqualTo(new GameActionsSummary(IgdbLinked: 4, CoversPending: 2, CoversMissing: 3, RatingsMissing: 2,
-            LastIgdbSyncAt: new DateTime(2026, 11, 26, 10, 15, 30, DateTimeKind.Utc))));
+        var lastSync = new DateTime(2026, 11, 26, 10, 15, 30, DateTimeKind.Utc);
+        Assert.That(summary, Is.EqualTo(new GameActionsSummary(IgdbLinked: 4, CoversPending: 2, CoversMissing: 3, RatingsMissing: 2, lastSync)));
     }
 
     [Test]

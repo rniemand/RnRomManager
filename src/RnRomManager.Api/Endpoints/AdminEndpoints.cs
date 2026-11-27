@@ -24,14 +24,15 @@ public static class AdminEndpoints
         admin.MapGet("/settings", (IServiceProvider services) => Results.Ok(EffectiveSettings.From(services)));
 
         // The BIOS info tab: each BIOS file browser play needs, checked in Paths:Bios.
-        // T2: the Actions tab.
+        // T2, AC8: the Actions tab.
         admin.MapGet("/actions", async (IGameRepository games, IOptions<SourcesOptions> sources, CancellationToken ct) =>
         {
             var summary = await games.GetActionsSummaryAsync(ct);
             return Results.Ok(new
             {
                 igdbConfigured = SourcesOptions.IgdbConfigured(sources.Value), igdbLinked = summary.IgdbLinked,
-                coversPending = summary.CoversPending, lastIgdbSyncAt = summary.LastIgdbSyncAt,
+                coversPending = summary.CoversPending, coversMissing = summary.CoversMissing, ratingsMissing = summary.RatingsMissing,
+                lastIgdbSyncAt = summary.LastIgdbSyncAt,
             });
         });
 

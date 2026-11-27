@@ -314,20 +314,23 @@ public static class LibraryEndpoints
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // Admin actions R1.
-        api.MapPost("/jobs/igdb-sync", async (HttpContext ctx, JobRunner runner, IgdbSyncJob job, IIgdbGames igdb) =>
+        // AC7: ?all=true repulls every linked game's rating.
+        api.MapPost("/jobs/igdb-sync", async (bool? all, HttpContext ctx, JobRunner runner, IgdbSyncJob job, IIgdbGames igdb) =>
         {
             if (!igdb.Configured)
                 return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
                     "Refreshing ratings needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
+            job.All = all == true;
             return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
-        // Admin actions P1.
-        api.MapPost("/jobs/pull-covers", async (HttpContext ctx, JobRunner runner, PullCoversJob job, IIgdbGames igdb) =>
+        // Admin actions P1; AC7: ?retryMissing=true also retries games whose cover couldn't be pulled before.
+        api.MapPost("/jobs/pull-covers", async (bool? retryMissing, HttpContext ctx, JobRunner runner, PullCoversJob job, IIgdbGames igdb) =>
         {
             if (!igdb.Configured)
                 return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
                     "Pulling covers needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
+            job.RetryMissing = retryMissing == true;
             return await JobStart.StartManualAsync(runner, job, ctx, ctx.RequestAborted);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
