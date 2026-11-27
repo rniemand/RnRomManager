@@ -1,6 +1,6 @@
 ---
 title: Amiga hard-disk and extra floppy formats
-status: draft
+status: ready
 created: 2026-11-27
 ---
 
@@ -118,11 +118,7 @@ No Playwright change: no e2e plays Amiga, and synthetic images don't boot.
 
   (reviewer)
 
-### Open questions
-1. Kickstart support for hard-disk play?
-   - (a) **Recommended, as drafted:** load optional `kick34005.A500`/`kick40068.A1200` for every Amiga launch and require `kick40068.A1200` for `.hdf`/`.hdz`/`.lha`.
-   - (b) No Kickstart work: make `.hdf`/`.hdz`/`.lha` library-only (`canPlay` and `playRomId` refuse them, as for `.ipf`), and drop step 2.
-   - (c) No Kickstart work, and let hard-disk games try AROS (likely a black screen).
+- 2026-11-27 Kickstart support for hard-disk play? → Load optional `kick34005.A500`/`kick40068.A1200` for every Amiga launch and require `kick40068.A1200` for `.hdf`/`.hdz`/`.lha`, as drafted (user)
 
 ## Kickoff prompt
 ```text
