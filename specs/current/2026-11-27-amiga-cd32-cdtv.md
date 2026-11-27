@@ -224,7 +224,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
       - In `describe('playUrl')`, a new case: `playUrl('g-8', { id: 2, fileName: 'Disc Chick (Europe) (Track 01).bin' }, 'puae', true, null, null, 'cd32')` is `/emulator/play.html?game=g-8&rom=2&core=puae&name=Disc%20Chick%20(Europe)%20(Track%2001).bin&disc=1&system=cd32`. Also `system` `'amiga'` or null adds nothing.
     - `EmulatorModal.test.ts`: the iframe `src` carries `&system=cdtv` when mounted with `system="cdtv"`, `disc` true and core `puae`.
   - Done when: those pass, and `npm run lint` and `npm run check` pass.
-- [ ] **8. Docs**:
+- [x] **8. Docs**:
   - `README.md`: A12's intro, Play, upgrade-note and attribution items (the rows are already in).
   - `docs/features.md`:
     - The systems list (line 3) gains both names after `PC-FX`, and so does the **Play** list.
