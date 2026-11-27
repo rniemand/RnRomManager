@@ -37,12 +37,18 @@ public static class PlayDisc
     /// <summary>PC-FX X5: takes TurboGrafx-CD's disc shapes.</summary>
     public const string PcfxSystemId = "pcfx";
 
+    /// <summary>CD32 A5: Amiga CD32 on PUAE.</summary>
+    public const string Cd32SystemId = "cd32";
+
+    /// <summary>CD32 A5: Commodore CDTV on PUAE.</summary>
+    public const string CdtvSystemId = "cdtv";
+
     /// <summary>The inclusive cap on the combined opened lengths a launch may stream.</summary>
     public const long MaxBytes = 2L * 1024 * 1024 * 1024;
 
     public static readonly IReadOnlySet<string> SupportedSystems = new HashSet<string>(StringComparer.Ordinal)
     {
-        SystemId, PspSystemId, SaturnSystemId, SegaCdSystemId, ThreeDoSystemId, TurboGrafxCdSystemId, PcfxSystemId,
+        SystemId, PspSystemId, SaturnSystemId, SegaCdSystemId, ThreeDoSystemId, TurboGrafxCdSystemId, PcfxSystemId, Cd32SystemId, CdtvSystemId,
     };
 
     public const string InvalidPlayDisc = "InvalidPlayDisc";
@@ -373,7 +379,7 @@ public static class PlayDisc
     /// a single file must be a <c>.chd</c>. CloneCD B8: or a CloneCD disc on any of the five disc systems (<see cref="IsCloneCd"/>).
     /// D11: or an MDS disc (<see cref="IsMds"/>), and a <c>.toc</c> takes the cue's place in a set. Browser play format gaps
     /// N1: or a standalone <c>.nrg</c> (<see cref="NrgDiscAsync"/>). PC-FX X5: the same for Beetle PC-FX, which opens only
-    /// <c>cue|ccd|toc|chd</c>.
+    /// <c>cue|ccd|toc|chd</c>. CD32 A5: Amiga CD32 and CDTV take a cue, TOC, CloneCD or MDS set, or a single <c>.iso</c>, <c>.chd</c> or <c>.nrg</c>.
     /// </summary>
     private static string? ShapeProblem(List<Member> members, string systemId)
     {
@@ -388,6 +394,9 @@ public static class PlayDisc
         if (members.Count == 1 && systemId is TurboGrafxCdSystemId or PcfxSystemId)
             return members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)
                 ? null : $"a {(systemId == PcfxSystemId ? "PC-FX" : "TurboGrafx-CD")} disc must be a .cue with its .bin tracks, or a .chd";
+        if (members.Count == 1 && systemId is Cd32SystemId or CdtvSystemId)
+            return Path.GetExtension(members[0].Name).ToLowerInvariant() is ".iso" or ".chd" || HasExtension(members[0].Name, ".nrg")
+                ? null : $"a {(systemId == Cd32SystemId ? "CD32" : "CDTV")} disc must be a .cue with its .bin tracks, or an .iso, .chd or .nrg";
         if (members.Count == 1)
             return IsBin(members[0].Name) || members[0].Name.EndsWith(".iso", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)

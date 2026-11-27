@@ -151,6 +151,38 @@ describe('canPlay on mednafen_pcfx (PC-FX X6)', () => {
 	});
 });
 
+describe('canPlay on puae (CD32 A10)', () => {
+	const file = { id: 1, fileName: 'Disc (Europe).cue', sizeBytes: 100 } as ReleaseFile;
+
+	it('plays an external cue set whose main file is a .bin', () => {
+		expect(
+			canPlay(
+				{ browserCore: 'puae' },
+				{ externalFileName: 'Disc (Europe) (Track 01).bin', files: [file] }
+			)
+		).toBe(true);
+	});
+
+	it.each(['Disc (Europe).chd', 'Disc (Europe).iso'])('plays an external %s', (name) => {
+		expect(canPlay({ browserCore: 'puae' }, { externalFileName: name })).toBe(true);
+	});
+
+	it.each([null, []])('refuses a lone external .BIN (files %j)', (files) => {
+		expect(canPlay({ browserCore: 'puae' }, { externalFileName: 'Disc (Europe).BIN', files })).toBe(
+			false
+		);
+	});
+
+	it('keeps Amiga floppies as they were: an embedded .adf plays, an .ipf does not', () => {
+		expect(canPlay({ browserCore: 'puae' }, { externalFileName: null, fileName: 'x.adf' })).toBe(
+			true
+		);
+		expect(canPlay({ browserCore: 'puae' }, { externalFileName: null, fileName: 'x.ipf' })).toBe(
+			false
+		);
+	});
+});
+
 describe('canPlay on virtualjaguar', () => {
 	const jaguar = (fileName: string, sizeBytes: number) =>
 		canPlay({ browserCore: 'virtualjaguar' }, { externalFileName: null, fileName, sizeBytes });
@@ -203,12 +235,17 @@ describe('S8 Nintendo DS', () => {
 		expect(canPlay({ browserCore: 'desmume' }, { externalFileName: 'Quest.(USA).nds' })).toBe(true);
 	});
 
-	it.each(['pcsx_rearmed', 'ppsspp', 'yabause', 'genesis_plus_gx', 'opera', 'mednafen_pcfx'])(
-		'usesPlayDisc is true for an external %s release',
-		(core) => {
-			expect(usesPlayDisc(core, { externalFileName: 'Disc (USA).cue' })).toBe(true);
-		}
-	);
+	it.each([
+		'pcsx_rearmed',
+		'ppsspp',
+		'yabause',
+		'genesis_plus_gx',
+		'opera',
+		'mednafen_pcfx',
+		'puae'
+	])('usesPlayDisc is true for an external %s release', (core) => {
+		expect(usesPlayDisc(core, { externalFileName: 'Disc (USA).cue' })).toBe(true);
+	});
 
 	it('usesPlayDisc is false for DeSmuME and for an embedded release', () => {
 		expect(usesPlayDisc('desmume', { externalFileName: 'Quest.(USA).nds' })).toBe(false);
@@ -241,6 +278,15 @@ describe('playUrl', () => {
 		).toBe(
 			`/emulator/play.html?game=g-1&rom=7&core=opera&name=x.cue&disc=1&save=${id}&saveKind=state`
 		);
+	});
+
+	it('adds the Amiga CD system (CD32 A6)', () => {
+		const disc = { id: 2, fileName: 'Disc Chick (Europe) (Track 01).bin' };
+		expect(playUrl('g-8', disc, 'puae', true, null, null, 'cd32')).toBe(
+			'/emulator/play.html?game=g-8&rom=2&core=puae&name=Disc%20Chick%20(Europe)%20(Track%2001).bin&disc=1&system=cd32'
+		);
+		for (const system of ['amiga', null])
+			expect(playUrl('g-8', disc, 'puae', true, null, null, system)).not.toContain('system=');
 	});
 
 	it('encodes the file name', () => {

@@ -387,6 +387,7 @@
 			: null)}
 	disc={playing?.disc ?? playing?.game.playDisc ?? false}
 	save={playing?.save ?? null}
+	system={playing?.game.system ?? null}
 />
 
 <style>

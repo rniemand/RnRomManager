@@ -240,6 +240,7 @@
 		game.browserCore !== null &&
 		usesPlayDisc(game.browserCore, playing.rom)}
 	save={playing ? { saveId: playing.save.id, saveKind: playing.save.kind } : null}
+	system={game.system}
 	onsaved={() => {
 		onchanged?.();
 		void load();

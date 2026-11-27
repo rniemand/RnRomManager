@@ -3,8 +3,9 @@
 /**
  * Sega CD B6: `disc` is true for an external release (`disc=1`), which loads from play-disc whatever the core.
  * Saves B17: `save` is the library save to load at game start (`save` + `saveKind`), or null.
+ * CD32 A6: `system` is the Amiga CD system of a PUAE disc launch (`system=cd32|cdtv`), or null.
  * @typedef {{ id: string, kind: 'state' | 'battery' }} PlaySave
- * @typedef {{ game: string, rom: number, core: string, name: string, disc: boolean, set: boolean, save: PlaySave | null }} PlayParams
+ * @typedef {{ game: string, rom: number, core: string, name: string, disc: boolean, set: boolean, save: PlaySave | null, system: 'cd32' | 'cdtv' | null }} PlayParams
  */
 
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,6 +49,9 @@ const cores = [
 /** Amiga F6, Plus/4 B13: the floppy disk-set cores, which take `set=1` with `disc=1` and get disk wording. */
 export const diskSetCores = ['puae', 'vice_xplus4'];
 
+/** CD32 A6: the `system` values a PUAE disc launch takes. */
+export const amigaCdSystems = ['cd32', 'cdtv'];
+
 /**
  * PSP B3, MS-DOS P5, 3DS G2: the cores that need threads and so run only on their own cross-origin isolated page, keyed to
  * that page's `data-player` (never in the modal's play.html).
@@ -88,6 +92,14 @@ export function parsePlayParams(search, player) {
 		core === 'yabause' ||
 		((core === 'genesis_plus_gx' || diskSetCores.includes(core)) && disc.length === 1);
 	if (set.length > 1 || (set.length === 1 && (set[0] !== '1' || !setCore))) return null;
+	// CD32 A6: `system` is absent or exactly cd32 or cdtv, given once, only for PUAE with `disc=1` and no `set`.
+	const system = query.getAll('system');
+	if (
+		system.length > 1 ||
+		(system.length === 1 &&
+			(!amigaCdSystems.includes(system[0]) || core !== 'puae' || disc.length !== 1 || set.length !== 0))
+	)
+		return null;
 	return {
 		game,
 		rom: Number(rom),
@@ -95,7 +107,8 @@ export function parsePlayParams(search, player) {
 		name,
 		disc: disc.length === 1,
 		set: set.length === 1,
-		save: save.length === 1 ? { id: save[0], kind: /** @type {'state' | 'battery'} */ (saveKind[0]) } : null
+		save: save.length === 1 ? { id: save[0], kind: /** @type {'state' | 'battery'} */ (saveKind[0]) } : null,
+		system: system.length === 1 ? /** @type {'cd32' | 'cdtv'} */ (system[0]) : null
 	};
 }
 
@@ -423,6 +436,44 @@ export const turboGrafxCdBiosMissing =
 /** TurboGrafx-CD B9: every BIOS name the player may write to the content root. */
 export const turboGrafxCdBiosNames = [...turboGrafxCdCards, turboGrafxCdGamesExpress];
 
+/** CD32 A7: the largest CD32 Kickstart accepted (1 MiB, the combined ROM). */
+export const cd32KickstartMaxBytes = 1048576;
+
+/** CD32 A7: the CD32 extended ROM's only accepted size, and the largest Kickstart that needs it. */
+export const cd32ExtBytes = 524288;
+
+/** CD32 A7: the only accepted size of each CDTV BIOS file. */
+export const cdtvBiosBytes = 262144;
+
+/** CD32 A7: shown when kick40060.CD32 isn't in the BIOS folder. */
+export const cd32BiosMissing =
+	'CD32 games need a Kickstart: ask an Admin to put kick40060.CD32 in the BIOS folder (Paths:Bios).';
+
+/** CD32 A7: shown when kick40060.CD32 is empty or over 1 MiB. */
+export const cd32KickstartSizeError =
+	'The CD32 Kickstart kick40060.CD32 in the BIOS folder (Paths:Bios) is empty or larger than 1 MiB: ask an Admin to replace it.';
+
+/** CD32 A7: shown when a Kickstart of 512 KiB or less has no kick40060.CD32.ext beside it. */
+export const cd32ExtMissing =
+	'This CD32 Kickstart needs its extended ROM: ask an Admin to put the 512 KiB kick40060.CD32.ext in the BIOS folder (Paths:Bios), or use the 1 MiB combined kick40060.CD32.';
+
+/** CD32 A7: shown when kick40060.CD32.ext isn't exactly 512 KiB. */
+export const cd32ExtSizeError =
+	'The CD32 extended ROM kick40060.CD32.ext in the BIOS folder (Paths:Bios) must be 512 KiB: ask an Admin to replace it.';
+
+/** CD32 A7: shown when either CDTV BIOS file isn't in the BIOS folder. */
+export const cdtvBiosMissing =
+	'CDTV games need two BIOS files: ask an Admin to put kick34005.A500 and kick34005.CDTV in the BIOS folder (Paths:Bios).';
+
+/**
+ * CD32 A7: shown when a CDTV BIOS file isn't exactly 256 KiB.
+ * @param {string} name the BIOS file name
+ * @returns {string}
+ */
+export function cdtvBiosSizeError(name) {
+	return `The CDTV BIOS ${name} in the BIOS folder (Paths:Bios) must be 256 KiB: ask an Admin to replace it.`;
+}
+
 /**
  * The play page's message for a failed play-disc request.
  * @param {number | null} status the HTTP status, or null for a network or body-read failure
@@ -434,8 +485,9 @@ export const turboGrafxCdBiosNames = [...turboGrafxCdCards, turboGrafxCdGamesExp
 export function discError(status, code, core = 'pcsx_rearmed', set = false) {
 	const psp = core === 'ppsspp';
 	if (status === 401) return sessionExpired;
-	// Amiga F7, Plus/4 B13: a floppy set (play-disc-set) has disk wording for every other outcome.
-	if (diskSetCores.includes(core)) {
+	// Amiga F7, Plus/4 B13: a floppy set (play-disc-set) has disk wording for every other outcome. CD32 A9: a single
+	// CD32/CDTV disc on PUAE keeps the disc wording.
+	if (diskSetCores.includes(core) && set) {
 		if (code === 'InvalidPlayDisc') return "These disks can't be played in the browser: one of them is empty.";
 		return status === null ? "Couldn't load the disks." : `Couldn't load the disks (HTTP ${status}).`;
 	}

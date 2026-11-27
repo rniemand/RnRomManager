@@ -81,6 +81,8 @@ describe('systemColour', () => {
 		expect(systemColour('c128')).toEqual({ name: 'c128', foreground: '#fff' });
 		expect(systemColour('plus4')).toEqual({ name: 'plus4', foreground: '#fff' });
 		expect(systemColour('amiga')).toEqual({ name: 'amiga', foreground: '#fff' });
+		expect(systemColour('cd32')).toEqual({ name: 'cd32', foreground: '#fff' });
+		expect(systemColour('cdtv')).toEqual({ name: 'cdtv', foreground: '#fff' });
 		expect(systemColour('fds')).toEqual({ name: 'fds', foreground: '#fff' });
 		expect(systemColour('3ds')).toEqual({ name: '3ds', foreground: '#000' });
 		expect(systemColour('satellaview')).toEqual({ name: 'satellaview', foreground: '#fff' });

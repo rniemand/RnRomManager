@@ -47,6 +47,8 @@ export const systemColours: Record<string, SystemColour> = {
 	vic20: { name: 'vic20', foreground: '#fff' },
 	c128: { name: 'c128', foreground: '#fff' },
 	amiga: { name: 'amiga', foreground: '#fff' },
+	cd32: { name: 'cd32', foreground: '#fff' },
+	cdtv: { name: 'cdtv', foreground: '#fff' },
 	fds: { name: 'fds', foreground: '#fff' },
 	'3ds': { name: '3ds', foreground: '#000' },
 	satellaview: { name: 'satellaview', foreground: '#fff' },

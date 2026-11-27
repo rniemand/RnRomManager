@@ -14,6 +14,7 @@ public static class BiosInfo
     private static BiosFile Exact(string name, long bytes) => new(name, bytes, bytes);
     private static BiosFile AtLeast(string name, long bytes) => new(name, bytes, MiB * 16);
     private static BiosFile UpTo(string name, long bytes) => new(name, 1, bytes);
+    private const string Cd32Group = "Commodore Amiga CD32", Cd32ExtGroup = "Commodore Amiga CD32 (extended ROM)";
 
     public static readonly BiosInfoGroup[] Catalog =
     [
@@ -34,6 +35,11 @@ public static class BiosInfo
             "A System Card; the first one found in this order is used."),
         new("TurboGrafx-CD (Games Express)", Need.Optional, [UpTo("gexpress.pce", MiB)], "Only Games Express discs need it."),
         new("PC-FX", Need.All, [Exact("pcfx.rom", MiB)], "Beetle PC-FX needs it for every game."),
+        new(Cd32Group, Need.All, [UpTo("kick40060.CD32", MiB)],
+            "PUAE needs a CD32 Kickstart for every game: the 512 KiB ROM with kick40060.CD32.ext, or the 1 MiB combined ROM."),
+        new(Cd32ExtGroup, Need.Optional, [Exact("kick40060.CD32.ext", 512 * KiB)], "Needed unless kick40060.CD32 is the 1 MiB combined ROM."),
+        new("Commodore CDTV", Need.All, [Exact("kick34005.A500", 256 * KiB), Exact("kick34005.CDTV", 256 * KiB)],
+            "PUAE needs Kickstart 1.3 and the CDTV extended ROM for every game."),
         new("Arcade (FinalBurn Neo)", Need.Optional, [],
             "Board BIOS sets your games need (e.g. neogeo.zip, pgm.zip) go in this folder too; they're listed under Other files.",
             "Emulator:FbneoCorePath"),
@@ -43,6 +49,7 @@ public static class BiosInfo
     {
         var folderExists = Directory.Exists(root);
         var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var cd32Kick = CheckFile(root, folderExists, Catalog.Single(g => g.System == Cd32Group).Files[0]);
         var groups = Catalog.Select(group =>
         {
             var files = group.Files.Select(file =>
@@ -57,6 +64,9 @@ public static class BiosInfo
                 Need.OneOf => present.Count > 0,
                 _ => true,
             };
+            // CD32 A11: as on the play page, a Kickstart of 512 KiB or less needs the extended ROM.
+            if (group.System == Cd32ExtGroup)
+                ok &= files[0].Status == "Valid" || cd32Kick is not { Status: "Valid", Size: <= 512 * KiB };
             return new
             {
                 system = group.System, need = group.Need.ToString(), ok, note = group.Note, files,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatSize } from './format';
 import {
+	cdtvBiosSizeError,
 	contentSize,
 	biosError,
 	biosFor,
@@ -89,7 +90,8 @@ describe('parsePlayParams', () => {
 			name: 'A #1 & B.gba',
 			disc: false,
 			set: false,
-			save: null
+			save: null,
+			system: null
 		});
 	});
 
@@ -136,6 +138,37 @@ describe('parsePlayParams', () => {
 		// Plus/4 B13: VICE (xplus4) is a disk-set core too.
 		expect(parsePlayParams(query({ core: 'vice_xplus4', disc: '1', set: '1' }))?.set).toBe(true);
 		expect(parsePlayParams(query({ core: 'vice_xplus4', set: '1' }))).toBeNull();
+	});
+
+	it.each(['cd32', 'cdtv'])('reads system=%s for PUAE with disc=1 (CD32 A6)', (system) => {
+		expect(parsePlayParams(query({ core: 'puae', disc: '1', system }))?.system).toBe(system);
+	});
+
+	it.each([
+		['without disc', { core: 'puae', system: 'cd32' }],
+		['with set=1', { core: 'puae', disc: '1', set: '1', system: 'cd32' }],
+		['on another core', { core: 'pcsx_rearmed', disc: '1', system: 'cd32' }],
+		['for amiga', { core: 'puae', disc: '1', system: 'amiga' }],
+		['in another case', { core: 'puae', disc: '1', system: 'CD32' }]
+	])('rejects system %s (CD32 A6)', (_, overrides) => {
+		expect(parsePlayParams(query(overrides))).toBeNull();
+	});
+
+	it('rejects a repeated system (CD32 A6)', () => {
+		expect(
+			parsePlayParams(`${query({ core: 'puae', disc: '1', system: 'cd32' })}&system=cd32`)
+		).toBeNull();
+	});
+
+	it('has no system on existing links (CD32 A6)', () => {
+		expect(parsePlayParams(query({ core: 'puae', disc: '1', set: '1' }))?.system).toBeNull();
+		expect(parsePlayParams(query({}))?.system).toBeNull();
+	});
+
+	it('names the CDTV BIOS file of the wrong size (CD32 A7)', () => {
+		expect(cdtvBiosSizeError('kick34005.CDTV')).toBe(
+			'The CDTV BIOS kick34005.CDTV in the BIOS folder (Paths:Bios) must be 256 KiB: ask an Admin to replace it.'
+		);
 	});
 
 	it('names saturn_bios.bin when a Saturn set has no BIOS (Saturn and Sega CD S6)', () => {
@@ -377,6 +410,13 @@ describe('discError', () => {
 		expect(discError(null, null, 'puae', true)).toBe("Couldn't load the disks.");
 	});
 
+	it('keeps disc wording for a single PUAE disc, a CD32 or CDTV one (CD32 A9)', () => {
+		expect(discError(500, 'IoError', 'puae', false)).toBe("Couldn't load the disc (HTTP 500).");
+		expect(discError(409, 'InvalidPlayDisc', 'puae')).toBe(
+			"This disc can't be played in the browser: its cue sheet or files are invalid or don't match."
+		);
+	});
+
 	it('has disk wording for VICE (Plus/4) sets (Plus/4 B13)', () => {
 		expect(discError(409, 'InvalidPlayDisc', 'vice_xplus4', true)).toBe(
 			"These disks can't be played in the browser: one of them is empty."
@@ -425,7 +465,8 @@ describe('PSP page (PSP B3)', () => {
 			name: 'Umd (USA).iso',
 			disc: false,
 			set: false,
-			save: null
+			save: null,
+			system: null
 		});
 		expect(parsePlayParams(query({ core: 'ppsspp' }))).toBeNull();
 		expect(parsePlayParams(query({ core: 'ppsspp' }))).toBeNull();
@@ -904,7 +945,8 @@ describe('Nintendo DS (Nintendo DS B4)', () => {
 			name: 'Marker Test (World).nds',
 			disc: false,
 			set: false,
-			save: null
+			save: null,
+			system: null
 		});
 		expect(parsePlayParams(query({ core: 'desmume' }), 'psp')).toBeNull();
 	});
@@ -1035,7 +1077,8 @@ describe('DOS page (MS-DOS P5, P6)', () => {
 			name: 'Doom.dosz',
 			disc: false,
 			set: false,
-			save: null
+			save: null,
+			system: null
 		});
 		expect(parsePlayParams(query({ core: 'dosbox_pure' }))).toBeNull();
 		expect(parsePlayParams(query({ core: 'dosbox_pure' }), 'psp')).toBeNull();
@@ -1085,7 +1128,8 @@ describe('3DS page (3DS G2, G3)', () => {
 			name: 'Zephyr Gate (Europe).3ds',
 			disc: false,
 			set: false,
-			save: null
+			save: null,
+			system: null
 		});
 		expect(parsePlayParams(query({ core: 'azahar' }))).toBeNull();
 		expect(parsePlayParams(query({ core: 'azahar' }), 'psp')).toBeNull();

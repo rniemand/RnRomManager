@@ -111,6 +111,19 @@ describe('EmulatorModal', () => {
 
 		expect((await frameOf(container)).getAttribute('src')).toMatch(/&disc=1$/);
 	});
+
+	it('adds the Amiga CD system for a CDTV disc (CD32 A6)', async () => {
+		const { container } = render(EmulatorModal, {
+			open: true,
+			gameId: 'g-3',
+			core: 'puae',
+			rom: { id: 15, fileName: 'Disc Chick (Europe).cue' },
+			disc: true,
+			system: 'cdtv'
+		});
+
+		expect((await frameOf(container)).getAttribute('src')).toMatch(/&disc=1&system=cdtv$/);
+	});
 });
 
 describe('EmulatorModal 3DO saves (3DO B11)', () => {
