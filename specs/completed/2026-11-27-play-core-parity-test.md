@@ -1,0 +1,74 @@
+---
+title: Play core parity test
+status: completed
+created: 2026-11-27
+---
+
+# Play core parity test
+
+## Summary
+The browser-play core lists are written twice: in the API (`LibraryEndpoints.ExternalBrowserCores`, `LibraryEndpoints.PlayDiscCores`, `PlayDisc.SupportedSystems`) and in the SPA (`emulator.ts`'s `externalBrowserCores`/`playDiscCores`, `params.js`'s `cores` allowlist). They match today, but nothing keeps them in step. One new Api.Tests class fails when they drift, so adding a core or a disc system can't leave the game page and the API disagreeing on what plays.
+
+## Out of scope
+- Moving the lists into one shared file (JSON read by both sides). The test is enough; the duplication is small.
+- `isolatedPlayers`, `operatorCores`, `diskSetCores` and `hidesCoreChooser` in `params.js`: already covered by `emulatorParams.test.ts` or by `BrowserCoreExtensionsTests`/`OperatorCoreManifest` checks.
+- Any behaviour change: no list's contents change.
+
+## Behaviour
+A new test class `PlayCoreParityTests` (new) in `tests/RnRomManager.Api.Tests` checks, with the same "list of named problems, assert empty" pattern as `SystemEmulatorsCatalogTests` and `BrowserCoreExtensionsTests`:
+
+- **C1** `emulator.ts`'s `externalBrowserCores` holds exactly the cores in `LibraryEndpoints.ExternalBrowserCores` (order ignored, no duplicates).
+- **C2** `emulator.ts`'s `playDiscCores` holds exactly the cores in `LibraryEndpoints.PlayDiscCores`.
+- **C3** Every core in `LibraryEndpoints.PlayDiscCores` is in `LibraryEndpoints.ExternalBrowserCores`.
+- **C4** `params.js`'s `cores` allowlist holds exactly the distinct non-null `ISystemHandler.BrowserCore` values of the registered handlers (`AppHost.AddSystemHandlers`).
+- **C5** `PlayDisc.SupportedSystems` holds exactly the ids of the registered handlers whose `BrowserCore` is in `LibraryEndpoints.PlayDiscCores` and whose `EmbedRomsInZip` is `false` (today: `psx`, `psp`, `saturn`, `segacd`, `3do`, `tgcd`, `pcfx`; `md` and `tg16` share a play-disc core but embed their ROMs).
+
+Reading the SPA files: the test reads `src/RnRomManager.Web/src/lib/emulator.ts` and `src/RnRomManager.Web/static/emulator/params.js` from `RepoPaths.Root()` (as `SystemEmulatorsCatalogTests` reads `systemEmulators.json`) and extracts each array with one regex over the declaration (`export const <name>: readonly string[] = [ … ];` in `emulator.ts`, `const cores = [ … ];` in `params.js`), then every single- or double-quoted string inside the brackets (`'([a-z0-9_]+)'` or `"([a-z0-9_]+)"`). An array that can't be found is itself a problem (`<file>: <name> not found`), so a rename fails the test instead of passing on an empty list; that array's C1/C2/C4 comparisons are then skipped (no "missing" lines for it), while the other rules still run. In the C1/C2 messages `<ApiName>` is `ExternalBrowserCores` for `externalBrowserCores` and `PlayDiscCores` for `playDiscCores`.
+
+Problem messages (exact text, `<x>` filled in):
+
+| Rule | Message |
+|---|---|
+| C1/C2 missing in SPA | `emulator.ts <name>: missing <core>` |
+| C1/C2 extra in SPA | `emulator.ts <name>: <core> is not in LibraryEndpoints.<ApiName>` |
+| C1/C2/C4 duplicate | `<file> <name>: <core> listed twice` |
+| C3 | `PlayDiscCores: <core> is not in ExternalBrowserCores` |
+| C4 missing | `params.js cores: missing <core> (used by <system id>)` — first system id by registration order |
+| C4 extra | `params.js cores: <core> is no system's BrowserCore` |
+| C5 missing | `PlayDisc.SupportedSystems: missing <system id>` |
+| C5 extra | `PlayDisc.SupportedSystems: <system id> is not an external system on a play-disc core` |
+| not found | `<file>: <name> not found` (`<file>` is `emulator.ts` or `params.js`) |
+
+## Changes
+| Area | File(s) | Change |
+|---|---|---|
+| Api | `src/RnRomManager.Api/Endpoints/PlayDisc.cs` | `SupportedSystems` goes from `private static readonly HashSet<string>` to `public static readonly IReadOnlySet<string>` (as `LibraryEndpoints.PlayDiscCores` is), so the test can read it; contents and its one use in the eligibility check are unchanged. The Api project has no `InternalsVisibleTo`. |
+| Tests | `tests/RnRomManager.Api.Tests/PlayCoreParityTests.cs` (new) | C1–C5 as above. A private static `List<string> Problems(string emulatorTs, string paramsJs, IReadOnlySet<string> externalBrowserCores, IReadOnlySet<string> playDiscCores, IReadOnlySet<string> playDiscSystems, IReadOnlyList<ISystemHandler> handlers)` (one parameter per line, style guide) takes the two files' raw text, the three API sets and the handlers, and does the extraction itself. The real test passes the files read from `RepoPaths.Root()`, `LibraryEndpoints.ExternalBrowserCores`, `LibraryEndpoints.PlayDiscCores`, `PlayDisc.SupportedSystems` and the handlers from a `Handlers()` helper built like `BrowserCoreExtensionsTests.Handlers()` (`AppHost.AddSystemHandlers` into a `ServiceCollection`), and asserts `Is.Empty`. A second test feeds synthetic texts, sets and `TestHandlers.Fake` handlers (with `BrowserCore` and `EmbedRomsInZip` set via `Returns`) and asserts with `Is.EquivalentTo` every message in the table, including a missing declaration (`not found`), double-quoted entries and single-quoted entries. |
+| Docs | `docs/development.md` § Browser emulators, "Adding a core" bullet | After the sentence naming `LibraryEndpoints.ExternalBrowserCores` and `emulator.ts`'s `externalBrowserCores`, add: "`PlayCoreParityTests` (Api.Tests) fails when those lists, `playDiscCores`/`PlayDiscCores`, `PlayDisc.SupportedSystems` or `params.js`'s core list drift apart." |
+| Docs | `docs/codemap.md` | Regenerated by `pwsh scripts/codemap.ps1`. |
+
+No migration, config key or API contract change.
+
+## Risks
+- **Regex parsing of TS/JS:** a reformat (e.g. a multi-line type annotation or double quotes from a formatter) would make an array "not found" or empty. The not-found problem and the C1/C2/C4 "missing" problems make that fail loudly, never pass silently. Both quote styles are accepted, since `prettier.config.js` (`singleQuote: true`) formats `emulator.ts` but `.prettierignore` skips `/static/` (`params.js`).
+- **Public `SupportedSystems`:** widens visibility of a read-only set only; `IReadOnlySet` keeps callers from mutating it.
+
+## Steps
+- [x] **1. Parity test**: make `PlayDisc.SupportedSystems` a public `IReadOnlySet<string>`, add `PlayCoreParityTests` (C1–C5, plus the synthetic-input message test), add the development.md sentence, regenerate the code map. Files: `src/RnRomManager.Api/Endpoints/PlayDisc.cs`, `tests/RnRomManager.Api.Tests/PlayCoreParityTests.cs` (new), `docs/development.md`, `docs/codemap.md`. Tests: `PlayCoreParityTests` (new); `LibraryEndpointsTests` (Integration; its `LibraryEndpointsTests.PlayDisc.cs` partial covers the eligibility check that reads the changed set; rerun unchanged). Done when:
+  - `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~PlayCoreParityTests"` passes on the current lists.
+  - Removing `'fbneo'` from `externalBrowserCores` in `emulator.ts` locally makes it fail with `emulator.ts externalBrowserCores: missing fbneo` (checked by hand, then reverted).
+  - The synthetic test asserts every message in the Behaviour table, with inputs covering a missing declaration, double-quoted entries and single-quoted entries.
+  - `docs/codemap.md` is regenerated and committed.
+
+## Decisions
+- 2026-11-27 Keep the duplicated lists and add a test, or share one file? → Test only (user chose "Add API/SPA parity test" from the 2026-11-27 audit)
+- 2026-11-27 Expose `PlayDisc.SupportedSystems`? → Make it a public `IReadOnlySet<string>`, as `LibraryEndpoints.PlayDiscCores` is; the Api project has no `InternalsVisibleTo` (code)
+- 2026-11-27 Self-review: no `PlayDiscTests` class (the play-disc check is covered by `LibraryEndpointsTests.PlayDisc.cs`); `params.js` is prettier-ignored, so the parser accepts both quote styles; `params.js` `cores` and the handlers' cores verified equal (34) (code)
+- 2026-11-27 Review: `Problems` takes the raw file texts so the regex extraction has synthetic coverage (not found, both quote styles) (reviewer)
+- 2026-11-27 Deep review: pinned the `Problems` signature, the handler source (as `BrowserCoreExtensionsTests.Handlers()`), `TestHandlers.Fake` for synthetic handlers and `Is.EquivalentTo`; a not-found array skips its own comparisons; `<ApiName>` mapping stated (code)
+
+## Kickoff prompt
+```text
+/spec implement 2026-11-27-play-core-parity-test.md
+```
+Starts the spec, or resumes it at the first unticked step.
