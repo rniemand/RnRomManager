@@ -1597,6 +1597,12 @@ describe('play page Commodore 64 (C64 B7)', () => {
 describe('play page Amiga disk sets (Amiga F7)', () => {
 	const setUrl = `/api/games/${game}/roms/12/play-disc-set`;
 	const disks = new Uint8Array([0x50, 0x4b, 3, 4, 2, 2]);
+	const kickA500 = '/api/emulator/bios/kick34005.A500';
+	const kickA1200 = '/api/emulator/bios/kick40068.A1200';
+	const noKickstarts = {
+		[kickA500]: async () => response(404),
+		[kickA1200]: async () => response(404)
+	};
 
 	async function playDisks(name: string, core = 'puae'): Promise<string> {
 		const query = new URLSearchParams({ game, rom: '12', core, name, disc: '1', set: '1' });
@@ -1609,6 +1615,7 @@ describe('play page Amiga disk sets (Amiga F7)', () => {
 	it('loads the set from play-disc-set, saying it downloads disks, named after its playlist', async () => {
 		let status = '';
 		serve({
+			...noKickstarts,
 			[setUrl]: async () => {
 				status = document.getElementById('status')!.textContent ?? '';
 				return {
@@ -1623,13 +1630,13 @@ describe('play page Amiga disk sets (Amiga F7)', () => {
 
 		await playDisks('Twin Disk (1990)(Synth).m3u');
 
-		expect(urls()).toEqual([setUrl]);
+		expect(urls()).toEqual([kickA500, kickA1200, setUrl]);
 		expect(status).toBe('Downloading disks…');
 		expect(atLoader).toMatchObject({
 			EJS_core: 'puae',
 			EJS_gameName: 'Twin Disk (1990)(Synth).m3u'
 		});
-		// CD32 A7, A8: a floppy set loads no Kickstart and sets no model.
+		// CD32 A7, A8: a floppy set loads only the optional Kickstarts and sets no model.
 		expect(atLoader?.EJS_defaultOptions).not.toHaveProperty('puae_model');
 		const file = atLoader?.EJS_gameUrl as File;
 		expect(file.name).toBe('Twin Disk (1990)(Synth).m3u');
@@ -1638,6 +1645,7 @@ describe('play page Amiga disk sets (Amiga F7)', () => {
 
 	it('shows the disk message for a 409 InvalidPlayDisc before the loader', async () => {
 		serve({
+			...noKickstarts,
 			[setUrl]: async () =>
 				new Response(JSON.stringify({ code: 'InvalidPlayDisc' }), {
 					status: 409
@@ -1682,6 +1690,95 @@ describe('play page Amiga disk sets (Amiga F7)', () => {
 			}
 		});
 		expect((atLoader?.EJS_gameUrl as File).name).toBe('Pixel Quest.m3u');
+	});
+});
+
+describe('play page Amiga Kickstart (Amiga K1–K3)', () => {
+	const kickA500 = '/api/emulator/bios/kick34005.A500';
+	const kickA1200 = '/api/emulator/bios/kick40068.A1200';
+	const firmware = (seed: number, size: number) =>
+		new Uint8Array(size).map((_, i) => (i + seed) % 241);
+
+	function body(bytes: Uint8Array): FakeResponse {
+		const chunks = [bytes];
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				const next = chunks.shift();
+				if (next) controller.enqueue(next);
+				else controller.close();
+			}
+		});
+		return { ok: true, status: 200, body: stream } as unknown as FakeResponse;
+	}
+
+	/** Serves each Kickstart as 404 unless given, and the ROM. */
+	function serveAmiga(found: Record<string, () => Promise<FakeResponse>>) {
+		serve({
+			[kickA500]: async () => response(404),
+			[kickA1200]: async () => response(404),
+			...found,
+			[romUrl]: async () => response(200)
+		});
+	}
+
+	it('an .adf with neither Kickstart loads after two 404s and sets no external files', async () => {
+		serveAmiga({});
+
+		expect(await play('puae', 'Disk Orbit (1990)(Synth).adf')).toBe('Starting emulator…');
+
+		expect(urls()).toEqual([kickA500, kickA1200, romUrl]);
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+	});
+
+	it('puts both Kickstarts found in the content root', async () => {
+		serveAmiga({
+			[kickA500]: async () => body(firmware(1, 262144)),
+			[kickA1200]: async () => body(firmware(2, 524288))
+		});
+
+		expect(await play('puae', 'Disk Orbit (1990)(Synth).adf')).toBe('Starting emulator…');
+
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/kick34005.A500', '/kick40068.A1200']);
+		expect(new Uint8Array(files['/kick40068.A1200'])).toEqual(firmware(2, 524288));
+	});
+
+	it('stops with the size error for a Kickstart of the wrong size, before the ROM', async () => {
+		serveAmiga({ [kickA500]: async () => body(firmware(1, 100)) });
+
+		expect(await play('puae', 'Disk Orbit (1990)(Synth).adf')).toBe(
+			'The Amiga Kickstart kick34005.A500 in the BIOS folder (Paths:Bios) must be 256 KiB: ask an Admin to replace it.'
+		);
+		expect(urls()).toEqual([kickA500]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops on any other failure', async () => {
+		serveAmiga({ [kickA1200]: async () => response(500) });
+
+		expect(await play('puae', 'Disk Orbit (1990)(Synth).adf')).toBe(
+			"Couldn't load the BIOS (HTTP 500)."
+		);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops an .lha without kick40068.A1200 before the ROM request', async () => {
+		serveAmiga({ [kickA500]: async () => body(firmware(1, 262144)) });
+
+		expect(await play('puae', 'Hard Orbit.lha')).toBe(
+			'Amiga hard-disk games need a Kickstart: ask an Admin to put kick40068.A1200 in the BIOS folder (Paths:Bios).'
+		);
+		expect(urls()).toEqual([kickA500, kickA1200]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('loads an .hdf with kick40068.A1200', async () => {
+		serveAmiga({ [kickA1200]: async () => body(firmware(2, 524288)) });
+
+		expect(await play('puae', 'Hard Orbit.hdf')).toBe('Starting emulator…');
+
+		expect(urls()).toEqual([kickA500, kickA1200, romUrl]);
+		expect(Object.keys(atLoader?.EJS_externalFiles as object)).toEqual(['/kick40068.A1200']);
 	});
 });
 

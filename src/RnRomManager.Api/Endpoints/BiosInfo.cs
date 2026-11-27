@@ -35,6 +35,8 @@ public static class BiosInfo
             "A System Card; the first one found in this order is used."),
         new("TurboGrafx-CD (Games Express)", Need.Optional, [UpTo("gexpress.pce", MiB)], "Only Games Express discs need it."),
         new("PC-FX", Need.All, [Exact("pcfx.rom", MiB)], "Beetle PC-FX needs it for every game."),
+        new("Commodore Amiga", Need.Optional, [Exact("kick34005.A500", 256 * KiB), Exact("kick40068.A1200", 512 * KiB)],
+            "Without them PUAE uses its built-in AROS Kickstart; hard-disk games (.hdf, .hdz, .lha) need kick40068.A1200."),
         new(Cd32Group, Need.All, [UpTo("kick40060.CD32", MiB)],
             "PUAE needs a CD32 Kickstart for every game: the 512 KiB ROM with kick40060.CD32.ext, or the 1 MiB combined ROM."),
         new(Cd32ExtGroup, Need.Optional, [Exact("kick40060.CD32.ext", 512 * KiB)], "Needed unless kick40060.CD32 is the 1 MiB combined ROM."),

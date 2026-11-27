@@ -2366,6 +2366,49 @@ public class IngestPipelineTests
         Assert.That(bytes.ToArray(), Is.EqualTo(AmigaDisk));
     }
 
+    private static readonly byte[] AmigaHdz = [(byte)'P', (byte)'K', 3, 4, .. Atari(4096 - 4, 2401)];
+
+    private async Task<ReviewItem> AmigaHdzReviewAsync()
+    {
+        var result = await IngestAsync(DropAged("amiga", "orbit.hdz", AmigaHdz));
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "amiga")), result.Details);
+        return (await Service<IIngestReviewRepository>().GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(AmigaHdz)), default))!;
+    }
+
+    [Test]
+    public async Task Amiga_Hdz_IsStoredWhole_AndGoesToReview()
+    {
+        var item = await AmigaHdzReviewAsync();
+
+        Assert.That(item, Is.Not.Null, "reviewed under the unpacked file's own SHA-1, so it wasn't unpacked");
+    }
+
+    [Test]
+    public async Task Amiga_ManualResolve_KeepsTheHdzExtension()
+    {
+        var item = await AmigaHdzReviewAsync();
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Hard Orbit"));
+
+        Assert.That(rom.FileName, Is.EqualTo("Hard Orbit (World).hdz"));
+    }
+
+    [Test]
+    public async Task Amiga_LooseOverTheMaximum_IsTooLarge_WithoutReadingIt()
+    {
+        const long size = 64L * 1024 * 1024 + 1;
+        var path = Path.Combine(_factory.Root, "ingest", "amiga", "huge.hdf");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using (var file = File.Create(path))
+            file.SetLength(size); // sparse where the file system allows
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
+
+        var result = await IngestAsync(new IngestFile("amiga", path, "huge.hdf", size, File.GetLastWriteTimeUtc(path)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
+        Assert.That(File.Exists(path), Is.False, "moved to _failed/");
+    }
+
     [Test]
     public async Task Snes_ZipHoldingACopierHeaderedSmc_IsIngestedAsTheStrippedSfc()
     {

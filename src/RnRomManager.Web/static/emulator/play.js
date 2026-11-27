@@ -23,6 +23,10 @@ import {
 	cdtvBiosBytes,
 	cdtvBiosMissing,
 	cdtvBiosSizeError,
+	amigaHardDiskKickstartMissing,
+	amigaKickstarts,
+	amigaKickstartSizeError,
+	isAmigaHardDisk,
 	diskSetCores,
 	biosFor,
 	contentFileName,
@@ -586,8 +590,9 @@ async function start() {
 	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
 	const isThreeDo = params.core === 'opera';
 	const isTurboGrafxCd = params.core === 'mednafen_pce' && params.disc;
-	// CD32 A7: an Amiga CD32 or CDTV disc; an Amiga floppy (no `system`) boots PUAE's built-in AROS.
+	// CD32 A7: an Amiga CD32 or CDTV disc; an Amiga floppy or hard disk (no `system`) loads the optional Kickstarts (Amiga K1).
 	const isAmigaCd = params.core === 'puae' && params.system !== null;
+	const isAmiga = params.core === 'puae' && params.system === null;
 	const isRomset = params.core in romsetSystems;
 	// PSP B3, MS-DOS P7: an isolated page is its own tab, with no modal to talk to.
 	if (player === undefined) listenForMessages(isThreeDo);
@@ -705,6 +710,18 @@ async function start() {
 				files.push({ name: `${kickstart}.ext`, bytes: cd32ExtBytes, sizeError: cd32ExtSizeError, exact: true, missing: cd32ExtMissing });
 		}
 	}
+	// Amiga K1–K3: the optional Kickstarts, one at a time; a 404 skips a file (PUAE falls back to AROS), any other problem
+	// stops the launch there. WHDLoad doesn't run on AROS, so a hard-disk release needs kick40068.A1200.
+	/** @type {Record<string, ArrayBuffer>} */
+	const amigaFirmware = {};
+	if (isAmiga) {
+		for (const file of amigaKickstarts) {
+			const result = await loadOptionalBios(file.name, file.bytes, amigaKickstartSizeError(file.name));
+			if ('error' in result) return show(result.error);
+			if (result.bios) amigaFirmware[`/${file.name}`] = result.bios;
+		}
+		if (isAmigaHardDisk(params.name) && !amigaFirmware['/kick40068.A1200']) return show(amigaHardDiskKickstartMissing);
+	}
 
 	/** @type {Blob} */
 	let content;
@@ -794,6 +811,8 @@ async function start() {
 		ejs.EJS_externalFiles = amigaCdFirmware;
 		ejs.EJS_hideSettings = ['puae_model'];
 	}
+	// Amiga K2: the same content root; PUAE's automatic model picks the A500 or A1200 by content.
+	if (isAmiga && Object.keys(amigaFirmware).length > 0) ejs.EJS_externalFiles = amigaFirmware;
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);

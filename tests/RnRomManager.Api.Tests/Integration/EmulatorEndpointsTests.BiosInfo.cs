@@ -41,6 +41,7 @@ public partial class EmulatorEndpointsTests
         WriteBios("scph5501.bin", new byte[100]);
         WriteBios("bios_CD_E.bin", new byte[128 * 1024]);
         WriteBios("neogeo.zip", new byte[10]);
+        WriteBios("kick34005.A500", new byte[256 * 1024]); // also in the CDTV group, so not an other file
 
         var info = await BiosInfoAsync();
 
@@ -69,6 +70,9 @@ public partial class EmulatorEndpointsTests
         Assert.That(Group(info, "Commodore Amiga CD32").GetProperty("ok").GetBoolean(), Is.False);
         Assert.That(Group(info, "Commodore Amiga CD32 (extended ROM)").GetProperty("ok").GetBoolean(), Is.True, "no Kickstart, so not needed");
         Assert.That(Group(info, "Commodore CDTV").GetProperty("ok").GetBoolean(), Is.False);
+        var amiga = Group(info, "Commodore Amiga");
+        Assert.That((Status(amiga, "kick34005.A500"), Status(amiga, "kick40068.A1200")), Is.EqualTo(("Valid", "Missing")));
+        Assert.That(amiga.GetProperty("ok").GetBoolean(), Is.True, "optional, and the one present is valid");
 
         Assert.That(info.GetProperty("otherFiles").EnumerateArray().Select(f => f.GetProperty("name").GetString()),
             Is.EqualTo(new[] { "neogeo.zip" }));
