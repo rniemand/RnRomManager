@@ -44,6 +44,8 @@ function game(id: string, extra: Partial<GameListItem> = {}): GameListItem {
 		dlcCount: 0,
 		saveCount: 0,
 		ownSaveCount: 0,
+		ownStateSaveCount: null,
+		igdbRating: null,
 		playRomId: null,
 		playRomFileName: null,
 		playDisc: false,
@@ -459,6 +461,7 @@ describe('Pick up where you left off (S3, S4)', () => {
 
 	it.each([
 		['no own save', { ownSaveCount: 0 }],
+		['own saves but no save state', { ownSaveCount: 2, ownStateSaveCount: 0 }],
 		['not playable', { playRomId: null }],
 		['a core that opens in a new tab', { browserCore: 'ppsspp' }]
 	])('hidden with %s', (_, extra) => {
@@ -483,22 +486,38 @@ describe('Pick up where you left off (S3, S4)', () => {
 		);
 	});
 
-	it('a battery save asks first', async () => {
+	it('shown when the state count is unknown and there are own saves', () => {
+		render(GameResults, { games: [owned('a', { ownStateSaveCount: null })], view: 'grid' });
+		expect(resumeButton()).toBeTruthy();
+	});
+
+	it('a save state is picked over a newer battery save (SV1)', async () => {
+		saves = [save('battery', 7, 'sam', 'battery'), save('state', 8, 'sam')];
+		render(GameResults, { games: [owned('a')], view: 'grid' });
+
+		await fireEvent.click(resumeButton());
+
+		await vi.waitFor(() =>
+			expect(document.querySelector('iframe')!.getAttribute('src')).toContain(
+				'&save=state&saveKind=state'
+			)
+		);
+		expect(screen.queryByText(/battery save replaces/)).toBeNull();
+	});
+
+	it('only battery saves → an info toast, nothing plays (SV1)', async () => {
 		saves = [save('battery', 7, 'sam', 'battery')];
 		render(GameResults, { games: [owned('a')], view: 'grid' });
 
 		await fireEvent.click(resumeButton());
 
-		await screen.findByText(
-			'Loading this battery save replaces the in-browser save for this release.'
+		await vi.waitFor(() =>
+			expect(toasts.items.at(-1)).toMatchObject({
+				text: 'No save state to pick up here.',
+				kind: 'info'
+			})
 		);
 		expect(document.querySelector('iframe')).toBeNull();
-		await fireEvent.click(screen.getByRole('button', { name: 'Play', hidden: true }));
-		await vi.waitFor(() =>
-			expect(document.querySelector('iframe')!.getAttribute('src')).toContain(
-				'&save=battery&saveKind=battery'
-			)
-		);
 	});
 
 	it('no playable own save → an info toast; a load error → a danger toast', async () => {
@@ -507,7 +526,10 @@ describe('Pick up where you left off (S3, S4)', () => {
 
 		await fireEvent.click(resumeButton());
 		await vi.waitFor(() =>
-			expect(toasts.items.at(-1)).toMatchObject({ text: 'No save to pick up here.', kind: 'info' })
+			expect(toasts.items.at(-1)).toMatchObject({
+				text: 'No save state to pick up here.',
+				kind: 'info'
+			})
 		);
 
 		fail = true;

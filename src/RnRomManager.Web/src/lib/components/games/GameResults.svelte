@@ -2,7 +2,6 @@
 	import Checkbox from '#lib/components/forms/Checkbox.svelte';
 	import { fromAction } from 'svelte/attachments';
 	import Button from '#lib/components/forms/Button.svelte';
-	import ConfirmModal from '#lib/components/modals/ConfirmModal.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
@@ -76,18 +75,16 @@
 	}
 
 	const canPlay = (game: GameListItem) => game.playRomId != null && !selected;
-	/** S3: the viewer has a save here and the core plays in the Play dialog. */
+	/** S3, SV2: the viewer has a save state here (the save count when unknown) and the core plays in the Play dialog. */
 	const canResume = (game: GameListItem) =>
 		canPlay(game) &&
-		game.ownSaveCount > 0 &&
+		(game.ownStateSaveCount ?? game.ownSaveCount) > 0 &&
 		!!game.browserCore &&
 		!opensInNewTab(game.browserCore);
 
 	let resuming = $state<string | null>(null);
-	let pendingBattery = $state<Playing | null>(null);
-	let batteryOpen = $state(false);
 
-	/** S4: the most recently updated own save that plays here, through the Saves tab's battery confirmation. */
+	/** S4, SV1: the most recently updated own save state that plays here; battery saves are never picked. */
 	async function resume(item: GameListItem): Promise<void> {
 		resuming = item.id;
 		try {
@@ -98,7 +95,7 @@
 			const me = auth.me?.username.toLowerCase();
 			let found: { save: SaveItem; rom: RomDetail } | null = null;
 			for (const save of saves) {
-				if (!me || save.uploadedBy?.toLowerCase() !== me) continue;
+				if (save.kind !== 'state' || !me || save.uploadedBy?.toLowerCase() !== me) continue;
 				const rom = playableRom(game, save);
 				if (rom) {
 					found = { save, rom };
@@ -106,22 +103,16 @@
 				}
 			}
 			if (!found) {
-				toasts.show('No save to pick up here.', 'info');
+				toasts.show('No save state to pick up here.', 'info');
 				return;
 			}
-			const next: Playing = {
+			playing = {
 				game: item,
 				rom: found.rom,
 				save: { saveId: found.save.id, saveKind: found.save.kind },
 				disc: usesPlayDisc(game.browserCore!, found.rom)
 			};
-			if (found.save.kind === 'battery') {
-				pendingBattery = next;
-				batteryOpen = true;
-			} else {
-				playing = next;
-				playOpen = true;
-			}
+			playOpen = true;
 		} catch {
 			toasts.show("Couldn't load your saves.", 'danger');
 		} finally {
@@ -129,11 +120,6 @@
 		}
 	}
 
-	function playBattery(): void {
-		batteryOpen = false;
-		playing = pendingBattery;
-		playOpen = true;
-	}
 	const actionsColumn = $derived(!!action || games.some((g) => g.playRomId != null));
 </script>
 
@@ -390,14 +376,6 @@
 		</table>
 	</div>
 {/if}
-
-<ConfirmModal
-	bind:open={batteryOpen}
-	title="Load battery save"
-	message="Loading this battery save replaces the in-browser save for this release."
-	confirmLabel="Play"
-	onconfirm={playBattery}
-/>
 
 <EmulatorModal
 	bind:open={playOpen}

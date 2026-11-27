@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from '#lib/components/forms/Button.svelte';
+	import Checkbox from '#lib/components/forms/Checkbox.svelte';
 	import PullCoverImagesModal from '#lib/components/modals/PullCoverImagesModal.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -13,11 +14,16 @@
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
-	/** T1–T3: start the IGDB jobs (Pull Cover Images, Refresh IGDB Ratings) with their counts. */
+	/**
+	 * T1–T3: start the IGDB jobs (Pull Cover Images, Refresh IGDB Ratings) with their counts. AC9–AC10: by default they
+	 * skip handled games; Try Missing Images and Repull ALL Ratings bring back the wider sets.
+	 */
 	let counts = $state<AdminActions | null>(null);
 	let error = $state<unknown>(null);
 	let starting = $state(false);
 	let confirmOpen = $state(false);
+	let retryMissing = $state(false);
+	let allRatings = $state(false);
 
 	async function load(): Promise<void> {
 		error = null;
@@ -41,6 +47,12 @@
 	const disabled = $derived(starting || jobs.current !== null || !counts?.igdbConfigured);
 	const plural = (n: number, one: string, many: string) =>
 		n === 1 ? `1 ${one}` : `${formatCount(n)} ${many}`;
+	const coverCount = $derived(
+		counts ? (retryMissing ? counts.coversMissing : counts.coversPending) : 0
+	);
+	const ratingCount = $derived(
+		counts ? (allRatings ? counts.igdbLinked : counts.ratingsMissing) : 0
+	);
 
 	async function start(type: 'PullCovers' | 'IgdbSync', url: string): Promise<void> {
 		starting = true;
@@ -61,7 +73,7 @@
 
 	function confirmPull(): void {
 		confirmOpen = false;
-		void start('PullCovers', '/api/jobs/pull-covers');
+		void start('PullCovers', `/api/jobs/pull-covers${retryMissing ? '?retryMissing=true' : ''}`);
 	}
 </script>
 
@@ -83,12 +95,21 @@
 				<div class="card-body d-flex flex-column">
 					<h2 class="card-title h5">Pull Cover Images</h2>
 					<p class="card-text">
-						Downloads the IGDB cover of every linked game that hasn't had one pulled yet and makes
-						it the game's cover, replacing the current cover.
+						Downloads the IGDB cover of every linked game that hasn't been tried yet and makes it
+						the game's cover, replacing the current cover.
 					</p>
 					<p class="card-text text-body-secondary small" data-testid="covers-count">
-						{plural(counts.coversPending, 'game to process', 'games to process')}
+						{plural(coverCount, 'game to process', 'games to process')}
 					</p>
+					<Checkbox
+						id="pull-retry-missing"
+						label="Try Missing Images"
+						bind:checked={retryMissing}
+						{disabled}
+					/>
+					<div class="form-text mb-3">
+						Also retries games whose IGDB cover couldn't be pulled before.
+					</div>
 					<div class="mt-auto">
 						<Button variant="primary" {disabled} onclick={() => (confirmOpen = true)}
 							>Pull Cover Images</Button
@@ -101,17 +122,29 @@
 			<div class="card h-100">
 				<div class="card-body d-flex flex-column">
 					<h2 class="card-title h5">Refresh IGDB Ratings</h2>
-					<p class="card-text">Fetches the IGDB rating and vote count of every linked game.</p>
+					<p class="card-text">
+						Fetches the IGDB rating and vote count of every linked game without a rating.
+					</p>
 					<p class="card-text text-body-secondary small" data-testid="ratings-count">
-						{plural(counts.igdbLinked, 'linked game', 'linked games')} · {counts.lastIgdbSyncAt
+						{plural(ratingCount, 'game to process', 'games to process')} · {counts.lastIgdbSyncAt
 							? `last refreshed ${formatDateTime(counts.lastIgdbSyncAt)}`
 							: 'never refreshed'}
 					</p>
+					<Checkbox
+						id="ratings-all"
+						label="Repull ALL Ratings"
+						bind:checked={allRatings}
+						{disabled}
+					/>
+					<div class="form-text mb-3">
+						Refreshes every linked game, including ones that already have a rating.
+					</div>
 					<div class="mt-auto">
 						<Button
 							variant="primary"
 							{disabled}
-							onclick={() => void start('IgdbSync', '/api/jobs/igdb-sync')}
+							onclick={() =>
+								void start('IgdbSync', `/api/jobs/igdb-sync${allRatings ? '?all=true' : ''}`)}
 							>Refresh IGDB Ratings</Button
 						>
 					</div>
@@ -121,8 +154,4 @@
 	</div>
 {/if}
 
-<PullCoverImagesModal
-	bind:open={confirmOpen}
-	count={counts?.coversPending ?? 0}
-	onconfirm={confirmPull}
-/>
+<PullCoverImagesModal bind:open={confirmOpen} count={coverCount} onconfirm={confirmPull} />
