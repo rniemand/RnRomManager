@@ -1849,10 +1849,12 @@ describe('game detail page', () => {
 		expect(toggle.classList).toContain('dropdown-toggle');
 		const items = [...toggle.parentElement!.querySelectorAll('.dropdown-item')];
 		expect(items.map((i) => i.textContent?.trim())).toEqual([
-			'Tetris 3.gb — 32.0 KiB',
-			'Tetris 1.gb — 32.0 KiB',
-			'Tetris 2.gb — 1.0 KiB'
+			'Tetris 3.gb32.0 KiB',
+			'Tetris 1.gb32.0 KiB',
+			'Tetris 2.gb1.0 KiB'
 		]);
+		// G2: the size is a badge after the name.
+		expect(items[2].querySelector('.badge.text-bg-light.border.ms-2')!.textContent).toBe('1.0 KiB');
 		await fireEvent.click(items[2]);
 
 		await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/api/games/g1/roms/2/download'));

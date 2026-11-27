@@ -9,7 +9,8 @@
 	import SystemBadge from '#lib/components/common/SystemBadge.svelte';
 	import GameTitle from '#lib/components/games/GameTitle.svelte';
 	import Icon from '#lib/icons/Icon.svelte';
-	import { formatCount, formatDateTime, formatSize } from '#lib/format.js';
+	import FileSize from '#lib/components/common/FileSize.svelte';
+	import { formatCount, formatDateTime } from '#lib/format.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
 	import { igdbScore } from '#lib/rating.js';
@@ -93,18 +94,6 @@
 		<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
 			{#if auth.isAdmin}
 				<GameTitle {game} {onsaved} {onstale} />
-				{#if game.igdbConfigured}
-					<!-- GP1: Edit Metadata opened on Lookup Info, searching at once, as Find on IGDB does. -->
-					<Button
-						variant="primary"
-						outline
-						size="sm"
-						icon="search"
-						aria-label="Lookup Info for {game.displayTitle}"
-						{@attach fromAction(tooltip, () => 'Lookup Info')}
-						onclick={() => onaction({ kind: 'edit', lookup: true })}
-					/>
-				{/if}
 			{:else}
 				<h1 class="h3 mb-0">{game.displayTitle}</h1>
 			{/if}
@@ -161,6 +150,15 @@
 										tooltip="Edit Metadata"
 										onclick={() => onaction({ kind: 'edit' })}
 									/>
+									{#if game.igdbConfigured}
+										<!-- GP1, G1: Edit Metadata opened on Lookup Info, searching at once, as Find on IGDB does. -->
+										<IconButton
+											icon="search"
+											label="Lookup Info for {game.displayTitle}"
+											tooltip="Lookup Info"
+											onclick={() => onaction({ kind: 'edit', lookup: true })}
+										/>
+									{/if}
 								{/if}
 							</div>
 						</td>
@@ -274,16 +272,28 @@
 						{#each downloadRoms as rom (rom.id)}
 							<li>
 								<Button class="dropdown-item" onclick={() => ondownload(rom.downloadUrl, rom)}
-									>{rom.fileName} — {formatSize(rom.sizeBytes)}</Button
+									>{rom.fileName}<span class="badge text-bg-light border ms-2"
+										><FileSize bytes={rom.sizeBytes} /></span
+									></Button
 								>
 							</li>
 						{/each}
 					</ul>
 				</div>
 			{/if}
-			<Button variant="secondary" outline size="sm" icon="collections" onclick={oncollections}
-				>Collections</Button
-			>
+			<!-- G3: filled with a count while the game is in a collection. -->
+			{#if memberOf.length}
+				<Button variant="primary" size="sm" icon="collections" onclick={oncollections}
+					>Collections<span class="badge text-bg-light ms-1"
+						>{formatCount(memberOf.length)}<span class="visually-hidden">&#32;collections</span
+						></span
+					></Button
+				>
+			{:else}
+				<Button variant="secondary" outline size="sm" icon="collections" onclick={oncollections}
+					>Collections</Button
+				>
+			{/if}
 			{#if fromMissingMetadata && auth.isAdmin}
 				<Button
 					variant="primary"

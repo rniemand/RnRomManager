@@ -86,8 +86,57 @@ describe('GameHeader', () => {
 	it('lists several ROMs in a Download ROM menu', () => {
 		setup({ downloadRoms: [rom(1, 'A.gb'), rom(2, 'B.gb')] });
 
-		expect(screen.getByRole('button', { name: /^A\.gb — / })).toBeTruthy();
-		expect(screen.getByRole('button', { name: /^B\.gb — / })).toBeTruthy();
+		// G2: the file name, then the size badge; no ` — `.
+		for (const name of ['A.gb', 'B.gb']) {
+			const item = screen.getByRole('button', { name: new RegExp(`^${name.replace('.', '\\.')}`) });
+			expect(item.textContent).not.toContain('—');
+			const badge = item.querySelector('span.badge.text-bg-light.border.ms-2')!;
+			expect(badge.textContent).toBe('1.0 KiB');
+		}
+	});
+
+	it('Collections is outlined without a badge when the game is in none (G3)', () => {
+		setup();
+		const button = screen.getByRole('button', { name: 'Collections' });
+		expect(button.className).toBe('btn btn-sm btn-outline-secondary');
+		expect(button.querySelector('.badge')).toBeNull();
+	});
+
+	it('Collections is filled with a count that follows memberOf (G3)', async () => {
+		const props = {
+			game: game(),
+			gameId: 'g1',
+			memberOf: [{ id: 'c1', name: 'Favourites' }],
+			downloadRoms: [],
+			fromMissingMetadata: false,
+			fromMissingIgdb: false,
+			descriptionExpanded: false,
+			ondownload: vi.fn(),
+			onsaved: vi.fn(),
+			onstale: vi.fn(),
+			onaction: vi.fn(),
+			oninfojson: vi.fn(),
+			oncollections: vi.fn()
+		};
+		const { rerender } = render(GameHeader, props);
+		let button = screen.getByRole('button', { name: /^Collections/ });
+		expect(button.className).toBe('btn btn-sm btn-primary');
+		expect(button.querySelector('.badge.text-bg-light.ms-1')!.textContent).toBe('1 collections');
+
+		await rerender({
+			memberOf: [
+				{ id: 'c1', name: 'Favourites' },
+				{ id: 'c2', name: 'RPGs' }
+			]
+		});
+		button = screen.getByRole('button', { name: /^Collections/ });
+		expect(button.className).toBe('btn btn-sm btn-primary');
+		expect(button.textContent?.trim()).toBe('Collections2 collections');
+
+		await rerender({ memberOf: [] });
+		expect(screen.getByRole('button', { name: 'Collections' }).className).toBe(
+			'btn btn-sm btn-outline-secondary'
+		);
 	});
 
 	it('hands the Manage menu choices to the page', async () => {
@@ -119,8 +168,14 @@ describe('GameHeader', () => {
 			const { onaction } = setup({ game: game({ igdbConfigured: true, igdbId }) });
 
 			const button = screen.getByRole('button', { name: 'Lookup Info for Tetris' });
-			expect(button.className).toBe('btn btn-sm btn-outline-primary');
+			expect(button.className).toBe('btn btn-sm btn-link text-body-secondary p-0');
 			expect(button.querySelector('i.bi-search')).toBeTruthy();
+			// G1: in the System row, right after Quick edit; gone from the title row.
+			expect(button.previousElementSibling).toBe(
+				screen.getByRole('button', { name: 'Quick edit' })
+			);
+			expect(button.closest('tr')!.querySelector('th')!.textContent).toBe('System');
+			expect(screen.getByRole('heading', { level: 1 }).parentElement!.contains(button)).toBe(false);
 			await fireEvent.click(button);
 
 			expect(onaction).toHaveBeenCalledWith({ kind: 'edit', lookup: true });
