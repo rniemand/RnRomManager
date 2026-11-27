@@ -547,6 +547,68 @@ public class GameQueryTests
         Assert.That((await _games.ListAsync(new GameQuery(), default)).Items.Single().MatchedOn, Is.Null);
     }
 
+    /// <summary>GS1: a game with one release and one set file, each with its own known hashes.</summary>
+    private async Task<(Guid Id, InfoJsonRom Rom, InfoJsonRomFile File)> AddWithSetFile(string title)
+    {
+        var bytes = RomBytes(++_seed);
+        var file = new InfoJsonRomFile("Track 02.bin", "Track 02.bin", "Track 02.bin", 10, "00000000",
+            Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(RomBytes(5000 + _seed))),
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(RomBytes(5000 + _seed))));
+        var rom = Rom($"{title} (Track 01).bin", bytes) with { Files = [file] };
+        var game = Game(title, rom);
+        var name = FileNameSanitizer.Sanitize(title) + ".zip";
+        await _mirror.ReplaceAsync(new MirrorEntry(game, $"gb/{Bucket.For(name)}/{name}", 100, When.UtcDateTime), default);
+        return (game.GameId, rom, file);
+    }
+
+    [Test]
+    public async Task HashSearch_FindsReleasesAndSetFiles_BySha1OrMd5_WithTheFileName()
+    {
+        var (_, rom, file) = await AddWithSetFile("Wipeout");
+        await Add("Tetris");
+
+        async Task<GameListItem> Only(string q) => (await _games.ListAsync(new GameQuery { Search = q }, default)).Items.Single();
+
+        Assert.That((await Only(rom.Metadata.Sha1)).MatchedOn, Is.EqualTo(new SearchMatch("sha1", rom.FileName)));
+        Assert.That((await Only(rom.Metadata.Md5)).MatchedOn, Is.EqualTo(new SearchMatch("md5", rom.FileName)));
+        Assert.That((await Only(file.Sha1)).MatchedOn, Is.EqualTo(new SearchMatch("sha1", "Track 02.bin")));
+        Assert.That((await Only(file.Md5)).MatchedOn, Is.EqualTo(new SearchMatch("md5", "Track 02.bin")));
+        Assert.That((await Only($"  {rom.Metadata.Sha1.ToUpperInvariant()} ")).DisplayTitle, Is.EqualTo("Wipeout"), "upper case, trimmed");
+        Assert.That(await Titles(new GameQuery { Search = rom.Metadata.Sha1[..39] }), Is.Empty, "39 hex isn't a hash");
+    }
+
+    [Test]
+    public async Task HashSearch_PrefersTheReleaseOverASetFileWithTheSameHash()
+    {
+        var bytes = RomBytes(++_seed);
+        var sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes));
+        var md5 = Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(bytes));
+        var rom = Rom("B main.bin", bytes) with { Files = [new InfoJsonRomFile("A track.bin", "A track.bin", "A track.bin", 10, "00000000", md5, sha1)] };
+        var game = Game("Same", rom);
+        await _mirror.ReplaceAsync(new MirrorEntry(game, "gb/S/Same.zip", 100, When.UtcDateTime), default);
+
+        var item = (await _games.ListAsync(new GameQuery { Search = sha1 }, default)).Items.Single();
+        Assert.That(item.MatchedOn, Is.EqualTo(new SearchMatch("sha1", "B main.bin")));
+    }
+
+    [Test]
+    public async Task HashSearch_KeepsTheOtherFilters()
+    {
+        var (inside, rom, _) = await AddWithSetFile("Wipeout");
+        var (_, other, _) = await AddWithSetFile("Wipeout 2");
+        await using var connection = _factory.Create();
+        var user = await connection.ExecuteScalarAsync<int>(
+            "INSERT INTO users (username, password_hash, failed_login_count, security_stamp, created_at, updated_at) " +
+            "VALUES ('alice', 'hash', 0, REPEAT('a', 32), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)); SELECT LAST_INSERT_ID();");
+        var collection = Guid.NewGuid();
+        await connection.ExecuteAsync(
+            "INSERT INTO collections (id, user_id, name, created_at, updated_at) VALUES (@collection, @user, 'Mine', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6));" +
+            "INSERT INTO collection_games (collection_id, game_id, added_at) VALUES (@collection, @inside, UTC_TIMESTAMP(6));",
+            new { collection, user, inside });
+
+        Assert.That(await Titles(new GameQuery { Search = rom.Metadata.Sha1, CollectionId = collection }), Is.EqualTo(new[] { "Wipeout" }));
+        Assert.That(await Titles(new GameQuery { Search = other.Metadata.Sha1, CollectionId = collection }), Is.Empty);
+    }
     private static readonly string[] Dlc = ["DLC"];
     private static readonly string[] Update = ["Update"];
 

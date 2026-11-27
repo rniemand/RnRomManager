@@ -51,4 +51,15 @@ public sealed record GameQuery
 
     /// <summary><see cref="Search"/> trimmed, whitespace runs collapsed to one space: what relevance ranks against.</summary>
     public string? Phrase => Search is null ? null : string.Join(' ', Search.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>
+    /// GS1: when the whole trimmed <see cref="Search"/> is a SHA1 (40 hex) or MD5 (32 hex), its column (<c>sha1</c> or
+    /// <c>md5</c>) and the lower-case hash; else null.
+    /// </summary>
+    public (string Field, string Hash)? HashSearch => Search?.Trim() switch
+    {
+        { Length: 40 } s when s.All(char.IsAsciiHexDigit) => ("sha1", s.ToLowerInvariant()),
+        { Length: 32 } s when s.All(char.IsAsciiHexDigit) => ("md5", s.ToLowerInvariant()),
+        _ => null,
+    };
 }

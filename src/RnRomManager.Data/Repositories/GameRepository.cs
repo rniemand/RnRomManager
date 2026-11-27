@@ -217,6 +217,7 @@ public sealed class GameRepository : IGameRepository
     {
         var (filter, args) = Where(query);
         var words = query.Words;
+        var hash = query.HashSearch;
         // B15/B17: inner join, so memberships of games no longer in the library don't show.
         var from = query.CollectionId is null
             ? "games g"
@@ -263,7 +264,8 @@ public sealed class GameRepository : IGameRepository
                    g.rating AS Rating, g.favourite AS Favourite, g.save_count AS SaveCount, g.title AS Title, g.igdb_id AS IgdbId,
                    (SELECT a.igdb_rating FROM game_actions a WHERE a.game_id = g.id) AS IgdbRating,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres,
-                   {(words.Count == 0 ? "NULL" : AddOnNamesJson)} AS AddOns
+                   {(words.Count == 0 ? "NULL" : AddOnNamesJson)} AS AddOns,
+                   {(hash is null ? "NULL" : HashFileName(hash.Value.Field))} AS HashMatchFileName
             FROM {from} {filter}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
@@ -271,7 +273,8 @@ public sealed class GameRepository : IGameRepository
 
         var items = rows.Items.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId, r.BoxArtSha1,
-            r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns)),
+            r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns),
+                r.HashMatchFileName is { } hashFile ? (hash!.Value.Field, hashFile) : null),
             (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true, r.IgdbId,
             IgdbRating: r.IgdbRating)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, rows.Total);
@@ -318,8 +321,9 @@ public sealed class GameRepository : IGameRepository
         var words = query.Words;
         // shortcut: LIKE '%word%' over five columns and the DLC/update file names is a full scan, and list values are
         // matched in their JSON text (escaped characters may not match literally); move to FULLTEXT if search gets slow.
+        var hash = query.HashSearch;
         for (var i = 0; i < words.Count; i++)
-            where.Add($"({TitleLike(i)} OR {JsonLike("developers", i)} OR {JsonLike("publishers", i)} OR {JsonLike("genres", i)} OR {AddOnLike(i)})");
+            where.Add($"({TitleLike(i)} OR {JsonLike("developers", i)} OR {JsonLike("publishers", i)} OR {JsonLike("genres", i)} OR {AddOnLike(i)}{(hash is null ? "" : $" OR {HashExists(hash.Value.Field)}")})");
         if (query.Favourite is not null)
             where.Add("g.favourite = @favourite");
         if (query.NotInCollectionId is not null)
@@ -346,8 +350,19 @@ public sealed class GameRepository : IGameRepository
         });
         for (var i = 0; i < words.Count; i++)
             args.Add($"w{i}", SqlLike.Contains(words[i]));
+        if (hash is not null)
+            args.Add("hash", hash.Value.Hash);
         return (filter, args);
     }
+
+    // GS1. shortcut: md5 has no index on roms/rom_files, so an MD5 query scans both tables; fine as it only runs for an
+    // exact 32-hex query, add indexes if it gets slow. The field is "sha1" or "md5", never user text.
+    private static string HashExists(string field) =>
+        $"(EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.{field} = @hash) OR EXISTS (SELECT 1 FROM rom_files f WHERE f.game_id = g.id AND f.{field} = @hash))";
+
+    // GS2: the matching release's file name, else the smallest matching set file's.
+    private static string HashFileName(string field) =>
+        $"COALESCE((SELECT MIN(r.file_name) FROM roms r WHERE r.game_id = g.id AND r.{field} = @hash), (SELECT MIN(f.file_name) FROM rom_files f WHERE f.game_id = g.id AND f.{field} = @hash))";
 
     private static string TitleLike(int i) => $"(g.display_title LIKE @w{i} OR g.title LIKE @w{i})";
 

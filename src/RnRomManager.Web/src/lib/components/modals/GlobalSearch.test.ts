@@ -174,6 +174,21 @@ describe('GlobalSearch', () => {
 		expect(options[3].textContent).toContain('Genre: Puzzle');
 	});
 
+	it('labels hash matches SHA1: and MD5: with the file name and opens the plain game page (GS2)', async () => {
+		items = [
+			item('g1', 'Orbit', { matchedOn: { field: 'sha1', value: 'Orbit (Track 02).bin' } }),
+			item('g2', 'Comet', { matchedOn: { field: 'md5', value: 'Comet.gb' } })
+		];
+		render(GlobalSearch, { open: true });
+		await typeAndWait('0123456789abcdef0123456789abcdef');
+
+		const options = screen.getAllByRole('option', { hidden: true });
+		expect(options[0].textContent).toContain('SHA1: Orbit (Track 02).bin');
+		expect(options[1].textContent).toContain('MD5: Comet.gb');
+		await fireEvent.click(options[0]);
+		expect(goto).toHaveBeenLastCalledWith('/games/g1');
+	});
+
 	describe('DLC and update matches (DLC B13)', () => {
 		beforeEach(() => {
 			items = [
