@@ -104,6 +104,36 @@ describe('GameHeader', () => {
 		expect(oncollections).toHaveBeenCalledOnce();
 	});
 
+	it.each([
+		['unlinked', null],
+		['linked', 42]
+	])(
+		'an Admin sees Lookup Info for an %s game; it opens Edit Metadata on the lookup (GP1)',
+		async (_, igdbId) => {
+			auth.set({ id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false });
+			const { onaction } = setup({ game: game({ igdbConfigured: true, igdbId }) });
+
+			const button = screen.getByRole('button', { name: 'Lookup Info for Tetris' });
+			expect(button.className).toBe('btn btn-sm btn-outline-primary');
+			expect(button.querySelector('i.bi-search')).toBeTruthy();
+			await fireEvent.click(button);
+
+			expect(onaction).toHaveBeenCalledWith({ kind: 'edit', lookup: true });
+		}
+	);
+
+	it('no Lookup Info without IGDB (GP1)', () => {
+		auth.set({ id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false });
+		setup();
+		expect(screen.queryByRole('button', { name: /^Lookup Info/ })).toBeNull();
+	});
+
+	it('no Lookup Info for a Site user (GP1)', () => {
+		auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
+		setup({ game: game({ igdbConfigured: true }) });
+		expect(screen.queryByRole('button', { name: /^Lookup Info/ })).toBeNull();
+	});
+
 	it('hides the Admin actions from a Site user', () => {
 		auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
 		setup();

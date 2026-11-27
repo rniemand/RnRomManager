@@ -11,6 +11,7 @@
 	import { formatCount, formatDateTime, formatSize } from '#lib/format.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
+	import { igdbScore } from '#lib/rating.js';
 	import { tooltip } from '#lib/tooltip.js';
 
 	interface Props {
@@ -91,6 +92,18 @@
 		<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
 			{#if auth.isAdmin}
 				<GameTitle {game} {onsaved} {onstale} />
+				{#if game.igdbConfigured}
+					<!-- GP1: Edit Metadata opened on Lookup Info, searching at once, as Find on IGDB does. -->
+					<Button
+						variant="primary"
+						outline
+						size="sm"
+						icon="search"
+						aria-label="Lookup Info for {game.displayTitle}"
+						{@attach fromAction(tooltip, () => 'Lookup Info')}
+						onclick={() => onaction({ kind: 'edit', lookup: true })}
+					/>
+				{/if}
 			{:else}
 				<h1 class="h3 mb-0">{game.displayTitle}</h1>
 			{/if}
@@ -110,8 +123,7 @@
 					class="badge text-bg-light border"
 					tabindex="0"
 					use:tooltip={`IGDB rating (users and critics), refreshed ${formatDateTime(game.igdbRating.syncedAt)}`}
-					>IGDB {Math.sign(game.igdbRating.score) * Math.round(Math.abs(game.igdbRating.score))}/100
-					· {formatCount(votes)}
+					>IGDB {igdbScore(game.igdbRating.score)}/100 · {formatCount(votes)}
 					{votes === 1 ? 'vote' : 'votes'}</span
 				>
 			{/if}

@@ -209,7 +209,7 @@
 		{:else if matches && matches.length === 0}
 			<p class="mb-3">No IGDB matches for “{searched}”.</p>
 		{:else if matches}
-			<div class="list-group mb-3" role="group" aria-label="IGDB matches">
+			<div class="list-group mb-3 lookup-matches" role="group" aria-label="IGDB matches">
 				{#each matches as match (match.igdbId)}
 					<Button
 						class={[
@@ -249,7 +249,7 @@
 	</div>
 
 	{#if chosen && copy}
-		<div class="table-responsive mb-2">
+		<div class="table-responsive mb-2 lookup-fields">
 			<table class="table table-sm table-striped table-hover align-middle mb-0">
 				<caption class="visually-hidden">Fields to copy from IGDB</caption>
 				<thead class="table-dark">
@@ -321,5 +321,19 @@
 	}
 	.copy-disabled > :not(:first-child) {
 		color: var(--bs-secondary-color);
+	}
+	/* EM2: the matches and the fields scroll on their own, so the modal's footer stays in reach; both hold focusable
+	   controls, so they need no tabindex. The fields keep their header in view. */
+	.lookup-matches {
+		overflow-y: auto;
+		max-height: 16rem;
+	}
+	.lookup-fields {
+		overflow-y: auto;
+		max-height: 20rem;
+	}
+	.lookup-fields thead th {
+		position: sticky;
+		top: 0;
 	}
 </style>

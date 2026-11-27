@@ -28,13 +28,8 @@ describe('BaseModal', () => {
 		expect(options.at(-1)).toEqual({ backdrop: 'static', keyboard: true });
 	});
 
-	it('scrollable adds modal-dialog-scrollable; it is off by default (U2)', () => {
-		const { unmount } = render(BaseModal, { open: false, title: 'T', onconfirm: () => {} });
-		expect(
-			document.querySelector('.modal-dialog')!.classList.contains('modal-dialog-scrollable')
-		).toBe(false);
-		unmount();
-		render(BaseModal, { open: false, title: 'T', scrollable: true, onconfirm: () => {} });
+	it('is always scrollable, the body is a focusable region (U2, EM1)', () => {
+		render(BaseModal, { open: false, title: 'T', onconfirm: () => {} });
 		expect(
 			document.querySelector('.modal-dialog')!.classList.contains('modal-dialog-scrollable')
 		).toBe(true); // The scrolling body is reachable and scrollable with the keyboard (axe scrollable-region-focusable).

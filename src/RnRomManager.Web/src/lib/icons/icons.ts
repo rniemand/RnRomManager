@@ -45,6 +45,8 @@ export const icons: Record<string, string> = {
 	'report-new-games': 'bi bi-stars',
 	'report-missing-metadata': 'bi bi-card-checklist',
 	'report-missing-igdb': 'bi bi-link-45deg',
+	// GS2: a Global search result linked to IGDB.
+	'igdb-linked': 'bi bi-link-45deg',
 	'review-suggestions': 'bi bi-lightbulb',
 	'review-matched': 'bi bi-bullseye',
 	'review-attach': 'bi bi-paperclip',

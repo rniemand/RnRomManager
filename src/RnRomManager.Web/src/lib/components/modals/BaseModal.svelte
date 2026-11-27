@@ -17,8 +17,6 @@
 		confirmDisabled?: boolean;
 		/** `lg` for a wide form (Edit Metadata), `xl` for the emulator; default width otherwise. */
 		size?: 'lg' | 'xl';
-		/** U2: `modal-dialog-scrollable`, so the header and footer stay and only the body scrolls. */
-		scrollable?: boolean;
 		/** Omitted → info mode: the footer shows only "Close". */
 		onconfirm?: () => void;
 		/**
@@ -41,7 +39,6 @@
 		busy = false,
 		confirmDisabled = false,
 		size,
-		scrollable = false,
 		onconfirm,
 		beforeclose,
 		onshown,
@@ -110,25 +107,21 @@
 	aria-hidden="true"
 >
 	<div
-		class="modal-dialog modal-dialog-centered"
+		class="modal-dialog modal-dialog-centered modal-dialog-scrollable"
 		class:modal-lg={size === 'lg'}
 		class:modal-xl={size === 'xl'}
-		class:modal-dialog-scrollable={scrollable}
 	>
 		<div class="modal-content">
 			<div class="modal-header">
 				<h2 class="modal-title fs-5 text-break" id="{id}-title">{title}</h2>
 				<Button class="btn-close" aria-label="Close" onclick={requestClose} disabled={closing} />
 			</div>
-			{#if scrollable}
-				<!-- U2: a scrolling body needs keyboard access (axe scrollable-region-focusable): it takes focus itself. -->
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex (a focusable scroll region is the WCAG-recommended fix) -->
-				<div class="modal-body" role="region" aria-label={title} tabindex="0">
-					{@render children?.()}
-				</div>
-			{:else}
-				<div class="modal-body">{@render children?.()}</div>
-			{/if}
+			<!-- U2, EM1: every modal scrolls its body so the header and footer stay on screen; a scrolling body needs keyboard
+			     access (axe scrollable-region-focusable), so it takes focus itself. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex (a focusable scroll region is the WCAG-recommended fix) -->
+			<div class="modal-body" role="region" aria-label={title} tabindex="0">
+				{@render children?.()}
+			</div>
 			<div class="modal-footer">
 				{#if footer}
 					<div class="d-flex flex-wrap gap-2 me-auto">{@render footer()}</div>

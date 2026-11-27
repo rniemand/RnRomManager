@@ -323,7 +323,7 @@ describe('admin pages', () => {
 			['Users', 'bi bi-people'],
 			['DATs', 'bi bi-database'],
 			['Settings', 'bi bi-gear'],
-			['ROM Zip Config', 'bi bi-file-zip'],
+			['ROM Zip Config', 'bi bi-file-earmark-zip'],
 			['BIOS info', 'bi bi-cpu'],
 			['Actions', 'bi bi-lightning-charge-fill'],
 			['Backups', 'bi bi-archive'],

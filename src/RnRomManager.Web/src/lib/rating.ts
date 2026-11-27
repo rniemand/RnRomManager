@@ -16,3 +16,6 @@ export async function saveRating(gameId: string, change: RatingChange): Promise<
 		return await api.patch<GameDetail>(url, change);
 	}
 }
+
+/** GS2, G1: an IGDB rating as a whole score, rounded half away from zero. */
+export const igdbScore = (score: number): number => Math.sign(score) * Math.round(Math.abs(score));

@@ -11,6 +11,7 @@
 	import { Modal } from '#lib/bootstrap.js';
 	import { opensInNewTab, playUrl, recordPlay } from '#lib/emulator.js';
 	import { releaseModal } from '#lib/modal.js';
+	import { igdbScore } from '#lib/rating.js';
 	import { reportTabs } from '#lib/reports.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import FileSize from '#lib/components/common/FileSize.svelte';
@@ -408,6 +409,13 @@
 							</div>
 							<div class="min-w-0">
 								<div class="text-truncate fw-semibold">{game.displayTitle}</div>
+								{#if game.igdbId != null && game.igdbId > 0}
+									<!-- GS2: linked to IGDB, with its rating when one is stored. -->
+									<div class="small text-truncate" class:text-body-secondary={i !== active}>
+										<Icon name="igdb-linked" label="Linked to IGDB" />
+										IGDB{game.igdbRating != null ? ` ${igdbScore(game.igdbRating)}/100` : ''}
+									</div>
+								{/if}
 								{#if game.matchedOn}
 									<div class="text-truncate small" class:text-body-secondary={i !== active}>
 										{matchLabels[game.matchedOn.field]}: {game.matchedOn.value}
