@@ -50,7 +50,7 @@ describe('SystemBadge', () => {
 		render(SystemBadge, { system: 's32x', name: '32X' });
 		render(SystemBadge, { system: 'tg16', name: 'TG16' });
 		render(SystemBadge, { system: 'switch', name: 'Switch' });
-		render(SystemBadge, { system: 'sg1000' });
+		render(SystemBadge, { system: 'vectrex' });
 
 		expect(screen.getByText('Game Boy Advance').classList.contains('text-bg-primary')).toBe(true);
 		expect(screen.getByText('NES').classList.contains('text-bg-warning')).toBe(true);
@@ -66,6 +66,6 @@ describe('SystemBadge', () => {
 		expect(switchBadge.classList.contains('text-bg-switch')).toBe(true);
 		// No icon of its own: the controller fallback.
 		expect(switchBadge.querySelector('i')?.className).toContain('bi-controller');
-		expect(screen.getByText('SG1000').classList.contains('text-bg-secondary')).toBe(true);
+		expect(screen.getByText('VECTREX').classList.contains('text-bg-secondary')).toBe(true);
 	});
 });

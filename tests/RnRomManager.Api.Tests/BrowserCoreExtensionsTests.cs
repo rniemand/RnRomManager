@@ -152,12 +152,12 @@ public class BrowserCoreExtensionsTests
         [("cdtv", ".mdf")] = MdsTocMember,
         [("cdtv", ".toc")] = MdsTocMember,
         [("3ds", ".cia")] = "library only: azahar's libretro build can't load a CIA; canPlay and the quick play refuse it",
+        [("sg1000", ".sc")] = "play.js names a .sc release .sg for smsplus, whose retro_load_game runs .sg content in SG-1000 mode (smsplus_libretro.c at c642bbd); keyboard titles don't work",
     };
 
     private const string Archive = "ingest unpacks .zip and .7z; the core never gets one";
     private const string Playlist = "the play page builds its own .m3u for a disc or disk set";
     private const string OtherSystem = "another system's type, ingested on that system's core";
-    private const string NewSystem = "would be a new system";
     private const string NotAGame = "not a game image (a snapshot, config, command, fliplist or icon file)";
     private const string NoDat = "homebrew or unusual type no DAT lists; left out by the 2026-11-23 audit";
     private const string OtherCommodore = "ingested only on another Commodore system here (the PET has no cartridge port; NIB, D2M/D4M and 8050/8250 images aren't taken for this system)";
@@ -175,9 +175,8 @@ public class BrowserCoreExtensionsTests
         (Playlist, ["mednafen_pce", "pcsx_rearmed", "yabause", "puae", "genesis_plus_gx", "picodrive", .. Vice], [".m3u"]),
         (OtherSystem, ["mgba"], [".gb", ".gbc", ".sgb"]),
         (OtherSystem, ["genesis_plus_gx"], [".sms", ".gg", ".sg", ".bms"]),
-        (OtherSystem, ["picodrive"], [".gen", ".smd", ".cue", ".iso", ".chd", ".sms", ".gg", ".sg", ".68k", ".sgd"]),
+        (OtherSystem, ["picodrive"], [".gen", ".smd", ".cue", ".iso", ".chd", ".sms", ".gg", ".sg", ".68k", ".sgd", ".sc"]),
         (OtherSystem, ["smsplus"], [".col"]),
-        (NewSystem, ["picodrive"], [".sc"]),
         (NotAGame, Vice, [".vsf", ".cmd", ".vfl"]),
         (NotAGame, ["puae"], [".uae", ".info", ".slave"]),
         ("a ProSystem cartridge description: a text file naming a separate ROM (and BupChip sample) file, not a ROM; a release is one file", ["prosystem"], [".cdf"]),
@@ -295,6 +294,7 @@ public class BrowserCoreExtensionsTests
             "mame2003 .mamez: stale exception (no such system)",
             "fbneo .fbneoz: stale exception (no such system)",
             "fbneo .fbneo7z: stale exception (no such system)",
+            "sg1000 .sc: stale exception (no such system)",
         }));
     }
 

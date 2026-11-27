@@ -73,6 +73,8 @@ public static class AppHost
         builder.Services.AddHostedService<StorageMigrationStarter>();
         // Release editing B19: the same way, for the one-off save folder move.
         builder.Services.AddHostedService<SaveFoldersStarter>();
+        // SG-1000 S13: the same way, for moving SG-1000 games out of Master System.
+        builder.Services.AddHostedService<Sg1000MoveStarter>();
         // B29: the type form (not a factory), so tests can remove it by ImplementationType.
         builder.Services.AddHostedService<DatRefreshScheduler>();
         var app = builder.Build();
@@ -204,6 +206,8 @@ public static class AppHost
         });
         builder.Services.AddTransient<SaveFoldersJob>();
         builder.Services.AddSingleton<SaveFoldersJobFactory>(sp => () => sp.GetRequiredService<SaveFoldersJob>());
+        builder.Services.AddTransient<Sg1000MoveJob>();
+        builder.Services.AddSingleton<Sg1000MoveJobFactory>(sp => () => sp.GetRequiredService<Sg1000MoveJob>());
         builder.Services.AddTransient<RnRomManager.Core.Storage.ZipRepackJob>();
         builder.Services.AddSingleton<ZipRepackJobFactory>(sp => (systemId, level) =>
         {
@@ -275,6 +279,7 @@ public static class AppHost
         services.AddSystemHandler<ColecoVisionHandler>();
         services.AddSystemHandler<GameGearHandler>();
         services.AddSystemHandler<MasterSystemHandler>();
+        services.AddSystemHandler<Sg1000Handler>();
         services.AddSystemHandler<MegaDriveHandler>();
         services.AddSystemHandler<Sega32xHandler>();
         services.AddSystemHandler<TurboGrafx16Handler>();

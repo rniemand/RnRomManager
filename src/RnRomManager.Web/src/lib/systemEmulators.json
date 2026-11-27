@@ -589,6 +589,19 @@
 			"note": "RetroArch core: Genesis Plus GX"
 		}
 	],
+	"sg1000": [
+		{
+			"name": "Emulicious",
+			"url": "https://emulicious.net/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Genesis Plus GX"
+		}
+	],
 	"snes": [
 		{
 			"name": "Snes9x",

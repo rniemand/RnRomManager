@@ -29,7 +29,7 @@ public class MasterSystemHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("sms", "Master System", "SMS", "mastersystem", "Sega - Master System - Mark III")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".sms", ".sg", ".bin", ".rom", ".bms" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".sms", ".bin", ".rom", ".bms" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((2048L, 4194304L)));
     }
 

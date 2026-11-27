@@ -466,6 +466,20 @@ public sealed class GameRepository : IGameRepository
             """, new { embedSystemIds, externalSystemIds }, cancellationToken: cancellationToken))).AsList();
     }
 
+    public async Task<IReadOnlyList<GameRow>> ListByOriginalExtensionAsync(string systemId, string extension, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        // roms uses utf8mb4_unicode_ci, so LIKE ignores case.
+        return (await connection.QueryAsync<GameRow>(new CommandDefinition($"""
+            {Select} g
+            WHERE g.system_id = @systemId
+              AND EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id)
+              AND NOT EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.original_file_name NOT LIKE CONCAT('%', @extension))
+              AND NOT EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.id_method = 'Dat')
+            ORDER BY g.zip_path
+            """, new { systemId, extension }, cancellationToken: cancellationToken))).AsList();
+    }
+
     /// <summary>Concatenated <c>region_key</c>s (<c>|USA||Europe|</c>) → distinct regions, sorted ordinally.</summary>
     private static List<string> Regions(string? regionKeys) =>
         (regionKeys ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();

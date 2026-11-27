@@ -392,8 +392,13 @@ public sealed class ReviewResolver(
                     keepHeader && item.Header is not null ? JsonNode.Parse(item.Header) as JsonObject : null).ConfigureAwait(false);
             if (item.ArchivePath is not null)
             {
-                var family = systems.ByFamily(systems.ById(item.SystemId)!.Family);
-                var entries = extractor.Extract(source, work, ext => family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes);
+                var itemSystem = systems.ById(item.SystemId)!;
+                var family = systems.ByFamily(itemSystem.Family);
+                var itemExtension = Path.GetExtension(item.ArchiveEntry);
+                // S15: the item's own entry still extracts after its system drops that extension (an sms .sg pending before SG-1000).
+                var entries = extractor.Extract(source, work, ext =>
+                    family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes
+                    ?? (string.Equals(ext, itemExtension, StringComparison.OrdinalIgnoreCase) ? itemSystem.MaxRomSizeBytes : null));
                 var entry = entries.FirstOrDefault(e => e.EntryPath == item.ArchiveEntry);
                 if (entry is null)
                     return new("VerifyFailed");

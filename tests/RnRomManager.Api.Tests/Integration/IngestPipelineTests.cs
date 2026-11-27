@@ -55,6 +55,7 @@ public class IngestPipelineTests
     /// <summary>An SMS-mode Game Gear game: the DAT names it <c>.sms</c> (G4).</summary>
     private static readonly byte[] Tide = GameGear(32768, 141, header: false);
     private static readonly byte[] Harbor = GameGear(32768, 150, header: true);
+    private static readonly byte[] BambooRun = Atari(16384, 1000);
     private static readonly byte[] Comet = new SyntheticMegaDriveRomBuilder { Seed = 160, Size = 65536 }.Build();
     private static readonly byte[] Relay = new SyntheticMegaDriveRomBuilder { Seed = 170, Size = 65536, SystemType = "SEGA 32X", OverseasTitle = "STAR RELAY" }.Build();
     private static readonly byte[] Pals = new SyntheticMegaDriveRomBuilder { Seed = 1972, Size = 65536, SystemType = "SEGA PICO", OverseasTitle = "PEN PALS" }.Build();
@@ -204,7 +205,7 @@ public class IngestPipelineTests
             // PC-FX X4: the real DAT names a data track too.
             [IngestSeeder.PcfxDat] = [new FixtureGame("Disc Fox (Japan)", "Disc Fox (Japan) (Track 2).bin", FoxData)], [IngestSeeder.Cd32Dat] = [new FixtureGame("Disc Chick (Europe)", "Disc Chick (Europe) (Track 01).bin", ChickData)], [IngestSeeder.CdtvDat] = [],
             [IngestSeeder.NeoGeoPocketDat] = [new FixtureGame("Dual Mode (Japan)", "Dual Mode (Japan).ngp", DualMode)],
-            [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)], [IngestSeeder.WonderSwanDat] = [new FixtureGame("Mono Flag (Japan)", "Mono Flag (Japan).ws", MonoFlag)], [IngestSeeder.WonderSwanColorDat] = [new FixtureGame("Swan Lagoon (Japan)", "Swan Lagoon (Japan).wsc", SwanLagoon)],
+            [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)], [IngestSeeder.WonderSwanDat] = [new FixtureGame("Mono Flag (Japan)", "Mono Flag (Japan).ws", MonoFlag)], [IngestSeeder.WonderSwanColorDat] = [new FixtureGame("Swan Lagoon (Japan)", "Swan Lagoon (Japan).wsc", SwanLagoon)], [IngestSeeder.Sg1000Dat] = [new FixtureGame("Bamboo Run (Japan)", "Bamboo Run (Japan).sg", BambooRun)],
             [IngestSeeder.SuperGrafxDat] = [new FixtureGame("Twin Vdp (Japan)", "Twin Vdp (Japan).sgx", Sgx)],
             [IngestSeeder.PocketChallengeV2Dat] = [new FixtureGame("Quiz Ladder (Japan)", "Quiz Ladder (Japan).pc2", Challenge)], [IngestSeeder.PicoDat] = [new FixtureGame("Pen Pals (Japan)", "Pen Pals (Japan).md", Pals)],
             [IngestSeeder.ThreeDsDat] =
@@ -1190,6 +1191,9 @@ public class IngestPipelineTests
     [TestCase("pico", "relay.32x")]
     [TestCase("md", "pals.pco")]
     [TestCase("s32x", "pals.pco")]
+    [TestCase("sg1000", "harbor.sms")]
+    [TestCase("gg", "comet.sg")]
+    [TestCase("sms", "comet.sg")]
     public async Task SegaFile_InTheWrongFolderOrUnsupported_IsUnsupportedType(string folder, string name)
     {
         var result = await IngestAsync(Drop(folder, name, name.EndsWith(".sms") ? Harbor : Comet));
@@ -1246,6 +1250,44 @@ public class IngestPipelineTests
         var rom = await ResolveGameGearAsync(item, GameGearManual("Harbor Patrol Hack"));
 
         Assert.That((rom.FileName, rom.OriginalFileName), Is.EqualTo(("Harbor Patrol Hack (World).sms", "Harbor Patrol Hack.sms")));
+    }
+
+    [Test]
+    public async Task Sg1000_Matched_IsStoredUnderTheDatsName()
+    {
+        var result = await IngestAsync(Drop("sg1000", "bamboo.sg", BambooRun));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "sg1000")));
+        var game = ReadZip(Path.Combine("sg1000", "B", "Bamboo Run.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("sg1000", "Bamboo Run (Japan).sg")));
+        Assert.That(game.Roms.Single().Header, Is.Null);
+    }
+
+    [Test]
+    public async Task Sg1000_UnmatchedSc_GoesToReviewAndKeepsItsExtension()
+    {
+        var item = await ReviewAsync("sg1000", "keys.sc", Atari(16384, 1001));
+        Assert.That(item.SystemId, Is.EqualTo("sg1000"));
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Keys"));
+
+        Assert.That((rom.FileName, rom.OriginalFileName), Is.EqualTo(("Keys (World).sc", "keys.sc")));
+    }
+
+    [Test]
+    public async Task Sg1000_UnderTwoKiB_IsTooSmall()
+    {
+        var result = await IngestAsync(Drop("sg1000", "tiny.sg", Atari(2047, 1002)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooSmall)));
+    }
+
+    [Test]
+    public async Task Sg1000_OverOneMiB_IsTooLarge()
+    {
+        var result = await IngestAsync(Drop("sg1000", "huge.sg", Atari(1048577, 1003)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
     }
 
     [Test]

@@ -22,4 +22,7 @@ public enum JobType
 
     /// <summary>Admin actions R1: stores each IGDB-linked game's IGDB rating.</summary>
     IgdbSync,
+
+    /// <summary>SG-1000 S12: moves Master System games of SG-1000 dumps to SG-1000.</summary>
+    Sg1000Move,
 }

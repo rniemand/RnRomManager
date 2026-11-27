@@ -20,6 +20,7 @@ export interface SystemColour {
 		| 'coleco'
 		| 'gg'
 		| 'sms'
+		| 'sg1000'
 		| 'md'
 		| 's32x'
 		| 'tg16'

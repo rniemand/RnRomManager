@@ -71,6 +71,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Release editing B19: off by default, so other tests never race the save folder job for the lock.</summary>
     public bool RunSaveFoldersStarter { get; init; }
 
+    /// <summary>SG-1000 S13: off by default, so other tests never race the SG-1000 move job for the lock.</summary>
+    public bool RunSg1000MoveStarter { get; init; }
+
     /// <summary>B29: hosts the daily DAT refresh only when set; otherwise a real-database test could start a refresh at 04:00.</summary>
     public bool RunDatRefreshScheduler { get; init; }
 
@@ -173,6 +176,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             builder.ConfigureTestServices(services =>
             {
                 foreach (var starter in services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) && d.ImplementationType == typeof(SaveFoldersStarter)).ToList())
+                    services.Remove(starter);
+            });
+        if (!RunSg1000MoveStarter)
+            builder.ConfigureTestServices(services =>
+            {
+                foreach (var starter in services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) && d.ImplementationType == typeof(Sg1000MoveStarter)).ToList())
                     services.Remove(starter);
             });
         if (!RunDatRefreshScheduler)

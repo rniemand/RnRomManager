@@ -65,7 +65,8 @@ const jobLabels: Record<CurrentJob['type'], string> = {
 	ZipRepack: 'Repacking ZIPs',
 	SaveFolders: 'Moving Saves to User Folders',
 	PullCovers: 'Pull Cover Images',
-	IgdbSync: 'Refresh IGDB Ratings'
+	IgdbSync: 'Refresh IGDB Ratings',
+	Sg1000Move: 'Moving Games to SG-1000'
 };
 
 /** ROM Zip Config B17: a job type's short label (footer, Jobs page); an unknown type shows as is. */

@@ -599,7 +599,7 @@ describe('library page', () => {
 	});
 
 	it('an unknown system gets the neutral callout colour (L4)', async () => {
-		games.items[0].system = 'sg1000';
+		games.items[0].system = 'vectrex';
 		try {
 			url.current = new URL('http://localhost/');
 			render(LibraryPage);

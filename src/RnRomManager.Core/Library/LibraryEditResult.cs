@@ -40,6 +40,9 @@ public sealed record LibraryEditResult(string? Code = null, string? Details = nu
     public const string SavesIndexFull = "SavesIndexFull";
     public const string SavesIndexFullTitle = "This game has too many saves. Delete some first.";
 
+    /// <summary>SG-1000 S11: the game isn't (or is no longer) a Master System game of SG-1000 dumps, or its ZIP is gone; the move skips it.</summary>
+    public const string NotSg1000 = "NotSg1000";
+
     public static LibraryEditResult Ok { get; } = new();
 
     /// <summary>B8–B11: the save the operation added, changed or deleted.</summary>

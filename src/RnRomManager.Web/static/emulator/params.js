@@ -579,14 +579,16 @@ export function isolatedBrowserError(browser, core) {
  * 3DO B8: the same for an Opera disc named like any of the five 3DO BIOS files. TurboGrafx-CD B9: the same for any
  * Beetle PCE content named like a System Card or the Games Express card, disc or HuCard alike. MS-DOS P8: every DOSBox
  * Pure release is scoped to its game, since DOSBox Pure keeps its browser save under the content name and two games
- * may share a release name.
+ * may share a release name. SG-1000 S7: smsplus runs content in SG-1000 mode only for a lowercase `.sg` path
+ * (retro_load_game in smsplus_libretro.c) and has no `.sc` case, so a `.sg` or `.sc` release is named `.sg`.
  * @param {string} core
  * @param {string} game the game id
  * @param {string} name the release's file name
  * @returns {string}
  */
 export function contentFileName(core, game, name) {
-	const safe = name.replaceAll('#', '_');
+	const hashSafe = name.replaceAll('#', '_');
+	const safe = core === 'smsplus' ? hashSafe.replace(/\.s[gc]$/i, '.sg') : hashSafe;
 	const lower = name.toLowerCase();
 	const clashes =
 		(core === 'pcsx_rearmed' && lower === psxBios) ||

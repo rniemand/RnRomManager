@@ -93,4 +93,11 @@ public interface IGameRepository
     /// </summary>
     Task<IReadOnlyList<GameRow>> ListStorageMovesAsync(IReadOnlyCollection<string> embedSystemIds, IReadOnlyCollection<string> externalSystemIds,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// SG-1000 S10: games of <paramref name="systemId"/> with at least one ROM, every ROM's <c>original_file_name</c> ending in
+    /// <paramref name="extension"/> (ignoring case) and none identified by <c>Dat</c>, by ZIP path. Candidates only: the move
+    /// re-opens each ZIP to decide.
+    /// </summary>
+    Task<IReadOnlyList<GameRow>> ListByOriginalExtensionAsync(string systemId, string extension, CancellationToken cancellationToken);
 }

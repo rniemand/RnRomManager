@@ -28,7 +28,8 @@ describe('job display helpers', () => {
 					'ZipRepack',
 					'SaveFolders',
 					'PullCovers',
-					'IgdbSync'
+					'IgdbSync',
+					'Sg1000Move'
 				] as const
 			).map(jobLabel)
 		).toEqual([
@@ -41,7 +42,8 @@ describe('job display helpers', () => {
 			'Repacking ZIPs',
 			'Moving Saves to User Folders',
 			'Pull Cover Images',
-			'Refresh IGDB Ratings'
+			'Refresh IGDB Ratings',
+			'Moving Games to SG-1000'
 		]);
 		expect(jobLabel('Other')).toBe('Other');
 	});
