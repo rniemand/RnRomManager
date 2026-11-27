@@ -29,12 +29,12 @@ Adds two disc systems to `RnRomManager.Systems.Commodore`: **Commodore Amiga CD3
   | `DatName` | `Commodore - CD32` (libretro `metadat/redump/Commodore - CD32.dat`, 205 games, one `.bin` each; libretro-thumbnails `Commodore_-_CD32`) | `Commodore - CDTV` (65 games, one `.bin` each; `Commodore_-_CDTV`) |
   | `DatFolder` / `MetadatKinds` | `DatKind.Redump` / `[]` | same |
   | `EmbedRomsInZip` / `FileSets` | false / true | same |
-  | `BrowserCore` | null until Step 5, then `puae` | same |
+  | `BrowserCore` | null until Step 6, then `puae` | same |
   | `ReadHeader` | null always | same |
   | `DefaultBoxArtPng` | `BoxArt.Lazy(typeof(Cd32Handler), "boxart.cd32.png")`; new 512×512 placeholder `cd32.svg` + `cd32.png` | `BoxArt.Lazy(typeof(CdtvHandler), "boxart.cdtv.png")`; `cdtv.svg` + `cdtv.png` |
 
   `Resources/boxart/README.md`: the source sentence becomes "`c64.svg`, `c128.svg`, `pet.svg`, `plus4.svg`, `vic20.svg`, `amiga.svg`, `cd32.svg` and `cdtv.svg` are the sources (made for this project, MIT)." Each system has its own family, so a disc in `ingest/cd32/` is never tried against the CDTV DAT, and the other way round. The class doc comment states the DAT facts above. Each `BrowserCore` comment reads `/// <summary>CD32 A5 (CDTV A5): PUAE, vendored; needs the operator's Kickstart ROMs.</summary>`.
-- **A2 Registration.** In `AppHost.AddSystemHandlers`, `services.AddSystemHandler<Cd32Handler>();` then `services.AddSystemHandler<CdtvHandler>();` go last. Today that's after `WonderSwanColorHandler`; if another spec has appended handlers since, they still go last. The Commodore project is already referenced and is in the Dockerfile restore layer. Startup creates `ingest/cd32/` and `ingest/cdtv/` with their `_*` folders. `/api/systems` (`DisplayName`, `OrdinalIgnoreCase`) lists `Commodore Amiga`, `Commodore Amiga CD32`, `Commodore CDTV`, `Commodore PET` in that order. `/api/admin/dats` (`DatName`, `Ordinal`) lists `Commodore - CD32` and `Commodore - CDTV` between `Commodore - Amiga` and `Commodore - Commodore 64`. (Ordinal: `D` < `o`, and `3` < `T`.) A DAT refresh fetches two more Redump files. Ingestion refuses with `DatsMissing` until **Admin → DATs → Refresh DATs** has run.
+- **A2 Registration.** In `AppHost.AddSystemHandlers`, `services.AddSystemHandler<Cd32Handler>();` then `services.AddSystemHandler<CdtvHandler>();` go last. Today that's after `WonderSwanColorHandler`; if another spec has appended handlers since, they still go last. The Commodore project is already referenced and is in the Dockerfile restore layer. Startup creates `ingest/cd32/` and `ingest/cdtv/` with their `_*` folders. `/api/systems` (`DisplayName`, `OrdinalIgnoreCase`) lists `Commodore Amiga`, `Commodore Amiga CD32`, `Commodore CDTV`, `Commodore PET` in that order. `/api/admin/dats` (`DatName`, `Ordinal`) lists `Commodore - CD32` and `Commodore - CDTV` between `Commodore - Amiga` and `Commodore - PET` (the order is `Commodore - 64`, `Commodore - Amiga`, `Commodore - CD32`, `Commodore - CDTV`, `Commodore - PET`). A DAT refresh fetches two more Redump files. Ingestion refuses with `DatsMissing` until **Admin → DATs → Refresh DATs** has run.
 - **A3 Colour, icon, catalogs.**
   - `app.css` gets two blocks directly after the `amiga` block, laid out like it:
     - `/* Amiga CD32 system colour: a deep CD32 violet, same in both themes; white on it is AAA (~12:1). */`, `:root { --bs-cd32: #3d2b6b; }`, `.text-bg-cd32 { color: #fff !important; background-color: var(--bs-cd32) !important; }`
@@ -84,7 +84,7 @@ Adds two disc systems to `RnRomManager.Systems.Commodore`: **Commodore Amiga CD3
   - The `ExternalBrowserCores` doc comment gains ", (CD32 A10) PUAE for Amiga CD32 and CDTV".
 - **A11 BIOS Info.** `BiosInfo.Catalog` gains three groups after `PC-FX`:
   - `new("Commodore Amiga CD32", Need.All, [UpTo("kick40060.CD32", MiB)], "PUAE needs a CD32 Kickstart for every game: the 512 KiB ROM with kick40060.CD32.ext, or the 1 MiB combined ROM.")`
-  - `new("Commodore Amiga CD32 (extended ROM)", Need.Optional, [Exact("kick40060.CD32.ext", 512 * KiB)], "Needed unless kick40060.CD32 is the 1 MiB combined ROM.")`
+  - `new("Commodore Amiga CD32 (extended ROM)", Need.Optional, [Exact("kick40060.CD32.ext", 512 * KiB)], "Needed unless kick40060.CD32 is the 1 MiB combined ROM.")`. Its `ok` mirrors the play page (A7): in `Check`, `kick40060.CD32` is checked once up front (`CheckFile` on the CD32 group's file), and this group's `ok` is additionally `files[0].Status == "Valid" || cd32Kick.Size > 512 * KiB` (a `private const string Cd32ExtGroup` names the group). So a 512 KiB Kickstart without the `.ext` shows this group not ok, while a 1 MiB combined one, or no Kickstart at all (the CD32 group already shows that), leaves it ok.
   - `new("Commodore CDTV", Need.All, [Exact("kick34005.A500", 256 * KiB), Exact("kick34005.CDTV", 256 * KiB)], "PUAE needs Kickstart 1.3 and the CDTV extended ROM for every game.")`
 
   The Admin BIOS tab renders the catalog generically, so it needs no SPA change.
@@ -93,12 +93,13 @@ Adds two disc systems to `RnRomManager.Systems.Commodore`: **Commodore Amiga CD3
     - `| Commodore Amiga CD32 | `cd32` | Next to ZIP | `.bin`, `.cue`, `.nrg`, `.chd`, `.iso`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | — |`
     - `| Commodore CDTV | `cdtv` | … | Redump | — |`
 
-    Their Play cells become `` `puae` `` in Step 5.
-  - Prose edits in Step 7:
+    Their Play cells become `` `puae` `` in Step 6.
+  - Prose edits in Step 8:
     - In the intro, "a PlayStation, Saturn, Sega CD, 3DO, TurboGrafx-CD or PC-FX bin/cue set" gains ", Amiga CD32 or CDTV" after `PC-FX`, and so does the `.chd` sentence.
     - The **Game detail** Play list gains `Commodore Amiga CD32` and `Commodore CDTV` after `PC-FX`, followed by the clause "; CD32 and CDTV play one disc per launch, up to 2 GiB, a cue set, an `.iso`, a `.chd` or an `.nrg` (never a lone `.bin`), and need Kickstart ROMs in `data/bios/` (`kick40060.CD32`, plus `kick40060.CD32.ext` unless it is the 1 MiB combined ROM; `kick34005.A500` and `kick34005.CDTV` for CDTV)".
+    - The **Game detail** sentence "PlayStation, Saturn, Sega CD, 3DO, TurboGrafx-CD and PC-FX also play a CloneCD, MDS or TOC rip" gains ", Amiga CD32 and CDTV" after `PC-FX` ("…, TurboGrafx-CD, PC-FX, Amiga CD32 and CDTV also play…").
     - The upgrade note's system list gains both names after `PC-FX`.
-    - In the attribution, the PUAE line's `(Commodore Amiga)` becomes `(Commodore Amiga, Amiga CD32 and CDTV)`, and gains the sentence "No Kickstart ROM is included."
+    - In the attribution, the PUAE line's `(Commodore Amiga)` becomes `(Commodore Amiga, Amiga CD32 and CDTV)`; its closing "No Commodore Kickstart ROM is included." already covers the Kickstarts
 
 ## Changes
 | Area | File(s) | Change |
@@ -122,11 +123,11 @@ There's no migration (`system_id` is a `VARCHAR`), no new config key and no new 
 - **Every full-registry DAT manifest must list both new DATs** once the handlers are registered, or ingestion fails with `DatsMissing`. Step 2 updates them all in one commit.
 - **Parallel specs.** Other pending specs (SG-1000, Pico, SuperGrafx, Pocket Challenge V2) also add systems. Every count below is given as a change ("+2"), and positions are given relative to an anchor rather than a line number. Whoever merges second re-derives the absolute values.
 - **Kickstart, model and NVRAM are read from source, not run** (A7, A8). The maintainer's post-merge boot check confirms them. Until then, the risk is an in-core "Kickstart ROM not found" message, not data loss.
-- **`puae` joins the external and play-disc sets.** Amiga floppies are always embedded, so the `external === null` path is unchanged. Step 6's tests prove that an `.adf`, `.adz` or `.ipf` keeps its eligibility.
-- **`discError`/status wording change (A9).** The existing `puae`/`vice_xplus4` cases all pass `set=true` and keep their text. Step 5 adds the `set=false` case.
+- **`puae` joins the external and play-disc sets.** Amiga floppies are always embedded, so the `external === null` path is unchanged. Step 7's tests prove that an `.adf`, `.adz` or `.ipf` keeps its eligibility.
+- **`discError`/status wording change (A9).** The existing `puae`/`vice_xplus4` cases all pass `set=true` and keep their text. Step 6 adds the `set=false` case.
 
 ## Steps
-Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need Docker. Playwright runs only in Finish and needs no change.
+Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which need Docker. Playwright runs only in Finish and needs no change.
 
 - [ ] **1. CD32 and CDTV handlers** (A1, with `BrowserCore` null): the two handlers and their box art. `IngestSeeder.Cd32Dat`/`CdtvDat` are added to `RedumpLayouts` and `EmptyDats`, but the seeder doesn't write them yet. Not registered.
   - Files: `Cd32Handler.cs`, `CdtvHandler.cs`, the four box-art files, `Resources/boxart/README.md`, `tests/RnRomManager.Systems.Commodore.Tests/Cd32HandlerTests.cs` and `CdtvHandlerTests.cs` (new), `IngestSeeder.cs`.
@@ -142,7 +143,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
   - `IngestSeeder`: the disc-folder loop and the `FixtureDatWriter.Write` entries (Changes table).
   - Every test file whose full-registry manifest lists `IngestSeeder.PcfxDat` adds `[IngestSeeder.Cd32Dat] = [], [IngestSeeder.CdtvDat] = []` after it. Today those are `AuditLibraryEditTests`, `DatEndpointsTests`, `GamePlayedEndpointTests`, `ImageEndpointsTests`, `ImageUrlEndpointsTests`, `IngestArchiveTests`, `IngestDeleteEndpointsTests`, `IngestEndpointsTests`, `IngestPipelineTests`, `IngestRestoreEndpointsTests`, `IngestReviewTests`, `LibraryEditTests`, `LibraryEndpointsTests`, `LibraryMoveMergeTests`, `MediaRetryEndpointsTests`, `NoteEndpointsTests`, `ReportEndpointsTests`, `ReviewEndpointsTests` and `ZipEntryEndpointsTests`. `PcfxHandlerTests` (a one-entry manifest) stays as it is. Before committing, grep `tests/` and check that every full manifest listing `IngestSeeder.PcfxDat` also lists both new DATs.
   - Counts and orders:
-    - `DatEndpointsTests`: the names count +2, with its message's disc-system count +2 ("the 12 disc systems" today). The ordinal list gains `IngestSeeder.Cd32Dat` and `IngestSeeder.CdtvDat` where `Ordinal` puts them (after `IngestSeeder.AmigaDat`). Refresh requests +2.
+    - `DatEndpointsTests`: the names count +2, with its message's "the 10 disc systems" becoming "the 12 disc systems". The ordinal list gains `IngestSeeder.Cd32Dat` and `IngestSeeder.CdtvDat` where `Ordinal` puts them (after `IngestSeeder.AmigaDat`). Refresh requests +2.
     - `IngestSeederTests`: `.dat` files +2.
     - `SystemStartupTests`: both id lists end `…, "cd32", "cdtv"`. `IngestEndpointsTests.Pending_ListsEverySystem_IgnoringJunk` likewise.
     - `LibraryEndpointsTests`: the display-name-ordered id list gains `"cd32", "cdtv"` right after `"amiga"`, and the `displayName` list gains `"Commodore Amiga CD32", "Commodore CDTV"` right after `"Commodore Amiga"`. Two new asserts after the `pcfx` one, in its form: `Find("cd32")` → `("Commodore Amiga CD32", "CD32")` and `Find("cdtv")` → `("Commodore CDTV", "CDTV")`. The `embedRoms` true count is unchanged.
@@ -174,8 +175,14 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
     - Every existing case passes unchanged.
     - `ShapeProblem`'s doc comment gains "CD32 A5: Amiga CD32 and CDTV take a cue, TOC, CloneCD or MDS set, or a single `.iso`, `.chd` or `.nrg`."
   - Done when: `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~LibraryEndpointsTests|FullyQualifiedName~PlayDiscCopyTests"` passes.
-- [ ] **5. Play page, BIOS Info and `BrowserCore`** (A6's `parsePlayParams` part, A7, A8, A9, A11, A1's `BrowserCore`, and A12's Play cells). Nothing produces a CD32/CDTV play link yet: every release is external, and `puae` isn't in the external core sets until Step 6.
-  - Files: `params.js`, `play.js`, `BiosInfo.cs`, `Cd32Handler.cs`, `CdtvHandler.cs`, `README.md` (Play cells), `BrowserCoreExtensionsTests.cs`, `EmulatorEndpointsTests.BiosInfo.cs`, and the vitest files below.
+- [ ] **5. BIOS Info** (A11): the three catalog groups and the CD32 extended-ROM rule in `BiosInfo.Check`.
+  - Files: `BiosInfo.cs`, `tests/RnRomManager.Api.Tests/Integration/EmulatorEndpointsTests.BiosInfo.cs`.
+  - Tests (`EmulatorEndpointsTests.BiosInfo`):
+    - `BiosInfo_reports_valid_wrong_size_missing_and_other_files` adds: `Group(info, "Commodore Amiga CD32")` `ok` false (absent); `"Commodore Amiga CD32 (extended ROM)"` `ok` true (no Kickstart, so not needed); `"Commodore CDTV"` `ok` false.
+    - `BiosInfo_amiga_cd_kickstarts` (new): a 512 KiB `kick40060.CD32` alone → CD32 group ok, extended-ROM group not ok (`kick40060.CD32.ext` `Missing`); adding a 512 KiB `kick40060.CD32.ext` → both ok; replacing the Kickstart with a 1 MiB one and deleting the `.ext` → both ok; 256 KiB `kick34005.A500` with a 128 KiB `kick34005.CDTV` → `kick34005.CDTV` `WrongSize`, CDTV group not ok.
+  - Done when: `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~EmulatorEndpointsTests"` passes (Docker running).
+- [ ] **6. Play page and `BrowserCore`** (A6's `parsePlayParams` part, A7, A8, A9, A1's `BrowserCore`, and A12's Play cells). Nothing produces a CD32/CDTV play link yet: every release is external, and `puae` isn't in the external core sets until Step 7.
+  - Files: `params.js`, `play.js`, `Cd32Handler.cs`, `CdtvHandler.cs`, `README.md` (Play cells), `BrowserCoreExtensionsTests.cs`, and the vitest files below.
   - Tests:
     - `Cd32HandlerTests`/`CdtvHandlerTests`: `BrowserCore` is `puae`. `SupportedSystemsTableTests`.
     - `BrowserCoreExtensionsTests`:
@@ -186,11 +193,6 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
       - PUAE lists `cue`, `nrg`, `chd`, `iso`, `ccd` and `mds`, so those need no entry.
       - The stale-exception list in `ProblemsAreNamed` gains the matching `"cd32 .<ext>: stale exception (no such system)"` and `"cdtv …"` lines in the same order.
       - `NotIngested` drops the `(NewSystem, ["puae"], [".cue", ".ccd", ".nrg", ".mds", ".iso", ".chd"])` group, which CD32 now ingests. `EveryCoreExtension_IsIngestedOrListed` passes without it.
-    - `EmulatorEndpointsTests.BiosInfo`: `BiosInfo_reports_valid_wrong_size_missing_and_other_files` adds:
-      - `Group(info, "Commodore Amiga CD32")` `ok` false with the folder empty of it;
-      - `"Commodore Amiga CD32 (extended ROM)"` `ok` true (optional and absent);
-      - `"Commodore CDTV"` `ok` false.
-    - New `BiosInfo_amiga_cd_kickstarts` (new): writing a 1 MiB `kick40060.CD32` → `Valid`, group ok; writing 256 KiB `kick34005.A500` and 128 KiB `kick34005.CDTV` → `kick34005.CDTV` is `WrongSize`, group not ok.
     - `emulatorParams.test.ts`:
       - `parsePlayParams` accepts `system=cd32` and `system=cdtv` with `core=puae&disc=1` (`.system` set), and returns null for:
         - `system` without `disc`;
@@ -202,14 +204,14 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
       - Existing links give `system` null.
       - `discError(500, 'IoError', 'puae', false)` is `"Couldn't load the disc (HTTP 500)."`, and `discError(409, 'InvalidPlayDisc', 'puae')` is the disc message.
       - `cdtvBiosSizeError('kick34005.CDTV')` returns A7's text.
-    - `emulatorPlay.test.ts`: a new `describe('play page Amiga CD32 and CDTV (CD32 A7, A8)')` after `describe('play page Amiga disk sets (Amiga F7)')`, using `play('puae', 'Disc Chick (Europe).cue', true)`, a `system` query value, and the play-disc URL pattern. Cases:
+    - `emulatorPlay.test.ts`: a new `describe('play page Amiga CD32 and CDTV (CD32 A7, A8)')` after `describe('play page Amiga disk sets (Amiga F7)')`, with a local helper `playAmigaCd(system: 'cd32' | 'cdtv')` (new, beside `playDisks`, as it is built) that sets `game`, `rom` `12`, `core` `puae`, `name` `Disc Chick (Europe) (Track 01).bin`, `disc` `1` and `system`, then awaits `started` and returns the status (`play(core, name, disc)` can't add `system`); the play-disc URL is `/api/games/${game}/roms/12/play-disc`. Cases:
       - CD32 with a 512 KiB `kick40060.CD32` and a 512 KiB `.ext`: requests go `kick40060.CD32` → `kick40060.CD32.ext` → play-disc. `EJS_externalFiles` has both keys. `EJS_defaultOptions.puae_model` is `'CD32'`. `EJS_hideSettings` is `['puae_model']`. The status shows `Downloading disc…`.
       - CD32 with a 1 MiB `kick40060.CD32`: no `.ext` request.
       - CD32: a 404 on `kick40060.CD32` shows `cd32BiosMissing`; a 404 on `.ext` (after a 512 KiB Kickstart) shows `cd32ExtMissing`; a 1 MiB + 1 byte Kickstart shows `cd32KickstartSizeError`. None of these makes a play-disc or loader request.
       - CDTV: requests go `kick34005.A500` → `kick34005.CDTV` → play-disc, and `puae_model` is `'CDTV'`. A 404 on either shows `cdtvBiosMissing`. A 128 KiB `kick34005.CDTV` shows `cdtvBiosSizeError('kick34005.CDTV')`.
       - The existing Amiga disk-set cases pass unchanged: no Kickstart request, `Downloading disks…`, no `puae_model`.
-  - Done when: `npm run lint`, `npm run check`, `npx vitest run src/lib/emulatorParams.test.ts src/lib/emulatorPlay.test.ts` and the `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`, `EmulatorEndpointsTests` and `dotnet test tests/RnRomManager.Systems.Commodore.Tests` runs pass.
-- [ ] **6. Enable CD32/CDTV Play** (A6's `playUrl` part, A10): the API's and SPA's external and play-disc core sets, the lone `.bin` rule, `playUrl`'s `system`, and its callers.
+  - Done when: `npm run lint`, `npm run check`, `npx vitest run src/lib/emulatorParams.test.ts src/lib/emulatorPlay.test.ts` and the `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests` and `dotnet test tests/RnRomManager.Systems.Commodore.Tests` runs pass.
+- [ ] **7. Enable CD32/CDTV Play** (A6's `playUrl` part, A10): the API's and SPA's external and play-disc core sets, the lone `.bin` rule, `playUrl`'s `system`, and its callers.
   - Files: `LibraryEndpoints.cs`, `LibraryDtos.cs`, `emulator.ts`, `EmulatorModal.svelte`, `GameResults.svelte`, `GameSaves.svelte`, `routes/games/[id]/+page.svelte`, and the tests below.
   - Tests:
     - `LibraryEndpointsTests`:
@@ -223,7 +225,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
       - In `describe('playUrl')`, a new case: `playUrl('g-8', { id: 2, fileName: 'Disc Chick (Europe) (Track 01).bin' }, 'puae', true, null, null, 'cd32')` is `/emulator/play.html?game=g-8&rom=2&core=puae&name=Disc%20Chick%20(Europe)%20(Track%2001).bin&disc=1&system=cd32`. Also `system` `'amiga'` or null adds nothing.
     - `EmulatorModal.test.ts`: the iframe `src` carries `&system=cdtv` when mounted with `system="cdtv"`, `disc` true and core `puae`.
   - Done when: those pass, and `npm run lint` and `npm run check` pass.
-- [ ] **7. Docs**:
+- [ ] **8. Docs**:
   - `README.md`: A12's intro, Play, upgrade-note and attribution items (the rows are already in).
   - `docs/features.md`:
     - The systems list (line 3) gains both names after `PC-FX`, and so does the **Play** list.
@@ -249,6 +251,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
   - `docs/development.md` (Browser emulators):
     - The **Play page** bullet's `parsePlayParams` list gains "an optional `system` (`cd32` or `cdtv`, only with `puae` and `disc=1`, no `set`)".
     - The **`disc` flag** bullet gains "Amiga CD32 and CDTV on `puae`".
+    - The **Multi-disc sets** bullet's `playUrl(gameId, rom, core, disc, save, setName)` becomes `playUrl(gameId, rom, core, disc, save, setName, system)`, with "; `system` adds `&system=cd32|cdtv` for an Amiga CD launch".
     - The **Multi-disc sets** bullet's sentence about floppy wording gains "(only with `set`; a single CD32/CDTV disc keeps disc wording)".
     - A new bullet after **PC-FX**: "**Amiga CD32 and CDTV (`puae` with `disc` and `system`):** PUAE plays these discs from `play-disc`. Before the disc, the play page loads the Kickstart ROMs through `loadOptionalBios` and hands them over in `EJS_externalFiles` at the content root, which is PUAE's system directory, since EmulatorJS sets none. For CD32, `kick40060.CD32` (1 byte–1 MiB) is loaded first, then `kick40060.CD32.ext` (exactly 512 KiB) when the Kickstart is 512 KiB or less: PUAE uses a larger one as the combined ROM. For CDTV, `kick34005.A500` and `kick34005.CDTV` are loaded (exactly 256 KiB each). The page sets `EJS_defaultOptions.puae_model` to `CD32` or `CDTV` and hides `puae_model`, since on `Automatic` PUAE picks CDTV only from a path containing `CDTV`. A lone `.bin` never gets a Play button: PUAE is on EmulatorJS's disable-cue list."
   - Done when: every item is in its doc, `SupportedSystemsTableTests` passes and `pwsh scripts/codemap.ps1` is clean.
@@ -263,6 +266,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
 - 2026-11-27 Model → `EJS_defaultOptions.puae_model` explicit and `puae_model` hidden: `Automatic` defaults every CD to CD32 and picks CDTV only from a path containing `CDTV` (code)
 - 2026-11-27 Disk wording → only for sets, so a CD32/CDTV disc gets disc wording without knowing the system (code)
 - 2026-11-27 DAT facts → CD32 205 games, CDTV 65, one `.bin` each, largest 643,311,984 / 767,163,600; IGDB 114 / 158; libretro-thumbnails folders exist (code: read 2026-11-27)
+- 2026-11-27 Independent review → R1 DAT order is `Commodore - 64`, Amiga, CD32, CDTV, PET; R2 DatEndpointsTests message 10 → 12; R3 README PUAE line already says no Kickstart is included; R4 named `playAmigaCd` helper; R5 BIOS Info's extended-ROM group follows the Kickstart's size; R6 BIOS Info is its own Step 5 (Steps renumbered to 8); R7 README CloneCD/MDS/TOC sentence and development.md's `playUrl` signature (reviewer)
 - 2026-11-27 Review → self-reviewed against the code (this fork may not start a Plan reviewer): the new-tab `playUrl` callers need no `system`; the quick-play and core tests already hold Amiga floppy cases; the DAT ordinal order pinned; counts given as deltas because parallel system specs move them (reviewer)
 
 ### Open questions
