@@ -58,7 +58,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Nintendo 3DS | `3ds` | Next to ZIP (configurable) | `.3ds`, `.cci`, `.cia` | No-Intro | `azahar` |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64`, `.bin`, `.u1` | No-Intro | `mupen64plus_next` |
 | Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds`, `.ids` | No-Intro | `desmume` |
-| Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
+| Nintendo Entertainment System | `nes` | In ZIP | `.nes`, `.unf`, `.unif` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz`, `.hdf` | titledb | — |
 | PC Engine SuperGrafx | `sgx` | In ZIP | `.sgx` | No-Intro | `mednafen_pce` |
 | PC-FX | `pcfx` | Next to ZIP | `.bin`, `.cue`, `.chd`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `mednafen_pcfx` |

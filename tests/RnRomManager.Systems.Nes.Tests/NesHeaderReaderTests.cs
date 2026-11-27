@@ -1,3 +1,5 @@
+using RnRomManager.Core.Systems;
+
 namespace RnRomManager.Systems.Nes.Tests;
 
 /// <summary>N4: every header field for iNES and NES 2.0, from hand-written headers.</summary>
@@ -148,5 +150,78 @@ public class NesHeaderReaderTests
                 "NES\x1A"u8.CopyTo(rom);
             Assert.DoesNotThrow(() => NesHeaderReader.Read(rom));
         }
+    }
+    /// <summary>A 32-byte UNIF header followed by the given chunks, each an id and its raw data (length from the data).</summary>
+    private static byte[] Unif(params (string Id, byte[] Data)[] chunks)
+    {
+        var rom = new List<byte>("UNIF"u8.ToArray());
+        rom.AddRange(new byte[28]);
+        foreach (var (id, data) in chunks)
+        {
+            rom.AddRange(System.Text.Encoding.ASCII.GetBytes(id));
+            rom.AddRange(BitConverter.GetBytes((uint)data.Length));
+            rom.AddRange(data);
+        }
+
+        return [.. rom];
+    }
+
+    private static byte[] Text(string s) => System.Text.Encoding.UTF8.GetBytes(s);
+
+    [Test]
+    public void Unif_WithNameAndMapr_ReadsTitleAndBoard()
+    {
+        var rom = Unif(("NAME", Text(" Homebrew Quest \0junk")), ("PRG0", new byte[64]), ("MAPR", Text("NES-UNROM\0")));
+
+        var header = NesHeaderReader.Read(rom)!;
+
+        Assert.That((header.ClassifiedSystemId, header.Title, header.IsPlausible), Is.EqualTo(("nes", "Homebrew Quest", true)));
+        Assert.That(header.Fields, Is.EqualTo(new Dictionary<string, object?>
+        {
+            ["headerValid"] = true,
+            ["format"] = "UNIF",
+            ["board"] = "NES-UNROM",
+            ["romSizeBytes"] = rom.Length,
+        }));
+    }
+
+    [Test]
+    public void Unif_WithoutChunks_HasNullTitleAndBoard()
+    {
+        var header = NesHeaderReader.Read(Unif())!;
+        Assert.That((header.Title, header.IsPlausible, header.Fields["board"], header.Fields["format"]),
+            Is.EqualTo(((string?)null, true, (object?)null, "UNIF")));
+    }
+
+    [Test]
+    public void Unif_EmptyName_IsNull() =>
+        Assert.That(NesHeaderReader.Read(Unif(("NAME", Text("  \0"))))!.Title, Is.Null);
+
+    [TestCase(1000u, TestName = "Unif length past the end stops the walk")]
+    [TestCase(0xFFFFFFFFu, TestName = "Unif length 0xFFFFFFFF stops the walk")]
+    public void Unif_ALengthPastTheEnd_StopsTheWalk(uint length)
+    {
+        var rom = Unif(("NAME", Text("First")), ("MAPR", Text("Board")));
+        // Overwrite NAME's length; the walk stops there, so neither chunk is read.
+        BitConverter.GetBytes(length).CopyTo(rom, 36);
+
+        RomHeader? header = null;
+        Assert.DoesNotThrow(() => header = NesHeaderReader.Read(rom));
+        Assert.That((header!.Title, header.Fields["board"]), Is.EqualTo(((string?)null, (object?)null)));
+    }
+
+    [Test]
+    public void Unif_ARepeatedName_KeepsTheFirst() =>
+        Assert.That(NesHeaderReader.Read(Unif(("NAME", Text("First")), ("NAME", Text("Second"))))!.Title, Is.EqualTo("First"));
+
+    [Test]
+    public void Unif_Under32Bytes_FallsBackToINes()
+    {
+        var rom = new byte[31];
+        "UNIF"u8.CopyTo(rom);
+
+        var header = NesHeaderReader.Read(rom)!;
+
+        Assert.That((header.IsPlausible, header.Fields["format"], header.Fields.Count), Is.EqualTo((false, (object?)null, 10)));
     }
 }

@@ -169,7 +169,6 @@ public class BrowserCoreExtensionsTests
         (NewSystem, ["puae"], [".cue", ".ccd", ".nrg", ".mds", ".iso", ".chd"]),
         (NotAGame, Vice, [".vsf", ".cmd", ".vfl"]),
         (NotAGame, ["puae"], [".uae", ".info", ".slave"]),
-        (NoDat, ["fceumm"], [".unf", ".unif"]),
         (NoDat, ["pcsx_rearmed"], [".exe"]),
         (NoDat, ["puae"], [".hdf", ".hdz", ".lha", ".fdi", ".raw", ".dms"]),
         (NoDat, ["handy"], [".o"]),
