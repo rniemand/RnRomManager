@@ -14,6 +14,15 @@
 // takes gexpress.pce when present, then loads from play-disc.
 import {
 	biosError,
+	cd32BiosMissing,
+	cd32ExtBytes,
+	cd32ExtMissing,
+	cd32ExtSizeError,
+	cd32KickstartMaxBytes,
+	cd32KickstartSizeError,
+	cdtvBiosBytes,
+	cdtvBiosMissing,
+	cdtvBiosSizeError,
 	diskSetCores,
 	biosFor,
 	contentFileName,
@@ -577,6 +586,8 @@ async function start() {
 	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
 	const isThreeDo = params.core === 'opera';
 	const isTurboGrafxCd = params.core === 'mednafen_pce' && params.disc;
+	// CD32 A7: an Amiga CD32 or CDTV disc; an Amiga floppy (no `system`) boots PUAE's built-in AROS.
+	const isAmigaCd = params.core === 'puae' && params.system !== null;
 	const isRomset = params.core in romsetSystems;
 	// PSP B3, MS-DOS P7: an isolated page is its own tab, with no modal to talk to.
 	if (player === undefined) listenForMessages(isThreeDo);
@@ -669,13 +680,38 @@ async function start() {
 		if ('error' in gamesExpress) return show(gamesExpress.error);
 		if (gamesExpress.bios) turboGrafxCdFirmware[`/${turboGrafxCdGamesExpress}`] = gamesExpress.bios;
 	}
+	// CD32 A7: PUAE's Kickstarts, one at a time; a missing one, or any other problem, stops the launch there. A CD32
+	// Kickstart over 512 KiB is the combined ROM and needs no extended ROM.
+	/** @type {Record<string, ArrayBuffer>} */
+	const amigaCdFirmware = {};
+	if (isAmigaCd) {
+		const kickstart = 'kick40060.CD32';
+		const files =
+			params.system === 'cd32'
+				? [{ name: kickstart, bytes: cd32KickstartMaxBytes, sizeError: cd32KickstartSizeError, exact: false, missing: cd32BiosMissing }]
+				: ['kick34005.A500', 'kick34005.CDTV'].map((name) => ({
+						name,
+						bytes: cdtvBiosBytes,
+						sizeError: cdtvBiosSizeError(name),
+						exact: true,
+						missing: cdtvBiosMissing
+					}));
+		for (const file of files) {
+			const result = await loadOptionalBios(file.name, file.bytes, file.sizeError, file.exact);
+			if ('error' in result) return show(result.error);
+			if (!result.bios) return show(file.missing);
+			amigaCdFirmware[`/${file.name}`] = result.bios;
+			if (file.name === kickstart && result.bios.byteLength <= cd32ExtBytes)
+				files.push({ name: `${kickstart}.ext`, bytes: cd32ExtBytes, sizeError: cd32ExtSizeError, exact: true, missing: cd32ExtMissing });
+		}
+	}
 
 	/** @type {Blob} */
 	let content;
 	// Sega CD B6: `disc=1` also loads from play-disc, for a core (Genesis Plus GX) that plays cartridges too.
 	// 3DO B7: Opera plays only discs, so it loads from play-disc with or without `disc=1`, like Yabause.
 	if (isPsx || isPsp || isSaturn || isThreeDo || params.disc) {
-		show(diskSetCores.includes(params.core) ? 'Downloading disks…' : 'Downloading disc…');
+		show(diskSetCores.includes(params.core) && params.set ? 'Downloading disks…' : 'Downloading disc…');
 		// Multi-disc M6: a set loads every disc and its .m3u in one ZIP.
 		const endpoint = params.set ? 'play-disc-set' : 'play-disc';
 		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/${endpoint}`, params.core, params.set);
@@ -752,6 +788,12 @@ async function start() {
 		ejs.EJS_externalFiles = turboGrafxCdFirmware;
 		ejs.EJS_hideSettings = ['pce_cdbios'];
 	}
+	// CD32 A7/A8: PUAE finds its Kickstarts in the system directory, the content root here. On Automatic it picks CDTV
+	// only from a path containing "CDTV", so the model is set and hidden; a model saved for this game still wins.
+	if (isAmigaCd) {
+		ejs.EJS_externalFiles = amigaCdFirmware;
+		ejs.EJS_hideSettings = ['puae_model'];
+	}
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);
@@ -791,7 +833,9 @@ async function start() {
 					desmume_pointer_type: 'touch',
 					lockMouse: 'disabled'
 				}
-			: {})
+			: {}),
+		// CD32 A8: the model PUAE can't pick from a Redump name.
+		...(isAmigaCd ? { puae_model: params.system === 'cd32' ? 'CD32' : 'CDTV' } : {})
 	};
 	// PSP B3, MS-DOS P7, 3DS G4: PPSSPP, DOSBox Pure and azahar have only threaded builds (EmulatorJS refuses them
 	// without EJS_threads); the vendored loader also ignores a saved "threads disabled".

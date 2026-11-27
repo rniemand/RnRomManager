@@ -180,7 +180,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
     - `BiosInfo_reports_valid_wrong_size_missing_and_other_files` adds: `Group(info, "Commodore Amiga CD32")` `ok` false (absent); `"Commodore Amiga CD32 (extended ROM)"` `ok` true (no Kickstart, so not needed); `"Commodore CDTV"` `ok` false.
     - `BiosInfo_amiga_cd_kickstarts` (new): a 512 KiB `kick40060.CD32` alone → CD32 group ok, extended-ROM group not ok (`kick40060.CD32.ext` `Missing`); adding a 512 KiB `kick40060.CD32.ext` → both ok; replacing the Kickstart with a 1 MiB one and deleting the `.ext` → both ok; 256 KiB `kick34005.A500` with a 128 KiB `kick34005.CDTV` → `kick34005.CDTV` `WrongSize`, CDTV group not ok.
   - Done when: `dotnet test tests/RnRomManager.Api.Tests --filter "FullyQualifiedName~EmulatorEndpointsTests"` passes (Docker running).
-- [ ] **6. Play page and `BrowserCore`** (A6's `parsePlayParams` part, A7, A8, A9, A1's `BrowserCore`, and A12's Play cells). Nothing produces a CD32/CDTV play link yet: every release is external, and `puae` isn't in the external core sets until Step 7.
+- [x] **6. Play page and `BrowserCore`** (A6's `parsePlayParams` part, A7, A8, A9, A1's `BrowserCore`, and A12's Play cells). Nothing produces a CD32/CDTV play link yet: every release is external, and `puae` isn't in the external core sets until Step 7.
   - Files: `params.js`, `play.js`, `Cd32Handler.cs`, `CdtvHandler.cs`, `README.md` (Play cells), `BrowserCoreExtensionsTests.cs`, and the vitest files below.
   - Tests:
     - `Cd32HandlerTests`/`CdtvHandlerTests`: `BrowserCore` is `puae`. `SupportedSystemsTableTests`.
@@ -271,6 +271,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
 - 2026-11-27 Multi-disc sets for CD32/CDTV? → Out of scope; each disc plays alone (user)
 - 2026-11-27 Deep review → handlers now end with `SegaPicoHandler`; BIOS Info extended-ROM `ok` rule fixed for a missing Kickstart (null `Size`); `.iso` play-disc cases folded into `PlayDisc_AStandaloneChd_StreamsUnchanged`; `systemEmulators.json` entry order, doc-comment and README clause placement, `BrowserCore` comment text and the `discError` text pinned; stale parallel-spec list updated (reviewer)
 - 2026-11-27 Step 2 → the colour names also need the `SystemColour` union in `types/SystemColour.ts`, or `npm run check` fails (code)
+- 2026-11-27 `PlayCoreParityTests.SpaAndApiCoreLists_Match` (C5) fails from Step 4 to Step 6: `PlayDisc.SupportedSystems` lists `cd32`/`cdtv` before `puae` joins `PlayDiscCores` in Step 7 → accept it, Step 7 makes it pass again (user)
 
 ## Kickoff prompt
 ```text

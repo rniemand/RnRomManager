@@ -1629,6 +1629,8 @@ describe('play page Amiga disk sets (Amiga F7)', () => {
 			EJS_core: 'puae',
 			EJS_gameName: 'Twin Disk (1990)(Synth).m3u'
 		});
+		// CD32 A7, A8: a floppy set loads no Kickstart and sets no model.
+		expect(atLoader?.EJS_defaultOptions).not.toHaveProperty('puae_model');
 		const file = atLoader?.EJS_gameUrl as File;
 		expect(file.name).toBe('Twin Disk (1990)(Synth).m3u');
 		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disks);
@@ -1680,6 +1682,162 @@ describe('play page Amiga disk sets (Amiga F7)', () => {
 			}
 		});
 		expect((atLoader?.EJS_gameUrl as File).name).toBe('Pixel Quest.m3u');
+	});
+});
+
+describe('play page Amiga CD32 and CDTV (CD32 A7, A8)', () => {
+	const bios = (name: string) => `/api/emulator/bios/${name}`;
+	const discUrl = `/api/games/${game}/roms/12/play-disc`;
+	const disc = new Uint8Array([0x50, 0x4b, 3, 4, 7, 7]);
+	const kick = bios('kick40060.CD32');
+	const ext = bios('kick40060.CD32.ext');
+	const a500 = bios('kick34005.A500');
+	const cdtv = bios('kick34005.CDTV');
+	const firmware = (seed: number, size: number) =>
+		new Uint8Array(size).map((_, i) => (i + seed) % 241);
+	let discStatus = '';
+
+	function body(bytes: Uint8Array): FakeResponse {
+		const chunks = [bytes];
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				const next = chunks.shift();
+				if (next) controller.enqueue(next);
+				else controller.close();
+			}
+		});
+		return { ok: true, status: 200, body: stream } as unknown as FakeResponse;
+	}
+
+	/** Serves every Kickstart as 404 unless given, and the disc. */
+	function serveCd(found: Record<string, () => Promise<FakeResponse>>) {
+		discStatus = '';
+		serve({
+			...Object.fromEntries([kick, ext, a500, cdtv].map((url) => [url, async () => response(404)])),
+			...found,
+			[discUrl]: async () => {
+				discStatus = document.getElementById('status')!.textContent ?? '';
+				return {
+					ok: true,
+					status: 200,
+					body: null,
+					blob: async () => new Blob([disc])
+				} as FakeResponse;
+			}
+		});
+	}
+
+	async function playAmigaCd(system: 'cd32' | 'cdtv'): Promise<string> {
+		const query = new URLSearchParams({
+			game,
+			rom: '12',
+			core: 'puae',
+			name: 'Disc Chick (Europe) (Track 01).bin',
+			disc: '1',
+			system
+		});
+		history.replaceState(null, '', `/emulator/play.html?${query}`);
+		const { started } = await import('../../static/emulator/play.js');
+		await started;
+		return document.getElementById('status')!.textContent ?? '';
+	}
+
+	it('CD32 with a 512 KiB Kickstart: loads it, then its extended ROM, then the disc, as model CD32', async () => {
+		serveCd({
+			[kick]: async () => body(firmware(1, 524288)),
+			[ext]: async () => body(firmware(2, 524288))
+		});
+
+		expect(await playAmigaCd('cd32')).toBe('Starting emulator…');
+
+		expect(urls()).toEqual([kick, ext, discUrl]);
+		expect(discStatus).toBe('Downloading disc…');
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/kick40060.CD32', '/kick40060.CD32.ext']);
+		expect(new Uint8Array(files['/kick40060.CD32.ext'])).toEqual(firmware(2, 524288));
+		expect(atLoader?.EJS_defaultOptions).toMatchObject({ puae_model: 'CD32' });
+		expect(atLoader?.EJS_hideSettings).toEqual(['puae_model']);
+	});
+
+	it('CD32 with the 1 MiB combined Kickstart: asks for no extended ROM', async () => {
+		serveCd({ [kick]: async () => body(firmware(1, 1048576)) });
+
+		await playAmigaCd('cd32');
+
+		expect(urls()).toEqual([kick, discUrl]);
+		expect(Object.keys(atLoader?.EJS_externalFiles as object)).toEqual(['/kick40060.CD32']);
+	});
+
+	it.each([
+		[
+			'no Kickstart',
+			{},
+			[kick],
+			'CD32 games need a Kickstart: ask an Admin to put kick40060.CD32 in the BIOS folder (Paths:Bios).'
+		],
+		[
+			'no extended ROM for a 512 KiB Kickstart',
+			{ [kick]: async () => body(firmware(1, 524288)) },
+			[kick, ext],
+			'This CD32 Kickstart needs its extended ROM: ask an Admin to put the 512 KiB kick40060.CD32.ext in the BIOS folder (Paths:Bios), or use the 1 MiB combined kick40060.CD32.'
+		],
+		[
+			'a Kickstart over 1 MiB',
+			{ [kick]: async () => body(firmware(1, 1048577)) },
+			[kick],
+			'The CD32 Kickstart kick40060.CD32 in the BIOS folder (Paths:Bios) is empty or larger than 1 MiB: ask an Admin to replace it.'
+		]
+	])('CD32 stops on %s, before the disc or the loader', async (_, found, requested, message) => {
+		serveCd(found);
+
+		expect(await playAmigaCd('cd32')).toBe(message);
+		expect(urls()).toEqual(requested);
+		expect(atLoader).toBeNull();
+	});
+
+	it('CDTV: loads kick34005.A500, then kick34005.CDTV, then the disc, as model CDTV', async () => {
+		serveCd({
+			[a500]: async () => body(firmware(3, 262144)),
+			[cdtv]: async () => body(firmware(4, 262144))
+		});
+
+		expect(await playAmigaCd('cdtv')).toBe('Starting emulator…');
+
+		expect(urls()).toEqual([a500, cdtv, discUrl]);
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/kick34005.A500', '/kick34005.CDTV']);
+		expect(new Uint8Array(files['/kick34005.CDTV'])).toEqual(firmware(4, 262144));
+		expect(atLoader?.EJS_defaultOptions).toMatchObject({ puae_model: 'CDTV' });
+		expect(atLoader?.EJS_hideSettings).toEqual(['puae_model']);
+	});
+
+	it.each([
+		['kick34005.A500', {}, [a500]],
+		['kick34005.CDTV', { [a500]: async () => body(firmware(3, 262144)) }, [a500, cdtv]]
+	])(
+		'CDTV stops when %s is missing, before the disc or the loader',
+		async (_, found, requested) => {
+			serveCd(found);
+
+			expect(await playAmigaCd('cdtv')).toBe(
+				'CDTV games need two BIOS files: ask an Admin to put kick34005.A500 and kick34005.CDTV in the BIOS folder (Paths:Bios).'
+			);
+			expect(urls()).toEqual(requested);
+			expect(atLoader).toBeNull();
+		}
+	);
+
+	it('CDTV stops on a 128 KiB kick34005.CDTV, naming it', async () => {
+		serveCd({
+			[a500]: async () => body(firmware(3, 262144)),
+			[cdtv]: async () => body(firmware(4, 131072))
+		});
+
+		expect(await playAmigaCd('cdtv')).toBe(
+			'The CDTV BIOS kick34005.CDTV in the BIOS folder (Paths:Bios) must be 256 KiB: ask an Admin to replace it.'
+		);
+		expect(urls()).toEqual([a500, cdtv]);
+		expect(atLoader).toBeNull();
 	});
 });
 

@@ -33,8 +33,8 @@ public class CdtvHandlerTests
         Assert.That(Handler.Family, Is.Not.AnyOf(new Cd32Handler().Family, new AmigaHandler().Family));
 
     [Test]
-    public void BrowserCore_IsNull_UntilPlayIsEnabled() =>
-        Assert.That(Handler.BrowserCore, Is.Null);
+    public void BrowserCore_IsPuae() =>
+        Assert.That(Handler.BrowserCore, Is.EqualTo("puae"));
 
     [TestCase(16)]
     [TestCase(4096)]

@@ -42,7 +42,7 @@ public sealed class Cd32Handler : ISystemHandler
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     /// <summary>CD32 A1: PUAE, vendored; needs the operator's Kickstart ROMs.</summary>
-    public string? BrowserCore => null;
+    public string? BrowserCore => "puae";
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
 }
