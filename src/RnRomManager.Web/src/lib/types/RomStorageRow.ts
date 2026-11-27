@@ -11,6 +11,8 @@ export interface RomStorageRow {
 	pendingGames: number;
 	/** Timeline polish Z1: the system's games (0 when none). */
 	gameCount: number;
+	/** RZ2: the system's library size in bytes, as the Library size report counts it (0 when no games). */
+	totalBytes: number;
 	/** ZIP Compression Z6: the system's level (Med when none is stored). */
 	zipCompression: 'Store' | 'Med' | 'High';
 	/** Z5: true while the system's ROMs are stored in the ZIP. */

@@ -15,7 +15,7 @@
 <BaseModal
 	bind:open
 	title={row ? `Repack ${row.displayName} ZIPs` : ''}
-	confirmLabel="Repack again"
+	confirmLabel="Repack"
 	confirmClass="btn-warning"
 	{onconfirm}
 >

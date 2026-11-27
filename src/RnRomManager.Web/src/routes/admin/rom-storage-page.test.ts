@@ -35,6 +35,7 @@ const rows = (ndsEmbed = false, pending = 0, gbaLevel = 'Med') => [
 		configurable: false,
 		pendingGames: 0,
 		gameCount: 1234,
+		totalBytes: 5 * 1024 * 1024,
 		zipCompression: gbaLevel,
 		compressionConfigurable: true
 	},
@@ -46,6 +47,7 @@ const rows = (ndsEmbed = false, pending = 0, gbaLevel = 'Med') => [
 		configurable: true,
 		pendingGames: pending,
 		gameCount: 0,
+		totalBytes: 0,
 		zipCompression: 'Med',
 		compressionConfigurable: false
 	}
@@ -92,33 +94,69 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 
 	const row = async (name: string) => (await screen.findByText(name)).closest('tr')!;
 
-	it('shows each system with its default and configured behaviour; only configurable rows have a button', async () => {
+	it('shows one storage icon when it matches the default; only configurable rows have a switch', async () => {
 		answers['GET /api/admin/rom-storage'] = { status: 200, body: rows(false, 2) };
 		render(RomStoragePage);
 
 		const gba = await row('Game Boy Advance');
-		expect(within(gba).getAllByRole('img', { name: 'Stored in ZIP' })).toHaveLength(2);
-		expect(within(gba).queryByRole('button', { name: /^Store (in|beside) ZIP$/ })).toBeNull();
+		expect(within(gba).getAllByRole('img', { name: 'Stored in ZIP' })).toHaveLength(1);
+		expect(within(gba).queryByRole('button', { name: /^Switch Game Boy Advance to/ })).toBeNull();
 		const nds = await row('Nintendo DS');
-		expect(within(nds).getAllByRole('img', { name: 'Beside ZIP' })).toHaveLength(2);
+		expect(within(nds).getAllByRole('img', { name: 'Beside ZIP' })).toHaveLength(1);
+		expect(nds.textContent).not.toContain('›');
 		expect(nds.textContent).toContain('2 games still to move');
-		expect(within(nds).getByRole('button', { name: 'Store in ZIP' })).toBeTruthy();
+		expect(within(nds).getByRole('button', { name: 'Switch Nintendo DS to in ZIP' })).toBeTruthy();
 		const [table] = screen.getAllByRole('table');
 		const headers = (i: number) =>
 			[...table.querySelectorAll('thead tr')[i].querySelectorAll('th')].map((h) =>
 				h.textContent?.trim()
 			);
 		expect(headers(0)).toEqual(['System', 'ROM storage', 'ZIP compression']);
-		expect(headers(1)).toEqual([
-			'System',
-			'Folder',
-			'Games',
-			'Default',
-			'Configured',
-			'Change',
-			'Level',
-			'Repack'
-		]);
+		expect(headers(1)).toEqual(['System', 'Folder', 'Games', 'Size', 'Storage', 'Level', 'Repack']);
+		const groups = [...table.querySelectorAll('thead tr')[0].querySelectorAll('th')].map((h) =>
+			h.getAttribute('colspan')
+		);
+		expect(groups).toEqual(['4', '1', '2']);
+	});
+
+	it('a configured storage that differs from the default shows default › configured, prefixed (RZ5)', async () => {
+		answers['GET /api/admin/rom-storage'] = { status: 200, body: rows(true) };
+		render(RomStoragePage);
+		const nds = await row('Nintendo DS');
+
+		const first = within(nds).getByRole('img', { name: 'Default: Beside ZIP' });
+		const second = within(nds).getByRole('img', { name: 'Configured: Stored in ZIP' });
+		expect(tooltips.get(first.parentElement!)).toBe(
+			"Default: Beside ZIP: ROMs are separate files next to each game's ZIP"
+		);
+		expect(tooltips.get(second.parentElement!)).toBe(
+			"Configured: Stored in ZIP: ROMs are inside each game's ZIP"
+		);
+		const arrow = within(nds).getByText('›');
+		expect(arrow.className).toBe('mx-1');
+		expect(arrow.getAttribute('aria-hidden')).toBe('true');
+		expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	});
+
+	it('the switch button carries the move icon, its label and tooltip (RZ5)', async () => {
+		render(RomStoragePage);
+		const button = within(await row('Nintendo DS')).getByRole('button', {
+			name: 'Switch Nintendo DS to in ZIP'
+		});
+
+		expect(button.querySelector('i.bi-arrow-left-right')).toBeTruthy();
+		expect(button.textContent?.trim()).toBe('');
+		expect(button.className).toBe('btn btn-sm btn-outline-primary ms-2');
+		expect(tooltips.get(button)).toBe("Switch to in ZIP: move every game's ROMs into its ZIP");
+		expect(button.closest('td')!.className).toBe('text-center text-nowrap');
+	});
+
+	it('the Size column shows the library size, a dash without games (RZ2)', async () => {
+		render(RomStoragePage);
+		const size = (row: HTMLElement) => row.querySelectorAll('td')[3];
+
+		expect(size(await row('Game Boy Advance')).querySelector('.file-size')).toBeTruthy();
+		expect(size(await row('Nintendo DS')).textContent!.trim()).toBe('—');
 	});
 
 	it('the Games column shows each system count, right-aligned (Z1)', async () => {
@@ -128,7 +166,7 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 		const games = (row: HTMLElement) => row.querySelectorAll('td')[2];
 
 		expect(games(gba).textContent!.trim()).toBe('1,234');
-		expect(games(gba).className).toBe('text-end');
+		expect(games(gba).className).toBe('text-end small');
 		expect(games(nds).textContent!.trim()).toBe('0');
 	});
 
@@ -170,15 +208,20 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 		answers['GET /api/admin/rom-storage'] = { status: 200, body: rows(true) };
 		render(RomStoragePage);
 
-		expect(
-			within(await row('Nintendo DS')).getByRole('button', { name: 'Store beside ZIP' })
-		).toBeTruthy();
+		const button = within(await row('Nintendo DS')).getByRole('button', {
+			name: 'Switch Nintendo DS to beside ZIP'
+		});
+		expect(tooltips.get(button)).toBe(
+			"Switch to beside ZIP: move every game's ROMs out of its ZIP, next to it"
+		);
 	});
 
 	it('into ZIP: the modal warns about slower saves; confirm PUTs, then a 202 refreshes jobs and toasts a link', async () => {
 		answers['PUT /api/admin/rom-storage/nds'] = { status: 202, body: { jobId: 'j1' } };
 		render(RomStoragePage);
-		await fireEvent.click(await screen.findByRole('button', { name: 'Store in ZIP' }));
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'Switch Nintendo DS to in ZIP' })
+		);
 
 		expect(screen.getByText(/saves get slower/, { exact: false })).toBeTruthy();
 		expect(screen.queryByText(/separate file next to its ZIP/)).toBeNull();
@@ -200,7 +243,9 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 	it('beside ZIP: the modal says each ROM becomes a separate file', async () => {
 		answers['GET /api/admin/rom-storage'] = { status: 200, body: rows(true) };
 		render(RomStoragePage);
-		await fireEvent.click(await screen.findByRole('button', { name: 'Store beside ZIP' }));
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'Switch Nintendo DS to beside ZIP' })
+		);
 
 		expect(screen.getByText(/separate file next to its ZIP/)).toBeTruthy();
 		expect(screen.queryByText(/saves get slower/)).toBeNull();
@@ -212,7 +257,9 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 			body: { status: 409, code: 'JobRunning', title: 'A job is running' }
 		};
 		render(RomStoragePage);
-		await fireEvent.click(await screen.findByRole('button', { name: 'Store in ZIP' }));
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'Switch Nintendo DS to in ZIP' })
+		);
 		await fireEvent.click(screen.getByRole('button', { name: 'Start moving', hidden: true }));
 
 		await vi.waitFor(() =>
@@ -229,7 +276,8 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 
 		await vi.waitFor(() =>
 			expect(
-				(screen.getByRole('button', { name: 'Store in ZIP' }) as HTMLButtonElement).disabled
+				(screen.getByRole('button', { name: 'Switch Nintendo DS to in ZIP' }) as HTMLButtonElement)
+					.disabled
 			).toBe(true)
 		);
 		expect(
@@ -259,14 +307,14 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 	describe('ZIP compression (Z11–Z12)', () => {
 		const paragraphs = [
 			'Every game ZIP of Game Boy Advance is rewritten, one at a time. On a large library this takes a long time and uses a lot of disk and CPU. No other job runs and no game can be edited until it ends.',
-			'If you cancel, some ZIPs keep the old level. They still play; use Repack again to finish.',
+			'If you cancel, some ZIPs keep the old level. They still play; use Repack to finish.',
 			"Each game needs free space about the size of its uncompressed ROMs while it's rewritten."
 		];
 		const text = (el: Element | null) => el?.textContent?.replace(/\s+/g, ' ').trim();
 		const dialog = (title: string) =>
 			screen.getByRole('heading', { name: title, hidden: true }).closest('.modal') as HTMLElement;
-		const edit = 'Edit ZIP compression of Game Boy Advance';
-		const repack = 'Repack again Game Boy Advance ZIPs';
+		const edit = /^Change ZIP compression of Game Boy Advance \(/;
+		const repack = 'Repack Game Boy Advance ZIPs';
 
 		async function chooseLevel(level: string): Promise<HTMLElement> {
 			await fireEvent.click(await screen.findByRole('button', { name: edit }));
@@ -277,20 +325,21 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 			return modal;
 		}
 
-		it('configurable rows show the level with Edit and Repack again; others show a dash', async () => {
+		it('configurable rows show the level badge as a button, and Repack; others show a dash', async () => {
 			answers['GET /api/admin/rom-storage'] = { status: 200, body: rows(false, 0, 'High') };
 			render(RomStoragePage);
 
 			const gba = await row('Game Boy Advance');
-			const badge = within(gba).getByText('High');
-			expect(badge.className).toBe('badge text-bg-success');
-			const editButton = within(gba).getByRole('button', { name: edit });
-			expect(editButton.textContent?.trim()).toBe('');
-			expect(editButton.querySelector('i.bi-pencil')).toBeTruthy();
-			expect(tooltips.get(editButton)).toBe('Edit compression level');
+			const badge = within(gba).getByRole('button', {
+				name: 'Change ZIP compression of Game Boy Advance (High)'
+			});
+			expect(badge.className).toBe('badge border-0 text-bg-success');
+			expect(badge.textContent?.trim()).toBe('High');
+			expect(within(gba).queryByRole('button', { name: /^Edit/ })).toBeNull();
+			expect(tooltips.get(badge)).toBe('Change compression level');
 			const repackButton = within(gba).getByRole('button', { name: repack });
 			expect(repackButton.hasAttribute('aria-label')).toBe(false);
-			expect(repackButton.textContent).toBe('Repack again Game Boy Advance ZIPs');
+			expect(repackButton.textContent).toBe('Repack Game Boy Advance ZIPs');
 			expect(repackButton.querySelector('.visually-hidden')?.textContent).toBe(
 				'Game Boy Advance ZIPs'
 			);
@@ -309,12 +358,12 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 				answers['GET /api/admin/rom-storage'] = { status: 200, body: rows(false, 0, value) };
 				const { unmount } = render(RomStoragePage);
 				const gba = await row('Game Boy Advance');
-				expect(within(gba).getByText(label).className).toBe(`badge ${cls}`);
+				expect(within(gba).getByText(label).className).toBe(`badge border-0 ${cls}`);
 				unmount();
 			}
 		});
 
-		it('Edit: the select is preselected, confirm waits for a change, PUT, then a toast links the job', async () => {
+		it('the level badge: the select is preselected, confirm waits for a change, PUT, then a toast links the job', async () => {
 			answers['PUT /api/admin/zip-compression/gba'] = { status: 202, body: { jobId: 'j9' } };
 			render(RomStoragePage);
 			await fireEvent.click(await screen.findByRole('button', { name: edit }));
@@ -380,7 +429,7 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 			);
 		});
 
-		it('Repack again: its own modal (no select) POSTs; a 409 shows the job-running toast', async () => {
+		it('Repack: its own modal (no select) POSTs; a 409 shows the job-running toast', async () => {
 			answers['POST /api/admin/zip-compression/gba/repack'] = {
 				status: 409,
 				body: { status: 409, code: 'JobRunning', title: 'A job is running' }
@@ -391,9 +440,7 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 			const modal = dialog('Repack Game Boy Advance ZIPs');
 			expect(within(modal).queryByLabelText('Compression level')).toBeNull();
 			expect([...modal.querySelectorAll('.modal-body p')].map(text)).toEqual(paragraphs);
-			await fireEvent.click(
-				within(modal).getByRole('button', { name: 'Repack again', hidden: true })
-			);
+			await fireEvent.click(within(modal).getByRole('button', { name: 'Repack', hidden: true }));
 
 			await vi.waitFor(() =>
 				expect(calls.map((c) => c.key)).toContain('POST /api/admin/zip-compression/gba/repack')
@@ -405,14 +452,14 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 			);
 		});
 
-		it('Repack again: a 202 toasts a link to the job page', async () => {
+		it('Repack: a 202 toasts a link to the job page', async () => {
 			answers['POST /api/admin/zip-compression/gba/repack'] = {
 				status: 202,
 				body: { jobId: 'j7' }
 			};
 			render(RomStoragePage);
 			await fireEvent.click(await screen.findByRole('button', { name: repack }));
-			await fireEvent.click(screen.getByRole('button', { name: 'Repack again', hidden: true }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Repack', hidden: true }));
 
 			await vi.waitFor(() =>
 				expect(toasts.items.at(-1)).toMatchObject({
@@ -433,14 +480,14 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 			};
 			render(RomStoragePage);
 			await fireEvent.click(await screen.findByRole('button', { name: repack }));
-			await fireEvent.click(screen.getByRole('button', { name: 'Repack again', hidden: true }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Repack', hidden: true }));
 
 			expect(
 				await screen.findByText("This system's ZIP compression can't be changed.")
 			).toBeTruthy();
 		});
 
-		it('Edit and Repack again are disabled while a job runs', async () => {
+		it('the level badge and Repack are disabled while a job runs', async () => {
 			answers['GET /api/jobs/current'] = { status: 200, body: running };
 			render(RomStoragePage);
 
