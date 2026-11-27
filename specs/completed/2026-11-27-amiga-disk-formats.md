@@ -1,6 +1,6 @@
 ---
 title: Amiga hard-disk and extra floppy formats
-status: in-progress
+status: completed
 created: 2026-11-27
 ---
 
