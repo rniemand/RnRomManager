@@ -1,6 +1,6 @@
 ---
 title: UI consistency, hash search and duplicate cleanup
-status: in-progress
+status: completed
 created: 2026-11-27
 ---
 
