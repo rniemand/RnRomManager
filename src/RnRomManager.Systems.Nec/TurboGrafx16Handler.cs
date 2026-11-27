@@ -40,6 +40,9 @@ public sealed class TurboGrafx16Handler : ISystemHandler
     /// Drops a 512-byte copier header, detected by size alone (HuCard dumps are multiples of 8 KiB). Three aftermarket protos
     /// in the DAT have that size unheadered; they get stripped, don't match and go to Review (spec T2, accepted).
     /// </summary>
-    public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) =>
+    public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) => StripCopierHeader(rom);
+
+    /// <summary>The size-based 512-byte copier-header strip, shared with <see cref="SuperGrafxHandler"/> (spec G2).</summary>
+    internal static ReadOnlyMemory<byte> StripCopierHeader(ReadOnlyMemory<byte> rom) =>
         rom.Length % 8192 == CopierHeaderBytes ? rom[CopierHeaderBytes..] : rom;
 }

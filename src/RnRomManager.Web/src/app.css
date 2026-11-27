@@ -139,6 +139,15 @@
 	background-color: var(--bs-pcfx) !important;
 }
 
+/* PC Engine SuperGrafx system colour: violet, same in both themes; white on it is AA (~5.0:1). */
+:root {
+	--bs-sgx: #b000f8;
+}
+.text-bg-sgx {
+	color: #fff !important;
+	background-color: var(--bs-sgx) !important;
+}
+
 /* MS-DOS system colour (MS-DOS S4): slate, same in both themes; white on it is AA (~9:1). */
 :root {
 	--bs-dos: #3f4a56;
@@ -200,6 +209,15 @@
 .text-bg-wsc {
 	color: #000 !important;
 	background-color: var(--bs-wsc) !important;
+}
+
+/* Pocket Challenge V2 system colour: lavender, same in both themes; black on it is AA (~12.6:1). */
+:root {
+	--bs-pc2: #d0bfff;
+}
+.text-bg-pc2 {
+	color: #000 !important;
+	background-color: var(--bs-pc2) !important;
 }
 
 /* Nintendo Switch system colour (N3): near-black, same in both themes; white on it is AA (~13:1). */

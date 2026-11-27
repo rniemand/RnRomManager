@@ -33,6 +33,8 @@ public class IngestPipelineTests
     private static readonly byte[] PrismTower = new SyntheticNgpRomBuilder { Seed = 1951, Colour = true, Title = "PRISMTOWER" }.Build();
     private static readonly byte[] SwanLagoon = new SyntheticWsRomBuilder { Seed = 1961, Colour = true }.Build();
     private static readonly byte[] MonoFlag = new SyntheticWsRomBuilder { Seed = 1962, Colour = true }.Build();
+    private static readonly byte[] Sgx = Atari(524288, 190);
+    private static readonly byte[] Challenge = new SyntheticWsRomBuilder { Seed = 1967 }.Build();
     /// <summary>A colour header listed in the mono DAT: the DAT decides the system.</summary>
     private static readonly byte[] DualMode = new SyntheticNgpRomBuilder { Seed = 1952, Colour = true, Title = "DUALMODE" }.Build();
     private static readonly byte[] Pioneer = new SyntheticNesRomBuilder { Seed = 70, Mapper = 1 }.Build();
@@ -200,6 +202,8 @@ public class IngestPipelineTests
             [IngestSeeder.PcfxDat] = [new FixtureGame("Disc Fox (Japan)", "Disc Fox (Japan) (Track 2).bin", FoxData)],
             [IngestSeeder.NeoGeoPocketDat] = [new FixtureGame("Dual Mode (Japan)", "Dual Mode (Japan).ngp", DualMode)],
             [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)], [IngestSeeder.WonderSwanDat] = [new FixtureGame("Mono Flag (Japan)", "Mono Flag (Japan).ws", MonoFlag)], [IngestSeeder.WonderSwanColorDat] = [new FixtureGame("Swan Lagoon (Japan)", "Swan Lagoon (Japan).wsc", SwanLagoon)],
+            [IngestSeeder.SuperGrafxDat] = [new FixtureGame("Twin Vdp (Japan)", "Twin Vdp (Japan).sgx", Sgx)],
+            [IngestSeeder.PocketChallengeV2Dat] = [new FixtureGame("Quiz Ladder (Japan)", "Quiz Ladder (Japan).pc2", Challenge)],
             [IngestSeeder.ThreeDsDat] =
             [
                 new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),
@@ -1475,6 +1479,7 @@ public class IngestPipelineTests
     [TestCase("ws", "other.gb")]
     [TestCase("gb", "other.ws")]
     [TestCase("ws", "other.pc2")]
+    [TestCase("pc2", "other.ws")]
     public async Task OtherFamilysExtension_IsUnsupportedType(string folder, string name)
     {
         var result = await IngestAsync(Drop(folder, name, new SyntheticNgpRomBuilder { Seed = 1956 }.Build()));
@@ -1555,6 +1560,93 @@ public class IngestPipelineTests
     public async Task Ws_OverSixteenMiB_IsTooLarge()
     {
         var result = await IngestAsync(Drop("ws", "huge.ws", new byte[16 * 1024 * 1024 + 1]));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
+    }
+
+    [Test]
+    public async Task SuperGrafx_DatMatch_IsStoredAsSgx()
+    {
+        var result = await IngestAsync(Drop("sgx", "twin.sgx", Sgx));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "sgx")), result.Details);
+        var game = ReadZip("sgx/T/Twin Vdp.zip");
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("sgx", "Twin Vdp (Japan).sgx")));
+        Assert.That(game.Roms.Single().Header, Is.Null);
+    }
+
+    [Test]
+    public async Task SuperGrafx_CopierHeadered_MatchesTheStrippedBytes()
+    {
+        var result = await IngestAsync(Drop("sgx", "hdr.sgx", CopierHeadered(Sgx)));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "sgx")), result.Details);
+        Assert.That(ReadZip("sgx/T/Twin Vdp.zip").Roms.Single().Metadata.Sha1, Is.EqualTo(Convert.ToHexStringLower(SHA1.HashData(Sgx))));
+    }
+
+    [Test]
+    public async Task SuperGrafx_Unmatched_GoesToReview()
+    {
+        var file = Drop("sgx", "odd.sgx", Atari(524288, 191));
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "sgx")));
+        Assert.That(File.Exists(file.FullPath), Is.True);
+    }
+
+    [TestCase(524287, "TooSmall")]
+    [TestCase(1049089, "TooLarge")]
+    public async Task SuperGrafx_OutsideTheSizeLimits_Fails(int size, string reason)
+    {
+        var result = await IngestAsync(Drop("sgx", "odd.sgx", Atari(size, 192)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, reason)));
+    }
+
+    [Test]
+    public async Task Pc2_DatMatch_IsStoredAsPc2()
+    {
+        var result = await IngestAsync(Drop("pc2", "quiz.pc2", Challenge));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "pc2")), result.Details);
+        var game = ReadZip("pc2/Q/Quiz Ladder.zip");
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName), Is.EqualTo(("pc2", "Quiz Ladder (Japan).pc2")));
+        Assert.That(rom.Header!.Select(kv => kv.Key), Is.EqualTo(new[] { "publisherId", "colour", "gameId", "version", "romSize", "saveType", "vertical", "mapper", "checksum", "checksumValid" }));
+    }
+
+    [Test]
+    public async Task Pc2_UnmatchedColourFooter_StaysPc2_NotRenamed()
+    {
+        var file = Drop("pc2", "odd.pc2", new SyntheticWsRomBuilder { Seed = 1968, Colour = true }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "pc2")));
+        Assert.That((File.Exists(file.FullPath), File.Exists(Path.Combine(Ingest("pc2"), "odd.wsc"))), Is.EqualTo((true, false)));
+    }
+
+    [Test]
+    public async Task Pc2_UnmatchedWithoutTheJump_IsInvalidHeader()
+    {
+        var result = await IngestAsync(Drop("pc2", "bad.pc2", new SyntheticWsRomBuilder { Seed = 1969, Opcode = 0x00 }.Build()));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+    }
+
+    [Test]
+    public async Task Pc2_UnderTheFooterSize_IsTooSmall()
+    {
+        var result = await IngestAsync(Drop("pc2", "tiny.pc2", new byte[15]));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooSmall)));
+    }
+
+    [Test]
+    public async Task Pc2_OverSixteenMiB_IsTooLarge()
+    {
+        var result = await IngestAsync(Drop("pc2", "huge.pc2", new byte[16 * 1024 * 1024 + 1]));
 
         Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
     }
@@ -1876,6 +1968,8 @@ public class IngestPipelineTests
 
     [TestCase("md", "circuit.pce")]
     [TestCase("tg16", "comet.md")]
+    [TestCase("tg16", "x.sgx")]
+    [TestCase("sgx", "circuit.pce")]
     public async Task TurboGrafx16_FileInAnotherFamilysFolder_IsUnsupportedType(string folder, string name)
     {
         var result = await IngestAsync(Drop(folder, name, name.EndsWith(".pce") ? Circuit : Comet));

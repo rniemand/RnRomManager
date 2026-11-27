@@ -84,7 +84,7 @@ public class ImageUrlEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [], [IngestSeeder.SuperGrafxDat] = [], [IngestSeeder.PocketChallengeV2Dat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris)],
         }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);

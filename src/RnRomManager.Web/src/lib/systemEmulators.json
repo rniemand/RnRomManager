@@ -362,6 +362,19 @@
 			"note": "RetroArch core: Beetle NeoPop"
 		}
 	],
+	"pc2": [
+		{
+			"name": "ares",
+			"url": "https://ares-emu.net/",
+			"os": ["windows", "macos"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Beetle WonderSwan"
+		}
+	],
 	"pcfx": [
 		{
 			"name": "Mednafen",
@@ -494,6 +507,24 @@
 			"url": "https://www.retroarch.com/?page=platforms",
 			"os": ["windows", "macos", "linux", "android", "ios"],
 			"note": "RetroArch core: Genesis Plus GX"
+		}
+	],
+	"sgx": [
+		{
+			"name": "Mednafen",
+			"url": "https://mednafen.github.io/releases/",
+			"os": ["windows"]
+		},
+		{
+			"name": "ares",
+			"url": "https://ares-emu.net/",
+			"os": ["windows", "macos"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Beetle SuperGrafx"
 		}
 	],
 	"sms": [

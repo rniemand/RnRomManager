@@ -42,6 +42,7 @@ roms/
   md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it)
   s32x/                 32X (.32x, .bin)
   tg16/                 TurboGrafx-16 / PC Engine (.pce)
+  sgx/                  PC Engine SuperGrafx (.sgx)
   switch/               Nintendo Switch (external: .nsp, .xci, .nsz, .xcz, .hdf files next to the ZIP)
     O/
       Orbit Expedition.zip
@@ -67,6 +68,7 @@ roms/
   ngpc/                 Neo Geo Pocket Color (.ngc)
   ws/                   WonderSwan (.ws)
   wsc/                  WonderSwan Color (.wsc)
+  pc2/                  Pocket Challenge V2 (.pc2)
 ```
 
 Inside a game's ZIP:
@@ -170,7 +172,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `8` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `plus4`, `tgcd`, `pcfx`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`, `ws`, `wsc`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `plus4`, `tgcd`, `pcfx`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`, `ws`, `wsc`, `sgx`, `pc2`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
@@ -256,6 +258,8 @@ Mega Drive / Genesis `header`, present only when the 16-byte field at 0x100 star
 
 TurboGrafx-16 `header`: always null (HuCards have no header).
 
+PC Engine SuperGrafx `header`: always null.
+
 Neo Geo Pocket / Neo Geo Pocket Color `header`, from the 64-byte cartridge header:
 
 - `title`: bytes 0x24–0x2F up to the first NUL, each byte outside 0x20–0x7E replaced by `?`, trailing spaces trimmed; null when empty.
@@ -280,6 +284,8 @@ WonderSwan / WonderSwan Color `header`, from the 16-byte cartridge footer at the
 - `checksumValid`: true when the sum of every ROM byte except the last two, modulo 65,536, equals `checksum`.
 
 The footer is plausible when byte 0x0 is `0xEA` (the reset vector's `JMP FAR`).
+
+Pocket Challenge V2 `header`: the same ten fields from the same footer.
 
 PlayStation, PlayStation Portable, Xbox 360, Saturn, Sega CD, 3DO, TurboGrafx-CD and PC-FX `header`: always null.
 

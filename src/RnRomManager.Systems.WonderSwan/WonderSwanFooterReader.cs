@@ -12,6 +12,7 @@ public static class WonderSwanFooterReader
 {
     public const string WonderSwanId = "ws";
     public const string WonderSwanColorId = "wsc";
+    public const string PocketChallengeV2Id = "pc2";
     public const int FooterSize = 16;
 
     /// <summary>The reset vector's <c>JMP FAR</c>: every cart needs it to boot.</summary>
